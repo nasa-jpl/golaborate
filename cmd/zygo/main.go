@@ -1,4 +1,4 @@
-package hcitzygo
+package zygo
 
 import (
 	"bytes"
