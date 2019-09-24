@@ -1,4 +1,4 @@
-package hcitcom
+package serveraccess
 
 import (
 	"encoding/json"

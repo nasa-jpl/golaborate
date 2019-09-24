@@ -1,5 +1,0 @@
-package hcitbmc
-
-func main() {
-
-}

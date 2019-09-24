@@ -2,7 +2,6 @@ package hcitzygo
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -10,12 +9,13 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"time"
 
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v2"
 
 	"github.com/tarm/serial"
+
+	"github.jpl.nasa.gov/HCIT/go-hcit/internal/serveraccess"
 )
 
 // wrapper around serial type to permit mocking
@@ -138,34 +138,11 @@ func main() {
 	conn := setupSerial()
 
 	// set up the active user information
-	serverState := ServerStatus{}
+	serverState := serveraccess.ServerStatus{}
 
 	http.HandleFunc("/notify-active", serverState.NotifyActive)
-	http.HandleFunc("/release-active", func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("released, %s last authed at %s, released by %s",
-			serverState.User,
-			serverState.WhenAuthed.Format(time.RFC822),
-			r.RemoteAddr)
-
-		serverState = ServerStatus{}
-		w.WriteHeader(http.StatusOK)
-
-	})
-	http.HandleFunc("/check-active", func(w http.ResponseWriter, r *http.Request) {
-		enc := json.NewEncoder(w)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		err := enc.Encode(serverState)
-		if err != nil {
-			fstr := fmt.Sprintf("/check-active error encoding server state %s", err)
-			log.Println(fstr)
-			http.Error(w, fstr, http.StatusBadRequest)
-		} else {
-
-			log.Printf("activity checked from %s", r.RemoteAddr)
-		}
-		return
-	})
+	http.HandleFunc("/release-active", serverState.ReleaseActive)
+	http.HandleFunc("/check-active", serverState.CheckActive)
 	// anonymous function in HandleFunc has access to the closure variable
 	// conn.  This isn't the cleanest style, but this is a small program.
 	http.HandleFunc("/measure", func(w http.ResponseWriter, r *http.Request) {
