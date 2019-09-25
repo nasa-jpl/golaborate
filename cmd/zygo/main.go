@@ -1,4 +1,4 @@
-package zygo
+package main
 
 import (
 	"bytes"
@@ -15,7 +15,7 @@ import (
 
 	"github.com/tarm/serial"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/internal/serveraccess"
+	"github.jpl.nasa.gov/HCIT/go-hcit/serveraccess"
 )
 
 // wrapper around serial type to permit mocking
@@ -73,7 +73,7 @@ func setupSerial() mockableSerial {
 	}
 	return mockableSerial{
 		p:    *conn,
-		real: true}
+		real: !viper.GetBool("spoofSerial")}
 }
 
 // "scanning" multipart serial read up to a termination sequence of bytes
@@ -125,9 +125,11 @@ func replyWithFile(fn string, w http.ResponseWriter) {
 	w.Header().Set("Content-Disposition", cDistStr)
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Length", fSize)
+	w.WriteHeader(200)
 
 	// copy the file to the client and print to the log
 	io.Copy(w, f)
+	return
 }
 
 func main() {
@@ -159,9 +161,9 @@ func main() {
 		log.Printf("filename: %s\t cleanup: %t", filename, cleanup)
 
 		// read the file
-		// reciever knows termination at carriage return
-		conn.p.Write([]byte(filename + "\r")) // "\x04" is what I would prefer
 		if conn.real {
+			// reciever knows termination at carriage return
+			conn.p.Write([]byte(filename + "\r")) // "\x04" is what I would prefer
 			// we need to wait for a reply
 			buf := readToTermination(conn.p, []byte("\r"))
 			log.Printf("serial response %q", buf)
@@ -172,7 +174,12 @@ func main() {
 			filename = "test.txt"
 			fldr = "."
 		}
-		filePath := filepath.Join(fldr, filename)
+		filePath, err := filepath.Abs(filepath.Join(fldr, filename))
+		if err != nil {
+			fstr := fmt.Sprintf("unable to compute abspath of file %s %s %s", fldr, filename, err)
+			log.Println(fstr)
+			http.Error(w, fstr, http.StatusInternalServerError)
+		}
 
 		replyWithFile(filePath, w)
 		return
