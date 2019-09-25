@@ -1,28 +1,16 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 
 	"github.com/spf13/viper"
+	"github.jpl.nasa.gov/HCIT/go-hcit/server"
+	"github.jpl.nasa.gov/HCIT/go-hcit/zygocomm"
 	"gopkg.in/yaml.v2"
-
-	"github.com/tarm/serial"
-
-	"github.jpl.nasa.gov/HCIT/go-hcit/serveraccess"
 )
-
-// wrapper around serial type to permit mocking
-type mockableSerial struct {
-	p    serial.Port
-	real bool
-}
 
 // configuration setup
 func setupViper() {
@@ -58,89 +46,15 @@ func setupViper() {
 	return
 }
 
-// serial connection setup
-func setupSerial() mockableSerial {
-	n := viper.GetString("serialConn")
-	b := viper.GetInt("serialBaud")
-	if viper.GetBool("spoofSerial") {
-		n, b = "/dev/ttyp1", 9600
-	}
-	conf := &serial.Config{Name: n, Baud: b}
-
-	conn, err := serial.OpenPort(conf)
-	if err != nil {
-		log.Fatalf("cannot open serial port %q", err)
-	}
-	return mockableSerial{
-		p:    *conn,
-		real: !viper.GetBool("spoofSerial")}
-}
-
-// "scanning" multipart serial read up to a termination sequence of bytes
-func readToTermination(s serial.Port, term []byte) []byte {
-	var out []byte
-	for {
-		buf := make([]byte, 128)
-		n, _ := s.Read(buf)
-		out = append(out, buf[:n]...)
-		if bytes.HasSuffix(out, term) {
-			break
-		}
-	}
-	return out
-}
-
-// read cleanup off the request
-func parseCleanup(w http.ResponseWriter, r *http.Request) bool {
-	// if true, delete the file after serving it
-	cleanupStr := r.URL.Query().Get("cleanup")
-	if cleanupStr == "" {
-		cleanupStr = "false"
-	}
-	cleanup, ok := strconv.ParseBool(cleanupStr)
-	if ok != nil {
-		fstr := fmt.Sprintf("cleanup URL parameter error, given %s, cannot be converted to float", cleanupStr)
-		log.Println(fstr)
-		http.Error(w, fstr, http.StatusBadRequest)
-	}
-
-	return cleanup
-}
-
-// reply to the request by serving a file
-func replyWithFile(fn string, w http.ResponseWriter) {
-	f, err := os.Open(fn)
-	defer f.Close()
-	if err != nil {
-		fstr := fmt.Sprintf("source file missing %s", fn)
-		log.Println(fstr)
-		http.Error(w, fstr, http.StatusNotFound)
-	}
-
-	// read some stuff to set the headers appropriately
-	filename := filepath.Base(fn)
-	fStat, _ := f.Stat()
-	fSize := strconv.FormatInt(fStat.Size(), 10) // base 10 int
-	cDistStr := fmt.Sprintf("attachment; filename=\"%s\"", filename)
-	w.Header().Set("Content-Disposition", cDistStr)
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Length", fSize)
-	w.WriteHeader(200)
-
-	// copy the file to the client and print to the log
-	io.Copy(w, f)
-	return
-}
-
 func main() {
 	// load cfg or use default values
 	setupViper()
 
 	// set up the serial connection
-	conn := setupSerial()
+	conn := zygocomm.SetupSerial()
 
 	// set up the active user information
-	serverState := serveraccess.ServerStatus{}
+	serverState := server.Status{}
 
 	http.HandleFunc("/notify-active", serverState.NotifyActive)
 	http.HandleFunc("/release-active", serverState.ReleaseActive)
@@ -148,45 +62,10 @@ func main() {
 	// anonymous function in HandleFunc has access to the closure variable
 	// conn.  This isn't the cleanest style, but this is a small program.
 	http.HandleFunc("/measure", func(w http.ResponseWriter, r *http.Request) {
-		// extract filename
-		filename := r.URL.Query().Get("filename")
-		if filename == "" {
-			filename = "tmp.dat"
-		}
-
-		// extract cleanup true/false
-		cleanup := parseCleanup(w, r)
-
-		// log the inputs
-		log.Printf("filename: %s\t cleanup: %t", filename, cleanup)
-
-		// read the file
-		if conn.real {
-			// reciever knows termination at carriage return
-			conn.p.Write([]byte(filename + "\r")) // "\x04" is what I would prefer
-			// we need to wait for a reply
-			buf := readToTermination(conn.p, []byte("\r"))
-			log.Printf("serial response %q", buf)
-		}
-
-		fldr := viper.GetString("zygoFileFolder")
-		if viper.GetBool("spoofFile") {
-			filename = "test.txt"
-			fldr = "."
-		}
-		filePath, err := filepath.Abs(filepath.Join(fldr, filename))
-		if err != nil {
-			fstr := fmt.Sprintf("unable to compute abspath of file %s %s %s", fldr, filename, err)
-			log.Println(fstr)
-			http.Error(w, fstr, http.StatusInternalServerError)
-		}
-
-		replyWithFile(filePath, w)
+		conn.TriggerMeasurement(w, r)
+		server.ReplyWithFile(w, r)
 		return
 	})
-
-	host := viper.GetString("host")
-	port := strconv.Itoa(viper.GetInt("port")) // ports are given as ints for convenience
 
 	// dump the config to the log
 	c := viper.AllSettings()
@@ -196,7 +75,11 @@ func main() {
 	}
 	fmt.Println("Server starting with configuration:")
 	fmt.Print(string(bs))
+
+	// boot up the server
+	host := viper.GetString("host")
+	port := strconv.Itoa(viper.GetInt("port")) // ports are given as ints for convenience
 	log.Fatal(http.ListenAndServe(host+":"+port, nil))
 
-	conn.p.Close()
+	conn.P.Close()
 }
