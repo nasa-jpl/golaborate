@@ -3,23 +3,20 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"time"
-
-	"github.com/spf13/viper"
 )
 
 // Status holds the current user, if the server is busy, and when the user
 // took control
 type Status struct {
-	User       string
-	Busy       bool
-	WhenAuthed time.Time
+	User       string    `json:"user"`
+	Busy       bool      `json:"busy"`
+	WhenAuthed time.Time `json:"whenAuthed"`
 }
 
 // AuthRequest is a passthrough struct allowing a User variale to be extracted
@@ -61,7 +58,9 @@ func (stat *Status) ReleaseActive(w http.ResponseWriter, r *http.Request) {
 		stat.WhenAuthed.Format(time.RFC822),
 		r.RemoteAddr)
 
-	stat = &Status{}
+	stat.User = ""
+	stat.Busy = false
+	stat.WhenAuthed = time.Time{}
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -110,17 +109,11 @@ func ParseFilename(w http.ResponseWriter, r *http.Request) string {
 }
 
 // ReplyWithFile replies to the client request by serving the given file name
-func ReplyWithFile(w http.ResponseWriter, r *http.Request) {
-	filename := ParseFilename(w, r)
+func ReplyWithFile(w http.ResponseWriter, r *http.Request, fn string, fldr string) {
 
-	fldr := viper.GetString("zygoFileFolder")
-	if viper.GetBool("spoofFile") {
-		filename = "test.txt"
-		fldr = "."
-	}
-	filePath, err := filepath.Abs(filepath.Join(fldr, filename))
+	filePath, err := filepath.Abs(filepath.Join(fldr, fn))
 	if err != nil {
-		fstr := fmt.Sprintf("unable to compute abspath of file %s %s %s", fldr, filename, err)
+		fstr := fmt.Sprintf("unable to compute abspath of file %s %s %s", fldr, fn, err)
 		log.Println(fstr)
 		http.Error(w, fstr, http.StatusInternalServerError)
 	}
@@ -133,25 +126,13 @@ func ReplyWithFile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fstr, http.StatusNotFound)
 	}
 
-	// read some stuff to set the headers appropriately
-	filename = filepath.Base(filePath)
-	fStat, _ := f.Stat()
-	fSize := strconv.FormatInt(fStat.Size(), 10) // base 10 int
-	cDistStr := fmt.Sprintf("attachment; filename=\"%s\"", filename)
-	w.Header().Set("Content-Disposition", cDistStr)
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Length", fSize)
-	w.WriteHeader(200)
-
-	// copy the file to the client and print to the log
-	io.Copy(w, f)
-
-	if ParseCleanup(w, r) {
-		err := os.Remove(filePath)
-		if err != nil {
-			log.Println(err)
-			http.Error(w, fmt.Sprintf("%s", err), http.StatusInternalServerError)
-		}
+	stat, err := f.Stat()
+	if err != nil {
+		fstr := fmt.Sprintf("error retrieving source file stats %s", err)
+		log.Println(fstr)
+		http.Error(w, fstr, http.StatusNotFound)
 	}
+	// read some stuff to set the headers appropriately
+	http.ServeContent(w, r, fn, stat.ModTime(), f)
 	return
 }
