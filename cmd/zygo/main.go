@@ -68,6 +68,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("cannot open serial port %q", err)
 	}
+	defer conn.Close()
 	reader := bufio.NewReader(conn)
 
 	// set up the active user information
@@ -131,6 +132,4 @@ func main() {
 	host := viper.GetString("host")
 	port := strconv.Itoa(viper.GetInt("port")) // ports are given as ints for convenience
 	log.Fatal(http.ListenAndServe(host+":"+port, nil))
-
-	conn.Close()
 }
