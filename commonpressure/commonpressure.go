@@ -2,6 +2,10 @@ package commonpressure
 
 import (
 	"bufio"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -18,7 +22,7 @@ func makeSerConf(addr string) *serial.Config {
 		Name:        addr,
 		Baud:        19200,
 		Size:        8,
-		Parity:      serial.ParityOdd,
+		Parity:      serial.ParityNone,
 		StopBits:    serial.Stop1,
 		ReadTimeout: 1 * time.Second}
 }
@@ -26,6 +30,40 @@ func makeSerConf(addr string) *serial.Config {
 // Sensor has a serial connection and can make commands
 type Sensor struct {
 	conn *serial.Port
+}
+
+// Pressure is a struct holding a single variable P used for http responses
+type Pressure struct {
+	P float64 `json:"p"`
+}
+
+// EncodeAndRespond Encodes the data to JSON and writes to w.
+// logs errors and replies with http.Error // status 500 on error
+func (press *Pressure) EncodeAndRespond(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	err := json.NewEncoder(w).Encode(press)
+	if err != nil {
+		fstr := fmt.Sprintf("error encoding pressure data to json state %q", err)
+		log.Println(fstr)
+		http.Error(w, fstr, http.StatusInternalServerError)
+	}
+	return
+}
+
+// ReadAndReplyWithJSON read the sensor and reply with a JSON body
+func (sens *Sensor) ReadAndReplyWithJSON(w http.ResponseWriter, r *http.Request) {
+	data, err := sens.Read()
+	if err != nil {
+		fstr := fmt.Sprintf("unable to read data from sensor %+v, error %q", sens, err)
+		log.Println(fstr)
+		http.Error(w, fstr, http.StatusInternalServerError)
+		return
+	}
+	p := Pressure{P: data}
+	p.EncodeAndRespond(w, r)
+	log.Printf("%s checked sensor, %e", r.RemoteAddr, data)
+	return
 }
 
 // NewGuage returns a new Sensor instance
@@ -73,7 +111,7 @@ func (sens *Sensor) Read() (float64, error) {
 		return 0, err
 	}
 	resp, err := sens.Recv()
-	strs := strings.Split(resp, "_")
-	protofloat := strs[1]
+	strs := strings.Split(resp, " ")
+	protofloat := strings.TrimRight(strs[1], "\r")
 	return strconv.ParseFloat(protofloat, 64)
 }
