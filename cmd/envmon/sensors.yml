@@ -1,0 +1,9 @@
+sensors:
+  - addr: "192.168.100.71:10001"
+    name: "fluke-zygo-bench"
+    type: "fluke"
+    conntype: TCP
+  - addr: "/dev/ttyUSB1"
+    name: "fluke-server-rack"
+    type: "fluke"
+    conntype: "serial"

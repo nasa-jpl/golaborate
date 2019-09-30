@@ -2,52 +2,48 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
-	"math/rand"
-	"net/http"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.jpl.nasa.gov/HCIT/go-hcit/fluke"
+	"github.jpl.nasa.gov/HCIT/go-hcit/sensor"
+	"gopkg.in/yaml.v2"
 )
 
-func gettemp() float64 {
-	return 22 + rand.Float64()
+// Config is a variable used to nicely reflect sensors.yml into structs
+type Config struct {
+	Sensors []sensor.Info `yaml:"sensors"`
 }
 
-func gethum() float64 {
-	return 6 + rand.Float64()
-}
+func loadConfig() *Config {
+	// read the data into a Config struct
+	path := "./sensors.yml"
+	yamlData, err := ioutil.ReadFile(path)
+	if err != nil {
+		fstr := fmt.Sprintf("Error reading sensors.yml, %q", err)
+		log.Fatal(fstr)
+	}
+	cfg := &Config{}
+	err = yaml.Unmarshal(yamlData, cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// benchTemp = prometheus.NewGauge(prometheus.GaugeOpts{
-// 	Name: "zygo_bench_temp_celcius",
-// 	Help: "Current temperature of Zygo bench inside the DM shroud.",
-// })
+	// now we need to bind methods and routes based on all of the gathered sensors
+	for idx, sens := range cfg.Sensors {
+		switch sens.Type {
+		case "fluke":
+			if sens.Conntype == "TCP" {
+				sens.Func = fluke.TCPPollDewKCh1
+			} else {
+				sens.Func = fluke.SerPollDewKCh1
+			}
+		}
+	}
+}
 
 func main() {
-	if err := prometheus.Register(prometheus.NewGaugeFunc(
-		prometheus.GaugeOpts{
-			Subsystem: "lab",
-			Name:      "zygo_bench_temp_celcius",
-			Help:      "Current temperature of Zygo bench inside the DM shroud.",
-		},
-		gettemp,
-	)); err == nil {
-		fmt.Println("GaugeFunc 'zygo_bench_temp_celcius' registered.")
-	}
-
-	if err := prometheus.Register(prometheus.NewGaugeFunc(
-		prometheus.GaugeOpts{
-			Subsystem: "lab",
-			Name:      "zygo_bench_relative_humidity",
-			Help:      "Current humidity of Zygo bench inside the DM shroud.",
-		},
-		gethum,
-	)); err == nil {
-		fmt.Println("GaugeFunc 'zygo_bench_relative_humidity' registered.")
-	}
-
-	// The Handler function provides a default handler to expose metrics
-	// via an HTTP server. "/metrics" is the usual endpoint for that.
-	http.Handle("/metrics", promhttp.Handler())
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	cfg := loadConfig()
+	log.Print(cfg.Sensors)
+	// log.Fatal(http.ListenAndServe(":8080", nil))
 }
