@@ -17,7 +17,8 @@ var (
 	terminators = []byte("\r")
 )
 
-func makeSerConf(addr string) *serial.Config {
+// MakeSerConf makes a new serial.Config with correct parity, baud, etc, set.
+func MakeSerConf(addr string) *serial.Config {
 	return &serial.Config{
 		Name:        addr,
 		Baud:        19200,
@@ -25,11 +26,6 @@ func makeSerConf(addr string) *serial.Config {
 		Parity:      serial.ParityNone,
 		StopBits:    serial.Stop1,
 		ReadTimeout: 1 * time.Second}
-}
-
-// Sensor has a serial connection and can make commands
-type Sensor struct {
-	conn *serial.Port
 }
 
 // Pressure is a struct holding a single variable P used for http responses
@@ -51,6 +47,19 @@ func (press *Pressure) EncodeAndRespond(w http.ResponseWriter, r *http.Request) 
 	return
 }
 
+// Sensor has a serial connection and can make commands
+type Sensor struct {
+	Conn *serial.Port
+}
+
+// NewGauge returns a new Sensor instance
+func NewGauge(addr string) (Sensor, error) {
+	cfg := MakeSerConf(addr)
+	conn, err := serial.OpenPort(cfg)
+	tc := Sensor{Conn: conn}
+	return tc, err
+}
+
 // ReadAndReplyWithJSON read the sensor and reply with a JSON body
 func (sens *Sensor) ReadAndReplyWithJSON(w http.ResponseWriter, r *http.Request) {
 	data, err := sens.Read()
@@ -66,14 +75,6 @@ func (sens *Sensor) ReadAndReplyWithJSON(w http.ResponseWriter, r *http.Request)
 	return
 }
 
-// NewGuage returns a new Sensor instance
-func NewGuage(addr string) (Sensor, error) {
-	cfg := makeSerConf(addr)
-	conn, err := serial.OpenPort(cfg)
-	tc := Sensor{conn: conn}
-	return tc, err
-}
-
 // MkMsg generates a message that conforms to the custom schema used by the Sensor gauges
 func (sens *Sensor) MkMsg(cmd string) []byte {
 	return append([]byte("#01"+cmd), terminators...)
@@ -82,15 +83,16 @@ func (sens *Sensor) MkMsg(cmd string) []byte {
 // Send sends a command to the controller.
 // If not terminated by terminators, behavior is undefined
 func (sens *Sensor) Send(cmd []byte) error {
-	_, err := sens.conn.Write(cmd)
+	_, err := sens.Conn.Write(cmd)
 	return err
 }
 
 // Recv data from the hardware and convert it to a string, stripping the leading *
 func (sens *Sensor) Recv() (string, error) {
-	reader := bufio.NewReader(sens.conn)
+	reader := bufio.NewReader(sens.Conn)
 	bytes, err := reader.ReadBytes('\r')
-	return strings.TrimLeft(string(bytes), "*"), err
+	bytes = bytes[1 : len(bytes)-2] // drop first char, "*", and last "\r"
+	return string(bytes), err
 }
 
 // SWVersion returns the sensor ID from the controller
