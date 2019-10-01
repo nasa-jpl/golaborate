@@ -13,11 +13,11 @@
 
  Reading from GP375 pressure meters over serial.
 
- ### Lakeshore
+ ### lakeshore
 
  Reading from a 332 sensor/heater controller.
 
- ### Lesker
+ ### lesker
 
  Reading from KJC300 pressure meters.
 
@@ -71,3 +71,16 @@ env GOOS=linux GOARCH=386 go build main.go
 `GOOS`, "go operating system" should be appropriate for the machine you intend to run the software on.  `GOARCH` is the processor architecture, which should generally be 386 (32-bit) or amd64 (64-bit).  The complete list of acceptable values for these constants can be found at https://golang.org/doc/install/source#environment
 
 Note that go supports cross compilation, so compiling for linux or windows from a mac is a nonissue.
+
+
+## Writing a new device "driver"
+
+Most pieces of lab equipment communicate with a computer over RS232, aka a Serial interface.  In Golang, a profitable way to communicate with them is to connect with `tarm/serial`, an excellent library for raw serial functions, and use `bufio.Reader.ReadBytes` to scan the reply, even if it comes in multiple replies, up to a termination byte(s).  To make a "driver" for any new hardware, you can simply consult its manual for the following information:
+
+- baudrate
+- number of data bits
+- number of stop bits
+- parity
+- message terminations
+
+Then copy paste one of the existing modules, replace this information, and update the gofuncs as appropriate for the hardware controls or queries you want to implement.
