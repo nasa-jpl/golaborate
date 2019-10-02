@@ -116,6 +116,9 @@ func TCPPollDewKCh1(ip string) (TempHumid, error) {
 		return TempHumid{}, err
 	}
 	_, err = fmt.Fprintf(conn, cmd)
+	if err != nil {
+		return TempHumid{}, err
+	}
 
 	// make a new buffer reader and read up to \r
 	reader := bufio.NewReader(conn)
