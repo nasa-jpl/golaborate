@@ -9,6 +9,8 @@ package ixllightwave
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -22,6 +24,11 @@ import (
 // the controller terminates with <CR> <NL> <END>
 // it expects terminations of <NL> or <END> or <NL><END>
 // we will use NL
+
+const (
+	// termination is the message termination used by the device
+	termination = "\n"
+)
 
 func badMethod(w http.ResponseWriter, r *http.Request) {
 	fstr := fmt.Sprintf("%s queried %s with bad method %s, must be either GET or POST", r.RemoteAddr, r.URL, r.Method)
@@ -138,6 +145,7 @@ func (ldc *LDC3916) SetChanAndReplyWithJSON(w http.ResponseWriter, r *http.Reque
 	} else {
 		TCPSetChan(ldc.Addr, data.Chan)
 		w.WriteHeader(200)
+		log.Printf("%s set channel %v", r.RemoteAddr, data.Chan)
 	}
 	return
 }
@@ -159,13 +167,14 @@ func (ldc *LDC3916) ChanDispatch(w http.ResponseWriter, r *http.Request) {
 // and returns JSON with a boolean field "B" containing the reply.
 func (ldc *LDC3916) GetTempControlAndReplyWithJSON(w http.ResponseWriter, r *http.Request) {
 	// this function is almost identical to GetLaserControl[...]
-	ctrl, err := TCPGetLaserControl(ldc.Addr)
+	ctrl, err := TCPGetTempControl(ldc.Addr)
 	if err != nil {
 		fstr := fmt.Sprintf("error getting temperature control status %q", err)
 		log.Println(err)
 		http.Error(w, fstr, http.StatusInternalServerError)
 	} else {
 		ctrl.EncodeAndRespond(w, r)
+		log.Printf("%s checked temperature control %v", r.RemoteAddr, ctrl.B)
 	}
 }
 
@@ -181,6 +190,7 @@ func (ldc *LDC3916) SetTempControlAndReplyWithJSON(w http.ResponseWriter, r *htt
 	} else {
 		TCPSetTempControl(ldc.Addr, data.B)
 		w.WriteHeader(200)
+		log.Printf("%s set temperature control %v", r.RemoteAddr, data.B)
 	}
 }
 
@@ -208,6 +218,7 @@ func (ldc *LDC3916) GetLaserControlAndReplyWithJSON(w http.ResponseWriter, r *ht
 		http.Error(w, fstr, http.StatusInternalServerError)
 	} else {
 		ctrl.EncodeAndRespond(w, r)
+		log.Printf("%s got laser output %v", r.RemoteAddr, ctrl.B)
 	}
 }
 
@@ -223,6 +234,7 @@ func (ldc *LDC3916) SetLaserControlAndReplyWithJSON(w http.ResponseWriter, r *ht
 	} else {
 		TCPSetLaserControl(ldc.Addr, data.B)
 		w.WriteHeader(200)
+		log.Printf("%s set laser output %v", r.RemoteAddr, data.B)
 	}
 }
 
@@ -249,6 +261,7 @@ func (ldc *LDC3916) GetLaserCurrentAndReplyWithJSON(w http.ResponseWriter, r *ht
 		http.Error(w, fstr, http.StatusInternalServerError)
 	} else {
 		curr.EncodeAndRespond(w, r)
+		log.Printf("%s got laser current %v mA", r.RemoteAddr, curr.A)
 	}
 }
 
@@ -264,6 +277,7 @@ func (ldc *LDC3916) SetLaserCurrentAndReplyWithJSON(w http.ResponseWriter, r *ht
 	} else {
 		TCPSetLaserCurrent(ldc.Addr, data.A)
 		w.WriteHeader(200)
+		log.Printf("%s set laser current %v mA", r.RemoteAddr, data.A)
 	}
 }
 
@@ -281,17 +295,42 @@ func (ldc *LDC3916) LaserCurrentDispatch(w http.ResponseWriter, r *http.Request)
 
 }
 
+// RawRequest sends a raw ASCII request to the driver and get a raw response.
+func (ldc *LDC3916) RawRequest(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	data, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		fstr := fmt.Sprintf("unable to read command from request body %q", err)
+		log.Println(fstr)
+		http.Error(w, fstr, http.StatusBadRequest)
+	}
+	cmd := string(data)
+	resp, err := TCPRawCmd(ldc.Addr, cmd)
+	if err != nil {
+		fstr := fmt.Sprintf("error from controller or reading response %q", err)
+		log.Println(fstr)
+		http.Error(w, fstr, http.StatusInternalServerError)
+	} else {
+		w.WriteHeader(200)
+		io.WriteString(w, resp)
+		log.Printf("%s sent raw command %s got response %s", r.RemoteAddr, cmd, resp)
+	}
+
+}
+
 // BindRoutes binds HTTP routes to the methods of the LDC.  stem should not end in a slash.  Use "" for the index URL.
 // ex: BindRoutes("/ldc") produces the following routes:
 // /ldc/chan [GET/POST] channel setting for stateful commands
 // /ldc/temperature-control [GET/POST] temperature control setting
 // /ldc/laser-output [GET/POST] laser output control setting
 // /ldc/laser-current [GET/POST] laser current in mA
+// /ldc/raw [POST] a request with an ASCII text body and ASCII response
 func (ldc *LDC3916) BindRoutes(stem string) {
 	http.HandleFunc(stem+"/chan", ldc.ChanDispatch)
 	http.HandleFunc(stem+"/temperature-control", ldc.TempControlDispatch)
 	http.HandleFunc(stem+"/laser-output", ldc.LaserControlDispatch)
 	http.HandleFunc(stem+"/laser-current", ldc.LaserCurrentDispatch)
+	http.HandleFunc(stem+"/raw", ldc.RawRequest)
 }
 
 func tcpSetup(addr string) (net.Conn, error) {
@@ -313,7 +352,7 @@ func runWriteOnlyCommand(addr, cmd string) error {
 	}
 	defer conn.Close()
 
-	_, err = conn.Write([]byte(cmd + "\n"))
+	_, err = conn.Write([]byte(cmd + termination))
 	if err != nil {
 		return err
 	}
@@ -338,7 +377,7 @@ func tcpQueryBool(addr, cmd string) (bool, error) {
 		return false, nil
 	}
 	defer conn.Close()
-	_, err = conn.Write([]byte(cmd))
+	_, err = conn.Write([]byte(cmd + termination))
 	if err != nil {
 		return false, nil
 	}
@@ -365,7 +404,7 @@ func TCPGetChan(addr string) (IXLChan, error) {
 		return IXLChan{}, err
 	}
 	defer conn.Close()
-	_, err = conn.Write([]byte("CHAN?\n"))
+	_, err = conn.Write([]byte("chan?" + termination))
 	if err != nil {
 		return IXLChan{}, err
 	}
@@ -396,7 +435,7 @@ func TCPSetChan(addr string, chans []int) error {
 // TCPGetTempControl gets if temperature control is currently enabled (true).
 func TCPGetTempControl(addr string) (IXLBool, error) {
 	// open a tcp connection to the meter and send it our command
-	cmd := "tec:out?\n"
+	cmd := "tec:out?"
 	b, err := tcpQueryBool(addr, cmd)
 	return IXLBool{B: b}, err
 }
@@ -415,7 +454,7 @@ func TCPSetTempControl(addr string, on bool) error {
 
 // TCPGetLaserControl gets if the laser output is currently enabled (true)
 func TCPGetLaserControl(addr string) (IXLBool, error) {
-	cmd := "las:out?\n"
+	cmd := "las:out?"
 	b, err := tcpQueryBool(addr, cmd)
 	return IXLBool{B: b}, err
 }
@@ -441,7 +480,7 @@ func TCPGetLaserCurrent(addr string) (IXLCurrent, error) {
 		return IXLCurrent{}, err
 	}
 	defer conn.Close()
-	_, err = conn.Write([]byte("las:ldi?\n"))
+	_, err = conn.Write([]byte("las:ldi?" + termination))
 	if err != nil {
 		return IXLCurrent{}, err
 	}
@@ -467,12 +506,13 @@ func TCPSetLaserCurrent(addr string, current float64) error {
 
 // TCPRawCmd writes a raw command, appended the termination byte, and returns any response
 func TCPRawCmd(addr, cmd string) (string, error) {
+	log.Println([]byte(cmd))
 	conn, err := tcpSetup(addr)
 	if err != nil {
 		return "", err
 	}
 	defer conn.Close()
-	_, err = conn.Write([]byte(cmd + "\n"))
+	_, err = conn.Write([]byte(cmd + termination))
 	if err != nil {
 		return "", err
 	}
