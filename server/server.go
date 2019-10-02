@@ -1,3 +1,4 @@
+// Package server contains misc server utilities.
 package server
 
 import (

@@ -1,3 +1,4 @@
+// Package lesker enables working with KJC300 pressure sensors.
 package lesker
 
 import (

@@ -1,3 +1,4 @@
+// Package granvillephillips enables working with GP375 pressure sensors.
 package granvillephillips
 
 import (

@@ -1,3 +1,4 @@
+// Package omega enables working with DPF700-series flow meters.
 package omega
 
 import (

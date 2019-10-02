@@ -1,3 +1,4 @@
+// Package util contains misc internal utilities.
 package util
 
 import (
