@@ -19,9 +19,7 @@ type Status struct {
 	WhenAuthed time.Time `json:"whenAuthed"`
 }
 
-// AuthRequest is a passthrough struct allowing a User variale to be extracted
-// from JSON
-type AuthRequest struct {
+type authRequest struct {
 	User string `json:"user"`
 }
 
@@ -31,7 +29,7 @@ type AuthRequest struct {
 func (stat *Status) NotifyActive(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	decoder := json.NewDecoder(r.Body)
-	var dat AuthRequest
+	var dat authRequest
 	err := decoder.Decode(&dat)
 	if err != nil {
 		fstr := fmt.Sprintf("/notify-error cannot decode request, need JSON field \"body\" %s", err)
