@@ -1,3 +1,6 @@
+// Package commonpressure works with pressure sensors speaking the lesker/gp dialect.
+// It contains low-level mechanisms for dealing with serial connections and higher
+// level mechanisms for providing an HTTP extraction over the device.
 package commonpressure
 
 import (
