@@ -16,3 +16,8 @@ func IntSliceToCSV(is []int) string {
 
 	return strings.Join(s, ",")
 }
+
+// GetBit returns the value of a given bit in a byte
+func GetBit(b byte, bitIndex uint) bool {
+	return (b & (1<<bitIndex - 1)) != 0
+}

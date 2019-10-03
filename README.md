@@ -55,12 +55,13 @@ mkdir github.jpl.nasa.gov && cd github.jpl.nasa.gov
 mkdir HCIT && cd HCIT
 git clone https://github.jpl.nasa.gov/HCIT/go-hcit
 
-go get github.com/tarm/serial
-go get github.com/spf13/viper
-go get gopkg.in/yaml.v2
+go get github.com/tarm/serial  # talking to serial devices
+go get github.com/spf13/viper  # configuration
+go get gopkg.in/yaml.v2        # YAML file support for configs
+go get github.com/snksoft/crc  # Cyclic Redundancy Check library for NKT devices
 ```
 
-There are no external dependencies aside from these three.
+There are no external dependencies aside from these .
 
 If you need to modify a program, cd from `go-hcit` to `/cmd/<the program>` and edit `main.go`.  Then run:
 
