@@ -2,9 +2,13 @@
 package nkt
 
 import (
-	"bytes"
+	"bufio"
 	"encoding/binary"
+	"fmt"
+	"go/types"
 	"time"
+
+	"github.jpl.nasa.gov/HCIT/go-hcit/util"
 
 	"github.com/tarm/serial"
 )
@@ -13,13 +17,6 @@ import (
 // SOT and EOT are declared in the const ( ... ) block below
 // the message is formatted as
 // [DEST] [SOURCE] [TYPE] [REGISTER] [0..240 data bytes] [CRC]
-
-// the workflow to generate a telegram is as follows:
-// 0.  Using the message and metadata (to/from where, what type, what register)
-//     generate the message body
-// 1.  Scan for special characters and replace them as described in the manual
-//     and implemented in sanitize()
-// 2.  Prepend and append [SOT] and [EOT]
 
 // MakeSerConf makes a new serial config
 func MakeSerConf(addr string) *serial.Config {
@@ -32,75 +29,47 @@ func MakeSerConf(addr string) *serial.Config {
 		ReadTimeout: 1 * time.Second}
 }
 
-// here we define some constants, mostly related to communication
-const (
-	// telStart is the start of telegram byte
-	telStart = 0x0D
-
-	// telEnd is the end of telegram byte
-	telEnd = 0x0A
-
-	// modTypeRegister is the memory register holding the module number
-	modTypeRegister = 0x61
-
-	// modFirmwareRegister is the memory register holding the firmware version code
-	modFirmwareRegister = 0x64
-
-	// modSerialRegister is the memory register holding the module serial number
-	modSerialRegister = 0x65
-
-	// modStatusRegister is the memory register holding the module status
-	modStatusRegister = 0x66
-
-	// modErrCodeRegister is the memory register holding the module error code
-	modErrCodeRegister = 0x67
-
-	// dataLength is the maximum message length in bytes
-	dataLength = 240
-
-	// minSourceAddr is the minimum value used for a source address
-	minSourceAddr = 0xA1
-
-	// specialCharFirstReplacement is the first byte used to replace a special character
-	specialCharFirstReplacement = 0x94
-
-	// specialCharShift is the amount to special characters up.
-	// special characters max out at 0x5E, so we will never overflow
-	specialCharShift = 0x40
-)
-
 var (
-	// dataOrder is the byte order
-	dataOrder = binary.LittleEndian
-
-	// crcOrder is the byte order used for the CRC message
-	crcOrder = binary.BigEndian
-
-	// specialChars is a byte slice of values that must be filtered out of messages
-	specialChars = []byte{0x0A, 0x0D, 0x5E}
-
-	// currentSourceAddr holds the current source address and can only be accessed
-	// by a single thread at once
-	currentSourceAddr = make(chan byte, 1)
+	// StandardAddresses maps some addresses present for all modules
+	StandardAddresses = map[string]byte{
+		"TypeCode":         0x61,
+		"Firmware Version": 0x64,
+		"Serial":           0x65,
+		"Status":           0x66,
+		"ErrorCode":        0x67,
+	}
 )
 
 // ModuleInformation is a struct holding information needed to communicate with a given module.
 type ModuleInformation struct {
-	Addresses   map[string]byte
-	StatusCodes map[int]string
+	Addresses  map[string]byte
+	CodeBanks  map[string]map[int]string
+	ValueTypes map[string]types.BasicKind
+	TypeCode   byte
 }
 
-func getSourceAddr() byte {
-	// read the current address from the channel, then put either
-	// addr + 1 on the channel (incremement), or wrap down to minSourceAddr
-	// if we will overflow a single byte
-	addr := <-currentSourceAddr
-	if addr <= 254 {
-		currentSourceAddr <- addr + 1
-	} else {
-		currentSourceAddr <- minSourceAddr
-	}
-	return addr
+// HumanPayload is a struct containing the basic types NKT devices may work with
+type HumanPayload struct {
+	// S holds a string
+	S string
+
+	// U holds a uint16
+	U uint16
+
+	// B holds raw bytes
+	B []byte
+
+	// F holds a float
+	F float64
+}
+
+// crcHelper computes the two-byte CRC value in a concurrent safe way and one line
+func crcHelper(buf []byte) []byte {
+	crcUint := crcTable.InitCrc()
+	crcUint = crcTable.UpdateCrc(crcUint, buf)
+	crcBytes := make([]byte, 2)
+	binary.BigEndian.PutUint16(crcBytes, crcTable.CRC16(crcUint))
+	return crcBytes
 }
 
 // AddressTypePair holds an Address and a Type byte
@@ -121,14 +90,77 @@ func AddressScan() []AddressTypePair {
 	return []AddressTypePair{}
 }
 
-func sanitize(data []byte) []byte {
-	out := make([]byte, 240)
-	for _, b := range data {
-		if bytes.Contains(specialChars, []byte{b}) {
-			out = append(out, []byte{specialCharFirstReplacement, b + specialCharShift}...)
-		} else {
-			out = append(out, b)
-		}
+// Module objects have an address and information struct
+type Module struct {
+	// Addr is the network or serial location of the module (i.e., is externally facing)
+	Addr string
+
+	// Info contains mapping data for a given module, see ModuleInformation for more docs.
+	Info *ModuleInformation
+}
+
+// SendRecv writes a telegram to the NKT device and returns the response
+func (m *Module) SendRecv(tele []byte) ([]byte, error) {
+	conn, err := util.TCPSetup(m.Addr, 3*time.Second)
+	if err != nil {
+		return []byte{}, err
 	}
-	return out
+	defer conn.Close()
+	_, err = conn.Write(tele)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	return bufio.NewReader(conn).ReadBytes(telEnd)
+}
+
+// GetValue reads a register
+func (m *Module) GetValue(addrName string) (MessagePrimitive, HumanPayload, error) {
+	mpSend := MessagePrimitive{
+		Dest:     m.Info.Addresses["Module"],
+		Src:      getSourceAddr(), // GSA returns a quasi-unique source address (up to ~154 per message interval)
+		Register: m.Info.Addresses[addrName],
+		Type:     "Read",
+		Data:     []byte{}}
+
+	tele, err := MakeTelegram(mpSend)
+	if err != nil {
+		return MessagePrimitive{}, HumanPayload{}, err
+	}
+	resp, err := m.SendRecv(tele)
+	fmt.Printf("%X\n", resp)
+	if err != nil {
+		return MessagePrimitive{}, HumanPayload{}, err
+	}
+
+	mpRecv, err := DecodeTelegram(resp)
+
+	// ValueTypes maps registers to types (e.g. uint16).
+	// UnpackRegister converts this to a HumanPayload.  The map lookup returns 0
+	// if the type is not defined, which will trigger a floating point conversion
+	// at 10x resolution
+	hp := UnpackRegister(mpRecv.Data, m.Info.ValueTypes[addrName])
+	if err != nil {
+		return MessagePrimitive{}, HumanPayload{}, err
+	}
+	return mpRecv, hp, nil
+}
+
+// UnpackRegister converts the raw data from a register into a HumanPayload
+func UnpackRegister(b []byte, typ types.BasicKind) HumanPayload {
+	if len(b) == 0 {
+		return HumanPayload{}
+	}
+	switch typ {
+	case types.Uint16:
+		v := dataOrder.Uint16(b)
+		return HumanPayload{U: v}
+	case types.String:
+		v := string(b)
+		return HumanPayload{S: v}
+	default: // default is 10x superres floating point value
+		v := dataOrder.Uint16(b)
+		return HumanPayload{F: float64(v) / 10.0}
+
+	}
 }
