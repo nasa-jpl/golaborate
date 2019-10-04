@@ -333,20 +333,8 @@ func (ldc *LDC3916) BindRoutes(stem string) {
 	http.HandleFunc(stem+"/raw", ldc.RawRequest)
 }
 
-func tcpSetup(addr string) (net.Conn, error) {
-	timeout := 3 * time.Second
-	conn, err := net.DialTimeout("tcp", addr, timeout)
-	if err != nil {
-		return nil, err
-	}
-	deadline := time.Now().Add(timeout)
-	conn.SetReadDeadline(deadline)
-	conn.SetWriteDeadline(deadline)
-	return conn, nil
-}
-
 func runWriteOnlyCommand(addr, cmd string) error {
-	conn, err := tcpSetup(addr)
+	conn, err := util.TCPSetup(addr, 3*time.Second)
 	if err != nil {
 		return err
 	}
@@ -372,7 +360,7 @@ func readReply(conn net.Conn) ([]byte, error) {
 }
 
 func tcpQueryBool(addr, cmd string) (bool, error) {
-	conn, err := tcpSetup(addr)
+	conn, err := util.TCPSetup(addr, 3*time.Second)
 	if err != nil {
 		return false, nil
 	}
@@ -399,7 +387,7 @@ func tcpQueryBool(addr, cmd string) (bool, error) {
 // TCPGetChan gets the current channel
 func TCPGetChan(addr string) (IXLChan, error) {
 	// open a tcp connection to the meter and send it our command
-	conn, err := tcpSetup(addr)
+	conn, err := util.TCPSetup(addr, 3*time.Second)
 	if err != nil {
 		return IXLChan{}, err
 	}
@@ -475,7 +463,7 @@ func TCPSetLaserControl(addr string, on bool) error {
 // TCPGetLaserCurrent gets the current laser current in mA.
 func TCPGetLaserCurrent(addr string) (IXLCurrent, error) {
 	// the body of this function is quite similar to TCPGetChan
-	conn, err := tcpSetup(addr)
+	conn, err := util.TCPSetup(addr, 3*time.Second)
 	if err != nil {
 		return IXLCurrent{}, err
 	}
@@ -507,7 +495,7 @@ func TCPSetLaserCurrent(addr string, current float64) error {
 // TCPRawCmd writes a raw command, appended the termination byte, and returns any response
 func TCPRawCmd(addr, cmd string) (string, error) {
 	log.Println([]byte(cmd))
-	conn, err := tcpSetup(addr)
+	conn, err := util.TCPSetup(addr, 3*time.Second)
 	if err != nil {
 		return "", err
 	}
