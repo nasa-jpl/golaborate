@@ -135,3 +135,8 @@ func ReplyWithFile(w http.ResponseWriter, r *http.Request, fn string, fldr strin
 	http.ServeContent(w, r, fn, stat.ModTime(), f)
 	return
 }
+
+// HTTPBinder is an object which knows how to bind methods to HTTP routes
+type HTTPBinder interface {
+	BindRoutes(string)
+}

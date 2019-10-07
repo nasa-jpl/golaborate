@@ -318,7 +318,7 @@ func (ldc *LDC3916) RawRequest(w http.ResponseWriter, r *http.Request) {
 
 }
 
-// BindRoutes binds HTTP routes to the methods of the LDC.  stem should not end in a slash.  Use "" for the index URL.
+// BindRoutes binds HTTP routes to the methods of the LDC.  This implements server.HTTPBinder.
 // ex: BindRoutes("/ldc") produces the following routes:
 // /ldc/chan [GET/POST] channel setting for stateful commands
 // /ldc/temperature-control [GET/POST] temperature control setting
