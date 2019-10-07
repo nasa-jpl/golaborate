@@ -35,3 +35,34 @@ func TCPSetup(addr string, timeout time.Duration) (net.Conn, error) {
 	conn.SetWriteDeadline(deadline)
 	return conn, nil
 }
+
+// ArangeByte replicates np.arange for byte slices
+// if startEnd is the only argument, it is the end value and start = 0, step = 1
+// if two arguments are given, they are start, end and step is 1.
+// if three arguments are given, they are start, end, step
+func ArangeByte(startEnd byte, endStep ...byte) []byte {
+	// default values for start and step
+	var start, end, step byte
+	if len(endStep) == 0 {
+		start = byte(0)
+		step = byte(1)
+		end = startEnd
+	} else if len(endStep) == 1 {
+		start = startEnd
+		end = endStep[0]
+		step = 1
+	} else {
+		start = startEnd
+		end = endStep[0]
+		step = endStep[1]
+	}
+	if step <= 0 || end < start {
+		return []byte{}
+	}
+	s := make([]byte, 0, 1+(end-start)/step)
+	for start <= end {
+		s = append(s, start)
+		start += step
+	}
+	return s
+}
