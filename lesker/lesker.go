@@ -2,7 +2,6 @@
 package lesker
 
 import (
-	"github.com/tarm/serial"
 	cp "github.jpl.nasa.gov/HCIT/go-hcit/commonpressure"
 )
 
@@ -11,10 +10,9 @@ type KJC300 struct {
 	cp.Sensor
 }
 
-// NewGauge returns a new Sensor instance
-func NewGauge(addr string) (KJC300, error) {
-	cfg := cp.MakeSerConf(addr)
-	conn, err := serial.OpenPort(cfg)
-	tc := KJC300{cp.Sensor{Conn: conn}}
-	return tc, err
+// NewSensor returns a new Sensor instance
+func NewSensor(addr, connType string) KJC300 {
+	return KJC300{Sensor: cp.Sensor{
+		Addr:     addr,
+		ConnType: connType}}
 }

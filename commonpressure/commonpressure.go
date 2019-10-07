@@ -6,18 +6,22 @@ package commonpressure
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.jpl.nasa.gov/HCIT/go-hcit/util"
+
 	"github.com/tarm/serial"
 )
 
-var (
-	terminators = []byte("\r")
+const (
+	termination = '\r'
 )
 
 // MakeSerConf makes a new serial.Config with correct parity, baud, etc, set.
@@ -50,17 +54,30 @@ func (press *Pressure) EncodeAndRespond(w http.ResponseWriter, r *http.Request) 
 	return
 }
 
-// Sensor has a serial connection and can make commands
+// Sensor has an address and connection type and can make commands
 type Sensor struct {
-	Conn *serial.Port
+	Addr, ConnType string
 }
 
-// NewGauge returns a new Sensor instance
-func NewGauge(addr string) (Sensor, error) {
-	cfg := MakeSerConf(addr)
-	conn, err := serial.OpenPort(cfg)
-	tc := Sensor{Conn: conn}
-	return tc, err
+// NewSensor returns a new Sensor instance
+func NewSensor(addr, connType string) Sensor {
+	return Sensor{
+		Addr:     addr,
+		ConnType: connType}
+}
+
+func (sens *Sensor) mkConn() (io.ReadWriteCloser, error) {
+	switch sens.ConnType {
+	case "TCP":
+		return util.TCPSetup(sens.Addr, 3*time.Second)
+
+	case "serial":
+		cfg := MakeSerConf(sens.Addr)
+		return serial.OpenPort(cfg)
+	default:
+		return nil, errors.New("ConnType must be TCP or serial")
+	}
+
 }
 
 // ReadAndReplyWithJSON read the sensor and reply with a JSON body
@@ -80,20 +97,22 @@ func (sens *Sensor) ReadAndReplyWithJSON(w http.ResponseWriter, r *http.Request)
 
 // MkMsg generates a message that conforms to the custom schema used by the Sensor gauges
 func (sens *Sensor) MkMsg(cmd string) []byte {
-	return append([]byte("#01"+cmd), terminators...)
+	return append([]byte("#01"+cmd), termination)
 }
 
-// Send sends a command to the controller.
-// If not terminated by terminators, behavior is undefined
-func (sens *Sensor) Send(cmd []byte) error {
-	_, err := sens.Conn.Write(cmd)
-	return err
-}
-
-// Recv data from the hardware and convert it to a string, stripping the leading *
-func (sens *Sensor) Recv() (string, error) {
-	reader := bufio.NewReader(sens.Conn)
-	bytes, err := reader.ReadBytes('\r')
+// SendRecv sends a command and receive an ASCII response that has already had SOT/EOT trimmed
+func (sens *Sensor) SendRecv(cmd []byte) (string, error) {
+	conn, err := sens.mkConn()
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+	_, err = conn.Write(cmd)
+	if err != nil {
+		return "", err
+	}
+	reader := bufio.NewReader(conn)
+	bytes, err := reader.ReadBytes(termination)
 	bytes = bytes[1 : len(bytes)-2] // drop first char, "*", and last "\r"
 	return string(bytes), err
 }
@@ -101,22 +120,24 @@ func (sens *Sensor) Recv() (string, error) {
 // SWVersion returns the sensor ID from the controller
 func (sens *Sensor) SWVersion() (string, error) {
 	msg := sens.MkMsg("VER")
-	err := sens.Send(msg)
-	if err != nil {
-		return "", err
-	}
-	id, err := sens.Recv()
-	return id, nil
+	return sens.SendRecv(msg)
 }
 
 func (sens *Sensor) Read() (float64, error) {
 	msg := sens.MkMsg("RD")
-	err := sens.Send(msg)
+	resp, err := sens.SendRecv(msg)
 	if err != nil {
-		return 0, err
+		return 0.0, err
 	}
-	resp, err := sens.Recv()
+	fmt.Println(resp)
 	strs := strings.Split(resp, " ")
 	protofloat := strings.TrimRight(strs[1], "\r")
 	return strconv.ParseFloat(protofloat, 64)
+}
+
+// BindRoutes binds HTTP routes to the methods of the pressure sensor.  This implements server.HTTPBinder.
+// ex: BindRoutes("/dst") produces the following routes:
+// /dst/pressure [GET] temperature and humidity, resp looks like {"P": 0.0004}  <- 4 millitorr
+func (sens *Sensor) BindRoutes(stem string) {
+	http.HandleFunc(stem+"/pressure", sens.ReadAndReplyWithJSON)
 }
