@@ -59,6 +59,7 @@ go get github.com/tarm/serial  # talking to serial devices
 go get github.com/spf13/viper  # configuration
 go get gopkg.in/yaml.v2        # YAML file support for configs
 go get github.com/snksoft/crc  # Cyclic Redundancy Check library for NKT devices
+go get golang.org/x/time/rate  # rate limiting
 ```
 
 There are no external dependencies aside from these .
