@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math/rand"
 	"net"
 	"net/http"
 	"strconv"
@@ -15,48 +14,9 @@ import (
 	"github.com/tarm/serial"
 )
 
-// MockableDewK sensor which may or may not be real
-type MockableDewK interface {
-	ReadAndReplyWithJSON() http.Handler
-}
-
-// DewK holds the address and connection type (TCP or serial) of a fluke sensor
-type DewK struct {
-	Addr, Conntype, Name string
-}
-
-// ReadAndReplyWithJSON reads the sensor over Conntype and responds with json-encoded TempHumic
-func (dk *DewK) ReadAndReplyWithJSON(w http.ResponseWriter, r *http.Request) {
-	var data TempHumid
-	var err error
-	if dk.Conntype == "TCP" { // this could be a switch if we need more than 2 types
-		data, err = TCPPollDewKCh1(dk.Addr)
-	} else {
-		data, err = SerPollDewKCh1(dk.Addr)
-	}
-	if err != nil {
-		fstr := fmt.Sprintf("unable to read data from DewK sensor %+v, error %q", dk, err)
-		log.Println(fstr)
-		http.Error(w, fstr, http.StatusInternalServerError)
-		return
-	}
-	data.EncodeAndRespond(w, r)
-	log.Printf("%s checked fluke %s, %+v", r.RemoteAddr, dk.Name, data)
-	return
-
-}
-
-// MockDewK sensor that returns 22 +/- 1C temp and 10 +/- 1% RH
-type MockDewK struct{}
-
-// ReadAndReplyWithJSON returns 22 +/- 1C temp and 10 +/- 1% RH from a fake sensor
-func (mdk *MockDewK) ReadAndReplyWithJSON(w http.ResponseWriter, r *http.Request) {
-	var t, h float64
-	h = 10 + rand.Float64()
-	t = 22 + rand.Float64()
-	th := TempHumid{T: t, H: h}
-	th.EncodeAndRespond(w, r)
-}
+const (
+	termination = '\r'
+)
 
 // TempHumid holds Temperature and Humidity data, T in C and H in % RH
 type TempHumid struct {
@@ -122,7 +82,7 @@ func TCPPollDewKCh1(ip string) (TempHumid, error) {
 
 	// make a new buffer reader and read up to \r
 	reader := bufio.NewReader(conn)
-	resp, err := reader.ReadBytes('\r')
+	resp, err := reader.ReadBytes(termination)
 	if err != nil {
 		return TempHumid{}, err
 	}
@@ -141,8 +101,9 @@ func SerPollDewKCh1(addr string) (TempHumid, error) {
 		log.Printf("cannot open serial port %q", err)
 		return TempHumid{}, err
 	}
+
 	reader := bufio.NewReader(conn)
-	buf, err := reader.ReadBytes('\r')
+	buf, err := reader.ReadBytes(termination)
 	if err != nil {
 		log.Printf("failed to read bytes from meter, %q", err)
 		return TempHumid{}, err
