@@ -1,10 +1,14 @@
 package nkt
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"time"
+
+	"github.jpl.nasa.gov/HCIT/go-hcit/util"
 
 	"github.com/snksoft/crc"
 )
@@ -199,4 +203,22 @@ func DecodeTelegram(tele []byte) (MessagePrimitive, error) {
 		Register: tele[3],
 		Data:     tele[4:],
 	}, nil
+}
+
+// WriteThenRead writes a telegram to a connection and then reads a response from it, returning an error if there is one
+func WriteThenRead(addr string, telegram []byte) ([]byte, error) {
+	conn, err := util.TCPSetup(addr, 3*time.Second)
+	if err != nil {
+		return []byte{}, err
+	}
+	defer conn.Close()
+	_, err = conn.Write(telegram)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	return bufio.NewReader(conn).ReadBytes(telEnd)
+	// buf := make([]byte, 0)
+	// _, err = conn.Read(buf)
+	// return buf, err
 }

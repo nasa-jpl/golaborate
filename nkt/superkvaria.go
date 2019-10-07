@@ -2,15 +2,14 @@ package nkt
 
 // this file contains values relevant to the SuperK Varia accessory
 
-// all values are encoded as uint16s and represent the quantity as described
-// in the const block
+const (
+	variaDefaultAddr = 0x10
+)
 
 var (
 	// SuperKVaria describes the SuperK Varia module
 	SuperKVaria = &ModuleInformation{
-		TypeCode: 0x68,
 		Addresses: map[string]byte{
-			"Module":              0x10,
 			"Input":               0x13,
 			"ND Setpoint":         0x32,
 			"Short Wave Setpoint": 0x33,
@@ -39,5 +38,8 @@ var (
 
 // NewSuperKVaria create a new Module representing a SuperKExtreme's main module
 func NewSuperKVaria(addr string) Module {
-	return Module{Addr: addr, Info: SuperKExtremeMain}
+	return Module{
+		AddrConn: addr,
+		AddrDev:  variaDefaultAddr,
+		Info:     SuperKExtremeMain}
 }

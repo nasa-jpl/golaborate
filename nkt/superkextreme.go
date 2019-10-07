@@ -1,16 +1,19 @@
 package nkt
 
+import "go/types"
+
 // this file contains values relevant to the SuperK Extreme modules
 
-// all values are encoded as uint16s and represent the quantity as described
-// in the const block
+const (
+	extremeDefaultAddr        = 0x0F
+	extremeFrontDefaultAddr   = 0x01
+	extremeBoosterDefaultAddr = 0x65
+)
 
 var (
 	// SuperKExtremeMain describes the SuperK Extreme Main module
 	SuperKExtremeMain = &ModuleInformation{
-		TypeCode: 0x60,
 		Addresses: map[string]byte{
-			"Module":             0x0F,
 			"Inlet Temperature":  0x11,
 			"Emission":           0x13,
 			"Setup":              0x31,
@@ -46,20 +49,20 @@ var (
 				13: "CRC error on startup (possible module address conflict)",
 				14: "Log error code present",
 				15: "System error code present",
-			}}}
+			}},
+		ValueTypes: map[string]types.BasicKind{
+			"Emission": types.Bool,
+		}}
 
 	// SuperKFrontDisplay describes the SuperK front display module
 	SuperKFrontDisplay = ModuleInformation{
-		TypeCode: 0x61,
 		Addresses: map[string]byte{
-			"Module":      0x01,
 			"Panel Lock":  0x3D,
 			"Text":        0x72,
 			"Error Flash": 0xBD}}
 
 	// SuperKBooster describes the SuperK Booster module
 	SuperKBooster = ModuleInformation{
-		TypeCode: 0x65,
 		Addresses: map[string]byte{
 			"Module":           0x05,
 			"Emission Runtime": 0x80,
@@ -79,5 +82,8 @@ var (
 
 // NewSuperKExtreme create a new Module representing a SuperKExtreme's main module
 func NewSuperKExtreme(addr string) Module {
-	return Module{Addr: addr, Info: SuperKExtremeMain}
+	return Module{
+		AddrConn: addr,
+		AddrDev:  extremeDefaultAddr,
+		Info:     SuperKExtremeMain}
 }
