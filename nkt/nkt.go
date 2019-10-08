@@ -112,43 +112,42 @@ func crcHelper(buf []byte) []byte {
 // - /what/ modules are installed (a type code)
 // and returns a map that connects addresses to (string) module types
 func AddressScan(addr string) (map[byte]string, error) {
-	// first establish a dummy connection and context for the limiter
-	// conn, err := util.TCPSetup(addr, 3*time.Second)
-	// if err != nil {
-	// 	return map[byte]string{}, err
-	// }
-	// defer conn.Close()
+	// first establish a connection and dummy context for the limiter
+	conn, err := util.TCPSetup(addr, 3*time.Second)
+	if err != nil {
+		return map[byte]string{}, err
+	}
+	defer conn.Close()
 	c := context.Background()
 
 	// now set up the rate limiter and basic message constructs
-	limiter := rate.NewLimiter(1, 1)
+	limiter := rate.NewLimiter(15, 15)
 	mp := MessagePrimitive{Type: "Read", Register: StandardAddresses["TypeCode"]}
-	addrs := util.ArangeByte(10, 20)
+	addrs := util.ArangeByte(1, 160)
 
 	modules := map[byte]string{}
 
 	for _, a := range addrs {
-		fmt.Println(a)
 		mp.Dest = a
 		mp.Src = getSourceAddr()
 		tele, err := MakeTelegram(mp)
 		if err != nil {
-			fmt.Println(err)
 			return map[byte]string{}, err
 		}
 		err = limiter.Wait(c)
 		if err != nil {
-			fmt.Println(err)
 			return map[byte]string{}, err
 		}
 
-		resp, err := WriteThenRead(addr, tele)
-		fmt.Println(a, err, resp, len(resp))
+		deadline := time.Now().Add(75 * time.Millisecond) // the manual advises 50-100 ms here
+		conn.SetReadDeadline(deadline)
+		conn.SetWriteDeadline(deadline)
+		resp, err := WriteThenRead(conn, tele)
 		if err == nil {
 			if len(resp) > 0 {
 				mpr, err := DecodeTelegram(resp)
-				fmt.Println(mpr)
 				if err == nil {
+					fmt.Println(a, mpr.Data)
 					modules[a] = ModuleTypeMap[mpr.Data[0]]
 				}
 			}
@@ -156,7 +155,6 @@ func AddressScan(addr string) (map[byte]string, error) {
 		}
 
 	}
-	// use a "50-100ms" timeout and query reg modNumRegister on each addr
 	return modules, nil
 }
 

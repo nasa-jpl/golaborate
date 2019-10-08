@@ -6,9 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"time"
-
-	"github.jpl.nasa.gov/HCIT/go-hcit/util"
+	"net"
 
 	"github.com/snksoft/crc"
 )
@@ -196,33 +194,24 @@ func DecodeTelegram(tele []byte) (MessagePrimitive, error) {
 	// 1.  We have a complete transmission
 	// 2.  No data was lost (CRC match)
 	// now we can break the message into its constituent pieces
-	return MessagePrimitive{
-		Dest:     tele[0],
-		Src:      tele[1],
-		Type:     MessageTypesBS[tele[2]],
-		Register: tele[3],
-		Data:     tele[4:],
-	}, nil
+	mp := MessagePrimitive{}
+	typ := MessageTypesBS[tele[2]]
+	mp.Dest = tele[0]
+	mp.Src = tele[1]
+	mp.Type = typ
+	mp.Register = tele[3]
+	if typ != "CRC Error" {
+		mp.Data = tele[4:]
+		return mp, nil
+	}
+	return mp, errors.New("CRC mismatch at NKT")
 }
 
 // WriteThenRead writes a telegram to a connection and then reads a response from it, returning an error if there is one
-func WriteThenRead(addr string, telegram []byte) ([]byte, error) {
-	conn, err := util.TCPSetup(addr, 3*time.Second)
+func WriteThenRead(conn net.Conn, telegram []byte) ([]byte, error) {
+	_, err := conn.Write(telegram)
 	if err != nil {
-		fmt.Println("open error ", err)
 		return []byte{}, err
 	}
-	defer conn.Close()
-	_, err = conn.Write(telegram)
-	if err != nil {
-		fmt.Println("write error ", err)
-		return []byte{}, err
-	}
-
-	resp, err := bufio.NewReader(conn).ReadBytes(telEnd)
-	if err == nil {
-		buf := make([]byte, 0)
-		conn.Read(buf)
-	}
-	return resp, err
+	return bufio.NewReader(conn).ReadBytes(telEnd)
 }
