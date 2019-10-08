@@ -5,7 +5,7 @@ import (
 	cp "github.jpl.nasa.gov/HCIT/go-hcit/commonpressure"
 )
 
-// KJC300 has a serial connection and can make commands
+// KJC300 embeds the commonpressure Sensor type
 type KJC300 struct {
 	cp.Sensor
 }
