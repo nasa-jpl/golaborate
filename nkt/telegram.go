@@ -209,16 +209,20 @@ func DecodeTelegram(tele []byte) (MessagePrimitive, error) {
 func WriteThenRead(addr string, telegram []byte) ([]byte, error) {
 	conn, err := util.TCPSetup(addr, 3*time.Second)
 	if err != nil {
+		fmt.Println("open error ", err)
 		return []byte{}, err
 	}
 	defer conn.Close()
 	_, err = conn.Write(telegram)
 	if err != nil {
+		fmt.Println("write error ", err)
 		return []byte{}, err
 	}
 
-	return bufio.NewReader(conn).ReadBytes(telEnd)
-	// buf := make([]byte, 0)
-	// _, err = conn.Read(buf)
-	// return buf, err
+	resp, err := bufio.NewReader(conn).ReadBytes(telEnd)
+	if err == nil {
+		buf := make([]byte, 0)
+		conn.Read(buf)
+	}
+	return resp, err
 }

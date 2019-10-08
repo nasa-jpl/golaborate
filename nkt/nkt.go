@@ -55,7 +55,11 @@ var (
 	ModuleTypeMap = map[byte]string{
 		0x0:  "N/A",
 		0x60: "SuperK Extreme",
+		0x61: "SuperK Front Panel",
+		0x65: "SuperK Booster",
 		0x68: "SuperK Varia",
+		0x6B: "SuperK Extend UV",
+		0x74: "SuperK COMPACT",
 	}
 )
 
@@ -119,15 +123,15 @@ func AddressScan(addr string) (map[byte]string, error) {
 	// now set up the rate limiter and basic message constructs
 	limiter := rate.NewLimiter(1, 1)
 	mp := MessagePrimitive{Type: "Read", Register: StandardAddresses["TypeCode"]}
-	addrs := util.ArangeByte(1, 160)
+	addrs := util.ArangeByte(10, 20)
 
 	modules := map[byte]string{}
 
 	for _, a := range addrs {
+		fmt.Println(a)
 		mp.Dest = a
 		mp.Src = getSourceAddr()
 		tele, err := MakeTelegram(mp)
-		fmt.Println(mp)
 		if err != nil {
 			fmt.Println(err)
 			return map[byte]string{}, err
@@ -137,12 +141,14 @@ func AddressScan(addr string) (map[byte]string, error) {
 			fmt.Println(err)
 			return map[byte]string{}, err
 		}
+
 		resp, err := WriteThenRead(addr, tele)
-		fmt.Println(resp, err)
-		if err != nil {
+		fmt.Println(a, err, resp, len(resp))
+		if err == nil {
 			if len(resp) > 0 {
 				mpr, err := DecodeTelegram(resp)
-				if err != nil {
+				fmt.Println(mpr)
+				if err == nil {
 					modules[a] = ModuleTypeMap[mpr.Data[0]]
 				}
 			}
@@ -225,7 +231,6 @@ func (m *Module) GetValue(addrName string) (MessagePrimitive, HumanPayload, erro
 	// UnpackRegister converts this to a HumanPayload.  The map lookup returns 0
 	// if the type is not defined, which will trigger a floating point conversion
 	// at 10x resolution
-	fmt.Println(mpRecv)
 	hp := UnpackRegister(mpRecv.Data, m.valueType(addrName))
 	if err != nil {
 		return MessagePrimitive{}, HumanPayload{}, err
