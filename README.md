@@ -1,39 +1,45 @@
 # go-hcit
- golang servers/services for S383's high contrast imaging testbeds.  This is set up as a monorepo and contains several packages.  Below is a somewhat infrequently maintained index of the packages and what they enable.  Each type of sensor has a `ReadAndReplyWithJSON` method which implements `http.Handler`
+golang servers/services for S383's high contrast imaging testbeds.  This is set up as a monorepo and contains several packages.  Below is a somewhat infrequently maintained index of the packages and what they enable.  Each type of sensor has a `ReadAndReplyWithJSON` method which implements `http.Handler`
 
- ### commonpressure
+### commonpressure
 
- refactored, common logic for working with pressure sensors.
+refactored, common logic for working with pressure sensors.
 
- ### fluke
+### fluke
 
- Reading from Fluke 1620a "DewK" temp/humidity sensors over TCP/IP or serial.
+Reading from Fluke 1620a "DewK" temp/humidity sensors over TCP/IP or serial.
 
- ### granville-phillips
+### granville-phillips
 
- Reading from GP375 pressure meters over serial.
+Reading from GP375 pressure meters over serial.
 
- ### lakeshore
+### lakeshore
 
- Reading from a 332 sensor/heater controller.
+Reading from a 332 sensor/heater controller.
 
- ### lesker
+### lesker
 
- Reading from KJC300 pressure meters.
+Reading from KJC300 pressure meters.
 
- ### thermocube
+### nkt
 
- Reading from Thermocube 200~400 series chillers.
+Operation (read state, command) of superK Extreme and VARIA lasers.
 
- In /cmd, there is the source for several executables:
+### thermocube
 
- ### envsrv
+Reading from Thermocube 200~400 series chillers.
 
- This server has routes for each sensor on OMC/GPCT/DST and allows them to be queried via HTTP.
+### Binaries
 
- ### zygo
+In /cmd, there is the source for several executables:
 
- This service enables remote measurement with Zygo interferometers via HTTP.
+#### envsrv
+
+This server has routes for each sensor on OMC/GPCT/DST and allows them to be queried via HTTP.
+
+#### zygo
+
+This service enables remote measurement with Zygo interferometers via HTTP.
 
 
 ## Setup
@@ -86,3 +92,27 @@ Most pieces of lab equipment communicate with a computer over RS232, aka a Seria
 - message terminations
 
 Then copy paste one of the existing modules, replace this information, and update the gofuncs as appropriate for the hardware controls or queries you want to implement.
+
+## development status
+
+| Device            | driver | server |
+| :---              | :----: |  ---:  |
+| JPL DM Controller |        |        |
+| Andor cameras     |        |        |
+| other cameras (?) |        |        |
+| Newport EPS       |        |        |
+| Aerotech Ensemble |        |        |
+| PI motion(?)      |        |        |
+| Lakeshore temp    |  X     |        |
+| Fluke temp/RH     |  X     |  X     |
+| Lesker pressure   |  X     |  X     |
+| GP pressure       |  X     |  X     |
+| Omega flowmeter   |        |        |
+| Omega temp        |        |        |
+| APC UPS           |        |        |
+| Pfeiffer turbo    |        |        |
+| NKT               |  X     |        |
+| IXL diode         |  X     |  X     |
+| Thermocube chiller|        |        |
+| Zygo              |  X     | X      |
+| 4D (?)            |        |        |
