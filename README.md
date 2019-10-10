@@ -98,6 +98,7 @@ Then copy paste one of the existing modules, replace this information, and updat
 | Device            | driver | server |
 | :---              | :----: |  ---:  |
 | JPL DM Controller |        |        |
+| BMC commercial    | X      |  X
 | Andor cameras     |        |        |
 | other cameras (?) |        |        |
 | Newport EPS       |        |        |

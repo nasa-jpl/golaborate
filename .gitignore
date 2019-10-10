@@ -16,3 +16,9 @@
 
 # mac trash
 .DS_Store
+
+# python stuff
+.pytest_cache
+
+# VS code
+.vscode
