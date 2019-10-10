@@ -177,7 +177,7 @@ type EPS301 struct {
 	Addr string
 }
 
-func (ep *EPS301) makeTelegram(mc motionCommand) (string, error) {
+func (ep *EPS301) makeTelegram(mc motionCommand, axis int) (string, error) {
 	pieces := []string{}
 	if mc.UsesAxis {
 		pieces = append(pieces, strconv.Itoa(axis))
