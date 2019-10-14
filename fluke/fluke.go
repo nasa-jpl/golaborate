@@ -1,17 +1,12 @@
 package fluke
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
-
-	"github.com/tarm/serial"
 )
 
 const (
@@ -52,61 +47,4 @@ func ParseTHFromBuffer(buf []byte) (TempHumid, error) {
 		numeric[i] = f
 	}
 	return TempHumid{T: numeric[0], H: numeric[1]}, nil
-}
-
-// TCPPollDewKCh1 reads temperature and humidity from a Fluke 1620a Thermo-Hygrometer over TCP/IP.
-func TCPPollDewKCh1(ip string) (TempHumid, error) {
-	// these meters communicate and port 10001.  They talk in raw TCP.
-	// sending read? spits back data looking like 21.4,6.5,0,0\r
-	// commas separate values.  Channels are all concat'd
-	port := "10001"
-	cmd := "read?\n"
-	timeout := 3 * time.Second
-
-	// open a tcp connection to the meter and send it our command
-	conn, err := net.DialTimeout("tcp", ip+":"+port, timeout)
-	if err != nil {
-		return TempHumid{}, err
-	}
-	deadline := time.Now().Add(timeout)
-	conn.SetReadDeadline(deadline)
-	conn.SetWriteDeadline(deadline)
-	defer conn.Close()
-	if err != nil {
-		return TempHumid{}, err
-	}
-	_, err = fmt.Fprintf(conn, cmd)
-	if err != nil {
-		return TempHumid{}, err
-	}
-
-	// make a new buffer reader and read up to \r
-	reader := bufio.NewReader(conn)
-	resp, err := reader.ReadBytes(termination)
-	if err != nil {
-		return TempHumid{}, err
-	}
-	return ParseTHFromBuffer(resp)
-}
-
-// SerPollDewKCh1 reads temperature and humidity from a Fluke 1620a Thermo-Hygrometer over serial.
-func SerPollDewKCh1(addr string) (TempHumid, error) {
-	conf := &serial.Config{
-		Name:        addr,
-		Baud:        9600,
-		ReadTimeout: 1 * time.Second}
-
-	conn, err := serial.OpenPort(conf)
-	if err != nil {
-		log.Printf("cannot open serial port %q", err)
-		return TempHumid{}, err
-	}
-
-	reader := bufio.NewReader(conn)
-	buf, err := reader.ReadBytes(termination)
-	if err != nil {
-		log.Printf("failed to read bytes from meter, %q", err)
-		return TempHumid{}, err
-	}
-	return ParseTHFromBuffer(buf)
 }

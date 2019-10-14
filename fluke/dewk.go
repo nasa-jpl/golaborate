@@ -1,53 +1,52 @@
 package fluke
 
 import (
-	"fmt"
-	"log"
-	"math/rand"
 	"net/http"
+
+	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
+	"github.jpl.nasa.gov/HCIT/go-hcit/server"
 )
 
-// DewK holds the address and connection type (TCP or serial) of a fluke sensor
+// DewK talks to a DewK 1620 temperature and humidity sensor
+// and serves data HTTP routes and meta HTTP routes (route list)
 type DewK struct {
-	Addr, Conntype, Name string
+	comm.RemoteDevice
+	server.Server
 }
 
-// ReadAndReplyWithJSON reads the sensor over Conntype and responds with json-encoded TempHumic
-func (dk *DewK) ReadAndReplyWithJSON(w http.ResponseWriter, r *http.Request) {
-	var data TempHumid
-	var err error
-	if dk.Conntype == "TCP" { // this could be a switch if we need more than 2 types
-		data, err = TCPPollDewKCh1(dk.Addr)
-	} else {
-		data, err = SerPollDewKCh1(dk.Addr)
+// NewDewK creates a new DewK instance
+func NewDewK(addr string, serial bool) *DewK {
+	if !serial {
+		addr = addr + ":10001"
 	}
+	rd := comm.NewRemoteDevice(addr, serial)
+	srv := server.Server{RouteTable: make(server.RouteTable)}
+	dk := DewK{RemoteDevice: rd}
+	srv.RouteTable["temphumid"] = dk.HTTPHandler
+	dk.Server = srv
+	return &dk
+}
+
+// Read polls the DewK for the current temperature and humidity, opening and closing a connection along the way
+func (dk *DewK) Read() (TempHumid, error) {
+	cmd := []byte("read?")
+	err := dk.Open()
 	if err != nil {
-		fstr := fmt.Sprintf("unable to read data from DewK sensor %+v, error %q", dk, err)
-		log.Println(fstr)
-		http.Error(w, fstr, http.StatusInternalServerError)
-		return
+		return TempHumid{}, err
 	}
-	data.EncodeAndRespond(w, r)
-	log.Printf("%s checked fluke %s, %+v", r.RemoteAddr, dk.Name, data)
-	return
-
+	defer dk.Close()
+	resp, err := dk.SendRecv(cmd)
+	if err != nil {
+		return TempHumid{}, err
+	}
+	return ParseTHFromBuffer(resp)
 }
 
-// BindRoutes binds HTTP routes to the methods of the DewK.  This implements server.HTTPBinder.
-// ex: BindRoutes("/zygo-table") produces the following routes:
-// /zygo-table/temphumid [GET] temperature and humidity, resp looks like {"T": 21.64, "RH": 6.1}
-func (dk *DewK) BindRoutes(stem string) {
-	http.HandleFunc(stem+"/temphumid", dk.ReadAndReplyWithJSON)
-}
-
-// MockDewK sensor that returns 22 +/- 1C temp and 10 +/- 1% RH
-type MockDewK struct{}
-
-// ReadAndReplyWithJSON returns 22 +/- 1C temp and 10 +/- 1% RH from a fake sensor
-func (mdk *MockDewK) ReadAndReplyWithJSON(w http.ResponseWriter, r *http.Request) {
-	var t, h float64
-	h = 10 + rand.Float64()
-	t = 22 + rand.Float64()
-	th := TempHumid{T: t, H: h}
+// HTTPHandler handles the single route served by a DewK
+func (dk *DewK) HTTPHandler(w http.ResponseWriter, r *http.Request) {
+	th, err := dk.Read()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 	th.EncodeAndRespond(w, r)
 }
