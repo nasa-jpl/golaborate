@@ -60,16 +60,17 @@ func (rt RouteTable) ListEndpoints() []string {
 // A Server holds a RouteTable and implements HTTPBinder
 type Server struct {
 	RouteTable RouteTable
+	URLStem    string
 }
 
 // BindRoutes binds routes on the default http server at stem+str
 // for str in ListRoutes
-func (s *Server) BindRoutes(stem string) {
+func (s *Server) BindRoutes() {
 	for str, meth := range s.RouteTable {
-		http.HandleFunc(stem+"/"+str, meth)
+		http.HandleFunc(s.URLStem+"/"+str, meth)
 	}
 
-	http.HandleFunc(stem+"/"+"list-of-routes", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc(s.URLStem+"/"+"list-of-routes", func(w http.ResponseWriter, r *http.Request) {
 		list := s.ListRoutes()
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -88,4 +89,46 @@ func (s *Server) BindRoutes(stem string) {
 // by this server
 func (s *Server) ListRoutes() []string {
 	return s.RouteTable.ListEndpoints()
+}
+
+// Mainframe is the top-level struct for an actual HTTP server with many
+// Server objects that map to hardware and represent "services" to the end user
+type Mainframe struct {
+	nodes []*Server
+}
+
+// Add adds a new server to the mainframe
+func (m *Mainframe) Add(s *Server) {
+	m.nodes = append(m.nodes, s)
+}
+
+// RouteGraph returns a non-recursive, depth-1 map of URL stems and their endpoints
+func (m *Mainframe) RouteGraph() map[string][]string {
+	routes := make(map[string][]string)
+	for _, s := range m.nodes {
+		routes[s.URLStem] = s.ListRoutes()
+	}
+	return routes
+}
+
+func (m *Mainframe) graphHandler(w http.ResponseWriter, r *http.Request) {
+	graph := m.RouteGraph()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	err := json.NewEncoder(w).Encode(graph)
+	if err != nil {
+		fstr := fmt.Sprintf("error encoding route graph to json state %q", err)
+		log.Println(fstr)
+		http.Error(w, fstr, http.StatusInternalServerError)
+	}
+	return
+}
+
+// BindRoutes binds the routes for each member service
+func (m *Mainframe) BindRoutes() {
+	for _, s := range m.nodes {
+		s.BindRoutes()
+	}
+
+	http.HandleFunc("/route-graph", m.graphHandler)
 }
