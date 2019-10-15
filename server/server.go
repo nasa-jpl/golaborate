@@ -122,7 +122,12 @@ func (m *Mainframe) Add(s HTTPBinder) {
 func (m *Mainframe) RouteGraph() map[string][]string {
 	routes := make(map[string][]string)
 	for _, s := range m.nodes {
-		routes[s.URLStem()] = s.ListRoutes()
+		stem := s.URLStem()
+		if _, ok := routes[stem]; ok {
+			routes[stem] = append(routes[stem], s.ListRoutes()...)
+		} else {
+			routes[stem] = s.ListRoutes()
+		}
 	}
 	return routes
 }
