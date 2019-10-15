@@ -60,7 +60,7 @@ type Sensor struct {
 // NewSensor creates a new Sensor instance
 func NewSensor(addr, urlStem string, serial bool) *Sensor {
 	rd := comm.NewRemoteDevice(addr, serial)
-	srv := server.Server{RouteTable: make(server.RouteTable), Stem: urlStem}
+	srv := server.NewServer(urlStem)
 	s := Sensor{RemoteDevice: rd}
 	srv.RouteTable["pressure"] = s.HTTPHandler
 	s.Server = srv

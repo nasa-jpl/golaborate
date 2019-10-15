@@ -65,7 +65,7 @@ type LDC3916 struct {
 }
 
 // NewLDC3916 creates a new LDC3916 instance, which embeds both comm.RemoteDevice and server.Server
-func NewLDC3916(addr, urlStem string) LDC3916 {
+func NewLDC3916(addr, urlStem string) *LDC3916 {
 	rd := comm.NewRemoteDevice(addr, false)
 	srv := server.NewServer(urlStem)
 	ldc := LDC3916{RemoteDevice: rd}
@@ -75,7 +75,7 @@ func NewLDC3916(addr, urlStem string) LDC3916 {
 	srv.RouteTable["laser-current"] = ldc.LaserCurrentDispatch
 	srv.RouteTable["raw"] = ldc.RawDispatch
 	ldc.Server = srv
-	return ldc
+	return &ldc
 }
 
 // TxTermination overloads the value from RemoteDevice
