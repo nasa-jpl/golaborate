@@ -4,6 +4,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"go/types"
 	"log"
 	"net/http"
 	"os"
@@ -65,6 +66,11 @@ type Server struct {
 
 	// stem is the string returned by URLStem to satisfy HTTPBinder
 	Stem string
+}
+
+// NewServer returns a new Server instance
+func NewServer(stem string) Server {
+	return Server{RouteTable: make(RouteTable), Stem: stem}
 }
 
 // URLStem returns the head of all URLs returned in ListRoutes
@@ -141,4 +147,151 @@ func (m *Mainframe) BindRoutes() {
 	}
 
 	http.HandleFunc("/route-graph", m.graphHandler)
+}
+
+// all of the following types are followed with a capital T for homogenaeity and
+// avoiding clashes with builtins
+
+// StrT is a struct with a single Str field
+type StrT struct {
+	Str string `json:"str"`
+}
+
+// FloatT is a struct with a single F64 field
+type FloatT struct {
+	F64 float64 `json:"f64"`
+}
+
+// UintT is a struct with a single Int field
+type UintT struct {
+	Int uint16 `json:"int"`
+}
+
+// ByteT is a struct with a single Int field
+type ByteT struct {
+	Int byte `json:"int"` // we won't distinguish between bytes and ints for users
+}
+
+// BufferT is a struct with a single Int field
+type BufferT struct {
+	Int []byte `json:"int"`
+}
+
+// BoolT is a sutrct with a single Bool field
+type BoolT struct {
+	Bool bool `json:"bool"`
+}
+
+// HumanPayload is a struct containing the basic types NKT devices may work with
+type HumanPayload struct {
+	// Bool holds a binary value
+	Bool bool
+
+	// Buffer holds raw bytes
+	Buffer []byte
+
+	// Byte holds a single byte
+	Byte byte
+
+	// Float holds a float
+	Float float64
+
+	// String holds a string
+	String string
+
+	// Uint16 holds a uint16
+	Uint16 uint16
+
+	// T holds the type of data actually contained in the payload
+	T types.BasicKind
+}
+
+// EndianInterface is safisfied by both encoding/binary.BigEndian and LittleEndian
+type EndianInterface interface {
+	Uint16([]byte) uint16
+}
+
+// UnpackBinary converts the raw data from a register into a HumanPayload
+func UnpackBinary(b []byte, typ types.BasicKind, endian EndianInterface) HumanPayload {
+	var hp HumanPayload
+	if len(b) == 0 {
+		return HumanPayload{}
+	}
+	switch typ {
+	case types.Uint16:
+		v := endian.Uint16(b)
+		hp = HumanPayload{Uint16: v}
+	case types.Bool:
+		v := uint8(b[0]) == 1
+		hp = HumanPayload{Bool: v}
+	case types.String:
+		v := string(b)
+		hp = HumanPayload{String: v}
+	case types.Byte:
+		v := b[0]
+		hp = HumanPayload{Byte: v}
+	default: // default is 10x superres floating point value
+		v := endian.Uint16(b)
+		hp = HumanPayload{Float: float64(v) / 10.0}
+	}
+
+	hp.T = typ
+	return hp
+}
+
+// EncodeAndRespond converts the humanpayload to a smaller struct with only one
+// field and writes it to w as JSON.
+func (hp *HumanPayload) EncodeAndRespond(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	switch hp.T {
+	case types.Bool:
+		obj := BoolT{Bool: hp.Bool}
+
+		// the logic from err to the closing brace is copy pasted a bunch in here
+		err := json.NewEncoder(w).Encode(obj)
+		if err != nil {
+			fstr := fmt.Sprintf("error encoding %+v hp to JSON, %q", hp, err)
+			log.Println(fstr)
+			http.Error(w, fstr, http.StatusInternalServerError)
+		}
+	// skip bytes case, unhandled in Unpack
+	case types.Byte:
+		obj := ByteT{Int: hp.Byte} // Byte -> int for consistency with uints
+
+		err := json.NewEncoder(w).Encode(obj)
+		if err != nil {
+			fstr := fmt.Sprintf("error encoding %+v hp to JSON, %q", hp, err)
+			log.Println(fstr)
+			http.Error(w, fstr, http.StatusInternalServerError)
+		}
+	case types.Float64:
+		obj := FloatT{F64: hp.Float}
+
+		err := json.NewEncoder(w).Encode(obj)
+		if err != nil {
+			fstr := fmt.Sprintf("error encoding %+v hp to JSON, %q", hp, err)
+			log.Println(fstr)
+			http.Error(w, fstr, http.StatusInternalServerError)
+		}
+	case types.String:
+		obj := StrT{Str: hp.String}
+
+		err := json.NewEncoder(w).Encode(obj)
+		if err != nil {
+			fstr := fmt.Sprintf("error encoding %+v hp to JSON, %q", hp, err)
+			log.Println(fstr)
+			http.Error(w, fstr, http.StatusInternalServerError)
+		}
+	case types.Uint16:
+		obj := UintT{Int: hp.Uint16}
+		err := json.NewEncoder(w).Encode(obj)
+		if err != nil {
+			fstr := fmt.Sprintf("error encoding %+v hp to JSON, %q", hp, err)
+			log.Println(fstr)
+			http.Error(w, fstr, http.StatusInternalServerError)
+		}
+
+	}
 }

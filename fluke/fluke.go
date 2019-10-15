@@ -9,10 +9,6 @@ import (
 	"strings"
 )
 
-const (
-	termination = '\r'
-)
-
 // TempHumid holds Temperature and Humidity data, T in C and H in % RH
 type TempHumid struct {
 	T float64 `json:"temp"`

@@ -20,7 +20,7 @@ func NewDewK(addr string, urlStem string, serial bool) *DewK {
 		addr = addr + ":10001"
 	}
 	rd := comm.NewRemoteDevice(addr, serial)
-	srv := server.Server{RouteTable: make(server.RouteTable), Stem: urlStem}
+	srv := server.NewServer(urlStem)
 	dk := DewK{RemoteDevice: rd}
 	srv.RouteTable["temphumid"] = dk.HTTPHandler
 	dk.Server = srv
