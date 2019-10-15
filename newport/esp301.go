@@ -5,66 +5,39 @@ import (
 	"strconv"
 )
 
+type command struct {
+	Cmd         string `json:"cmd"`
+	Alias       string `json:"alias"`
+	Description string `json:"description"`
+	UsesAxis    bool   `json:"usesAxis"`
+	IsRead      bool   `json:"isRead"`
+}
+
+var (
+	commands = []command{
+		// Status functions
+		{Cmd: "TE", Alias: "err-num", Description: "get error number", IsRead: true},
+		{Cmd: "TP", Alias: "position", Description: "get position", UsesAxis: true, IsRead: true},
+		{Cmd: "TS", Alias: "controller-status", Description: "get controller status"},
+		{Cmd: "TV", Alias: "velocity", Description: "get velocity", UsesAxis: true, IsRead: true},
+		{Cmd: "TX", Alias: "controller-activity", Description: "get controller activity", IsRead: true},
+		{Cmd: "VE", Alias: "controller-firmware", Description: "get controller firmware version", IsRead: true},
+	}
+)
+
+// REWRITE THE CODE BELOW.
+// MAKE SEVERAL SEQUENCES OF COMMANDS, BY CATEGORY (STATUS, MOTION, ETC)
+// EXPOSE A /RAW-COMMAND ROUTE THAT ALLOWS USERS TO DO WHATEVER THEY WANT
+// EXPOSE A /HELP ROUTE THAT RETURNS THE SEQUENCES OF COMMANDS
+// WHICH INCLUDE HELPFUL INFORMATION, DESCRIPTION ETC.
+// EXPOSE A FEW ROUTES LIKE:
+// - /AXIS/IDX/ABSPOS   [GET] RETRIEVE ABSOLUTE POSITION [POST] SET POSITION
+// - /AXIS/IDX/RELPOS   [GET] RETRIEVE RELATIVE POSITION [POST] SET RELATIVE POSITION
+// - /AXIS/IDX/VELOCITY [GET] / [POST] AS ABOVE
+// - /AXIS/IDX/ACCELERATION
+// - /AXIS/IDX/DECELERATION
 var (
 	epsCommands = map[string]motionCommand{
-		// Status functions
-		"DP": motionCommand{
-			Descr:    "Get target position",
-			Route:    "target-position",
-			Method:   http.MethodGet,
-			UsesAxis: true},
-		"DV": motionCommand{
-			Descr:    "Get working speed",
-			Route:    "working-speed",
-			Method:   http.MethodGet,
-			UsesAxis: true},
-		"ID": motionCommand{
-			Descr:  "Get stage model and serial number",
-			Route:  "model-serial",
-			Method: http.MethodGet},
-		"MD": motionCommand{
-			Descr:    "Get axis motion status",
-			Route:    "moving",
-			Method:   http.MethodGet,
-			UsesAxis: true},
-		"PH": motionCommand{
-			Descr:    "Get hardware status",
-			Route:    "hw-status",
-			Method:   http.MethodGet,
-			UsesAxis: true},
-		"TB": motionCommand{
-			Descr:    "Get error message",
-			Route:    "err-msg",
-			Method:   http.MethodGet,
-			UsesAxis: true},
-		"TE": motionCommand{
-			Descr:    "Get error number",
-			Route:    "err-num",
-			Method:   http.MethodGet,
-			UsesAxis: true},
-		"TP": motionCommand{
-			Descr:    "Get position",
-			Route:    "position",
-			Method:   http.MethodGet,
-			UsesAxis: true},
-		"TS": motionCommand{
-			Descr:  "Get controller status",
-			Route:  "controller-status",
-			Method: http.MethodGet},
-		"TV": motionCommand{
-			Descr:    "Get velocity",
-			Route:    "velocity",
-			Method:   http.MethodGet,
-			UsesAxis: true},
-		"TX": motionCommand{
-			Descr:  "Get controller activity",
-			Route:  "controller-activity",
-			Method: http.MethodGet},
-		"VE": motionCommand{
-			Descr:  "Get firmware version",
-			Route:  "firmware-version",
-			Method: http.MethodGet},
-
 		// Motion & Position control
 		"AB": motionCommand{
 			Descr:    "Abort motion",
