@@ -41,8 +41,9 @@ func ReplyWithFile(w http.ResponseWriter, r *http.Request, fn string, fldr strin
 
 // HTTPBinder is an object which knows how to bind methods to HTTP routes and can list them
 type HTTPBinder interface {
-	BindRoutes(string)
-	ListRoutes()
+	BindRoutes()
+	ListRoutes() []string
+	URLStem() string
 }
 
 // RouteTable maps URL endpoints to
@@ -59,18 +60,27 @@ func (rt RouteTable) ListEndpoints() []string {
 
 // A Server holds a RouteTable and implements HTTPBinder
 type Server struct {
+	//RouteTable is an instance of type RouteTable
 	RouteTable RouteTable
-	URLStem    string
+
+	// stem is the string returned by URLStem to satisfy HTTPBinder
+	Stem string
+}
+
+// URLStem returns the head of all URLs returned in ListRoutes
+func (s *Server) URLStem() string {
+	return s.Stem
 }
 
 // BindRoutes binds routes on the default http server at stem+str
 // for str in ListRoutes
 func (s *Server) BindRoutes() {
+	stem := s.URLStem()
 	for str, meth := range s.RouteTable {
-		http.HandleFunc(s.URLStem+"/"+str, meth)
+		http.HandleFunc(stem+"/"+str, meth)
 	}
 
-	http.HandleFunc(s.URLStem+"/"+"list-of-routes", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc(stem+"/"+"list-of-routes", func(w http.ResponseWriter, r *http.Request) {
 		list := s.ListRoutes()
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -94,11 +104,11 @@ func (s *Server) ListRoutes() []string {
 // Mainframe is the top-level struct for an actual HTTP server with many
 // Server objects that map to hardware and represent "services" to the end user
 type Mainframe struct {
-	nodes []*Server
+	nodes []HTTPBinder
 }
 
 // Add adds a new server to the mainframe
-func (m *Mainframe) Add(s *Server) {
+func (m *Mainframe) Add(s HTTPBinder) {
 	m.nodes = append(m.nodes, s)
 }
 
@@ -106,7 +116,7 @@ func (m *Mainframe) Add(s *Server) {
 func (m *Mainframe) RouteGraph() map[string][]string {
 	routes := make(map[string][]string)
 	for _, s := range m.nodes {
-		routes[s.URLStem] = s.ListRoutes()
+		routes[s.URLStem()] = s.ListRoutes()
 	}
 	return routes
 }

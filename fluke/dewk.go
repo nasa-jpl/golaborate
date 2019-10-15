@@ -15,12 +15,12 @@ type DewK struct {
 }
 
 // NewDewK creates a new DewK instance
-func NewDewK(addr string, serial bool) *DewK {
+func NewDewK(addr string, urlStem string, serial bool) *DewK {
 	if !serial {
 		addr = addr + ":10001"
 	}
 	rd := comm.NewRemoteDevice(addr, serial)
-	srv := server.Server{RouteTable: make(server.RouteTable)}
+	srv := server.Server{RouteTable: make(server.RouteTable), Stem: urlStem}
 	dk := DewK{RemoteDevice: rd}
 	srv.RouteTable["temphumid"] = dk.HTTPHandler
 	dk.Server = srv
