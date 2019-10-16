@@ -21,8 +21,8 @@ const (
 	termination = '\r'
 )
 
-// MakeSerConf makes a new serial.Config with correct parity, baud, etc, set.
-func MakeSerConf(addr string) *serial.Config {
+// makeSerConf makes a new serial.Config with correct parity, baud, etc, set.
+func makeSerConf(addr string) *serial.Config {
 	return &serial.Config{
 		Name:        addr,
 		Baud:        19200,
@@ -69,7 +69,7 @@ func NewSensor(addr, urlStem string, serial bool) *Sensor {
 
 // SerialConf returns a serial config and satisfies SerialConfigurator
 func (s *Sensor) SerialConf() serial.Config {
-	return *MakeSerConf(s.Addr)
+	return *makeSerConf(s.Addr)
 }
 
 // Send overloads RemoteDevice.Send to prepend the "#01" that is expected by the sensor
