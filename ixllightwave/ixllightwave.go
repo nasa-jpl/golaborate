@@ -102,6 +102,7 @@ func (ldc *LDC3916) ChanDispatch(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		obj := struct{ ints []int }{}
 		err := json.NewDecoder(r.Body).Decode(obj)
+		defer r.Body.Close()
 		if err != nil {
 			fstr := fmt.Sprintf("unable to decode int array from query.  Query must be a JSON request with \"ints\" field.  For a single channel, use a length-1 array.  %q", err)
 			log.Println(fstr)
@@ -127,6 +128,7 @@ func (ldc *LDC3916) TempControlDispatch(w http.ResponseWriter, r *http.Request) 
 	case http.MethodPost:
 		boo := server.BoolT{}
 		err := json.NewDecoder(r.Body).Decode(boo)
+		defer r.Body.Close()
 		if err != nil {
 			fstr := fmt.Sprintf("unable to decode boolean from query.  Query must be a JSON request with \"bool\" field.  %q", err)
 			log.Println(fstr)
@@ -151,6 +153,7 @@ func (ldc *LDC3916) LaserOutputDispatch(w http.ResponseWriter, r *http.Request) 
 	case http.MethodPost:
 		boo := server.BoolT{}
 		err := json.NewDecoder(r.Body).Decode(boo)
+		defer r.Body.Close()
 		if err != nil {
 			fstr := fmt.Sprintf("unable to decode boolean from query.  Query must be a JSON request with \"bool\" field.  %q", err)
 			log.Println(fstr)
@@ -175,6 +178,7 @@ func (ldc *LDC3916) LaserCurrentDispatch(w http.ResponseWriter, r *http.Request)
 	case http.MethodPost:
 		float := server.FloatT{}
 		err := json.NewDecoder(r.Body).Decode(float)
+		defer r.Body.Close()
 		if err != nil {
 			fstr := fmt.Sprintf("unable to decode boolean from query.  Query must be a JSON request with \"bool\" field.  %q", err)
 			log.Println(fstr)
@@ -194,7 +198,8 @@ func (ldc *LDC3916) RawDispatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	str := server.StrT{}
-	json.NewDecoder(r.Body).Decode(&str)
+	json.NewDecoder(r.Body).Decode(str)
+	defer r.Body.Close()
 	resp, err := ldc.processCommand(str.Str, true, "")
 	httpResponder(resp, "string", err)(w, r)
 }
