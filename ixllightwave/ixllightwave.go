@@ -283,7 +283,7 @@ func httpResponder(data string, typ string, err error) http.HandlerFunc {
 			}
 		}
 		ret = struct{ f64 float64 }{f}
-	case "default":
+	default:
 		ret = struct{ str string }{data}
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
