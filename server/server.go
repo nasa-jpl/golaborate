@@ -85,19 +85,6 @@ func (s *Server) BindRoutes() {
 	for str, meth := range s.RouteTable {
 		http.HandleFunc(stem+"/"+str, meth)
 	}
-
-	http.HandleFunc(stem+"/"+"list-of-routes", func(w http.ResponseWriter, r *http.Request) {
-		list := s.ListRoutes()
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		err := json.NewEncoder(w).Encode(list)
-		if err != nil {
-			fstr := fmt.Sprintf("error encoding list of routes data to json %q", err)
-			log.Println(fstr)
-			http.Error(w, fstr, http.StatusInternalServerError)
-		}
-	})
-
 	return
 }
 
@@ -147,11 +134,33 @@ func (m *Mainframe) graphHandler(w http.ResponseWriter, r *http.Request) {
 
 // BindRoutes binds the routes for each member service
 func (m *Mainframe) BindRoutes() {
+	listRouteMap := make(map[string][]string)
 	for _, s := range m.nodes {
 		s.BindRoutes()
+		stem := s.URLStem()
+		if value, ok := listRouteMap[stem]; ok { // ok, key exists, concat the lists
+			listRouteMap[stem] = append(value, s.ListRoutes()...)
+		} else {
+			listRouteMap[stem] = s.ListRoutes()
+		}
+	}
+
+	for stem, listOfRoutes := range listRouteMap {
+		http.HandleFunc(stem+"/route-graph", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			err := json.NewEncoder(w).Encode(listOfRoutes)
+			if err != nil {
+				fstr := fmt.Sprintf("error encoding list of routes data to json %q", err)
+				log.Println(fstr)
+				http.Error(w, fstr, http.StatusInternalServerError)
+			}
+		})
 	}
 
 	http.HandleFunc("/route-graph", m.graphHandler)
+
+	return
 }
 
 // all of the following types are followed with a capital T for homogenaeity and
