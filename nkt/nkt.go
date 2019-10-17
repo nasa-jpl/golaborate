@@ -233,14 +233,24 @@ func (m *Module) getRegister(addrName string) (byte, error) {
 // SendRecv sends a buffer after appending the Tx terminator,
 // then returns the response with the Rx terminator stripped
 func (m *Module) SendRecv(mp MessagePrimitive) (MessagePrimitive, error) {
+	mpRecv := MessagePrimitive{}
 	if m.RemoteDevice.Conn == nil {
-		return MessagePrimitive{}, comm.ErrNotConnected
+		return mpRecv, comm.ErrNotConnected
 	}
-	err := m.Send(mp)
-	if err != nil {
-		return MessagePrimitive{}, err
+	var err error
+	// try to send the message up to 3 times.  transient CRC errors are pretty common with the NKTs
+	for idx := 0; idx < 3; idx++ {
+		err = m.Send(mp)
+		if err != nil {
+			return mpRecv, err
+		}
+		mpRecv, err = m.Recv()
+		if err == nil {
+			break
+		}
 	}
-	return m.Recv()
+	return mpRecv, err
+
 }
 
 // GetValue reads a register
