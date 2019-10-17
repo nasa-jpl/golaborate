@@ -101,7 +101,7 @@ Then copy paste one of the existing modules, replace this information, and updat
 | BMC commercial    | X      |  X
 | Andor cameras     |        |        |
 | other cameras (?) |        |        |
-| Newport EPS       |        |        |
+| Newport EPS       |  X     |  X     |
 | Aerotech Ensemble |        |        |
 | PI motion(?)      |        |        |
 | Lakeshore temp    |  X     |        |
@@ -112,7 +112,7 @@ Then copy paste one of the existing modules, replace this information, and updat
 | Omega temp        |        |        |
 | APC UPS           |        |        |
 | Pfeiffer turbo    |        |        |
-| NKT               |  X     |        |
+| NKT               |  X     |  X     |
 | IXL diode         |  X     |  X     |
 | Thermocube chiller|        |        |
 | Zygo              |  X     | X      |
