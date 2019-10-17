@@ -89,9 +89,28 @@ func (sk *SuperKVaria) httpFloatValue(w http.ResponseWriter, r *http.Request, va
 		wvl := float64(dataOrder.Uint16(mp.Data)) / 10
 		hp := server.HumanPayload{Float: wvl, T: types.Float64}
 		hp.EncodeAndRespond(w, r)
+		log.Printf("%s got %s NKT %s, %f", r.RemoteAddr, value, sk.Addr, wvl)
 	case http.MethodPost:
-		s := "not implemented"
-		http.Error(w, s, http.StatusNotImplemented)
+		vT := server.FloatT{}
+		err := json.NewDecoder(r.Body).Decode(&vT)
+		defer r.Body.Close()
+		if err != nil {
+			fstr := fmt.Sprintf("error decoding json, should have field \"f64\", %q", err)
+			log.Println(fstr)
+			http.Error(w, fstr, http.StatusBadRequest)
+			return
+		}
+		intt := uint16(mathx.Round(vT.F64*10, 1))
+		buf := make([]byte, 2, 2)
+		dataOrder.PutUint16(buf, intt)
+		_, err = sk.SetValue(value, buf)
+		if err != nil {
+			fstr := fmt.Sprintf("Erorr getting %s, %q", value, err)
+			log.Println(fstr)
+			http.Error(w, fstr, http.StatusInternalServerError)
+			return
+		}
+		log.Printf("%s set %s NKT %s, %f", r.RemoteAddr, value, sk.Addr, vT.F64)
 	default:
 		server.BadMethod(w, r)
 	}
@@ -132,12 +151,10 @@ func (sk *SuperKVaria) HTTPCenterBandwidth(w http.ResponseWriter, r *http.Reques
 			log.Println(fstr)
 			http.Error(w, fstr, http.StatusInternalServerError)
 		}
+		log.Printf("%q got center wavelength, NKT %s, is %+v", r.RemoteAddr, sk.Addr, cbw)
 		return
 	case http.MethodPost:
 		cbw := CenterBandwidth{}
-		buf := []byte{}
-		r.Body.Read(buf)
-		fmt.Println(string(buf))
 		err := json.NewDecoder(r.Body).Decode(&cbw)
 		defer r.Body.Close()
 		if err != nil {
@@ -163,6 +180,7 @@ func (sk *SuperKVaria) HTTPCenterBandwidth(w http.ResponseWriter, r *http.Reques
 			return
 		}
 		w.WriteHeader(http.StatusOK)
+		log.Printf("%q set center wavelength, NKT %s, is %+v", r.RemoteAddr, sk.Addr, cbw)
 	default:
 		server.BadMethod(w, r)
 	}

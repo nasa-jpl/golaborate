@@ -90,6 +90,7 @@ func getSourceAddr() byte {
 	// read the current address from the channel, then put either
 	// addr + 1 on the channel (incremement), or wrap down to minSourceAddr
 	// if we will overflow a single byte
+	return byte(161)
 	addr := <-currentSourceAddr
 	if addr <= 254 {
 		currentSourceAddr <- addr + 1
@@ -160,7 +161,6 @@ func (mp MessagePrimitive) EncodeTelegram() ([]byte, error) {
 	out := append([]byte{telStart}, buf...)
 	out = append(out, crcBytes...)
 	out = append(out, telEnd)
-	fmt.Printf("sending %X\n", out)
 	return out, nil
 }
 
@@ -199,7 +199,6 @@ func DecodeTelegram(tele []byte) (MessagePrimitive, error) {
 	// 1.  We have a complete transmission
 	// 2.  No data was lost (CRC match)
 	// now we can break the message into its constituent pieces
-	fmt.Printf("received %X\n", tele)
 	mp := MessagePrimitive{}
 	typ := MessageTypesBS[tele[2]]
 	mp.Dest = tele[0]
