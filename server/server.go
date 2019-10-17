@@ -300,3 +300,10 @@ func (hp *HumanPayload) EncodeAndRespond(w http.ResponseWriter, r *http.Request)
 
 	}
 }
+
+// BadMethod returns an error if the request method is not GET or POST
+func BadMethod(w http.ResponseWriter, r *http.Request) {
+	fstr := fmt.Sprintf("%s queried %s with bad method %s, must be either GET or POST", r.RemoteAddr, r.URL, r.Method)
+	log.Println(fstr)
+	http.Error(w, fstr, http.StatusMethodNotAllowed)
+}

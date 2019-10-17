@@ -30,6 +30,10 @@ const (
 )
 
 var (
+
+	// ErrRemoteCRCMismatch is generated when the NKT responds with the CRC mismatch telegram type code
+	ErrRemoteCRCMismatch = errors.New("CRC mismatch at NKT")
+
 	// dataOrder is the byte order
 	dataOrder = binary.LittleEndian
 
@@ -131,7 +135,7 @@ func reverseSanitize(data []byte) []byte {
 // the message is formatted as
 // [DEST] [SOURCE] [TYPE] [REGISTER] [0..240 data bytes] [CRC]
 
-// MakeTelegram produces a telegram from the constituent pieces.
+// EncodeTelegram produces a telegram from the constituent pieces.
 // the workflow to generate a telegram is as follows:
 // 0.  Using the message and metadata (to/from where, what type, what register)
 //     generate the message body
@@ -140,7 +144,7 @@ func reverseSanitize(data []byte) []byte {
 // 2.  Calculate a CRC-16 value based on CRC-CCITT XMODEM.  sanitize() it and
 //     append to the message
 // 2.  Prepend and append [SOT] and [EOT]
-func MakeTelegram(mp MessagePrimitive) ([]byte, error) {
+func (mp MessagePrimitive) EncodeTelegram() ([]byte, error) {
 	// make a buffer holding the raw message
 	var typ byte
 	if _, ok := MessageTypesSB[mp.Type]; !ok {
@@ -156,6 +160,7 @@ func MakeTelegram(mp MessagePrimitive) ([]byte, error) {
 	out := append([]byte{telStart}, buf...)
 	out = append(out, crcBytes...)
 	out = append(out, telEnd)
+	fmt.Printf("sending %X\n", out)
 	return out, nil
 }
 
@@ -194,6 +199,7 @@ func DecodeTelegram(tele []byte) (MessagePrimitive, error) {
 	// 1.  We have a complete transmission
 	// 2.  No data was lost (CRC match)
 	// now we can break the message into its constituent pieces
+	fmt.Printf("received %X\n", tele)
 	mp := MessagePrimitive{}
 	typ := MessageTypesBS[tele[2]]
 	mp.Dest = tele[0]
@@ -204,7 +210,7 @@ func DecodeTelegram(tele []byte) (MessagePrimitive, error) {
 		mp.Data = tele[4:]
 		return mp, nil
 	}
-	return mp, errors.New("CRC mismatch at NKT")
+	return mp, ErrRemoteCRCMismatch
 }
 
 // WriteThenRead writes a telegram to a connection and then reads a response from it, returning an error if there is one

@@ -1,5 +1,18 @@
 package nkt
 
+import (
+	"encoding/json"
+	"fmt"
+	"go/types"
+	"log"
+	"math"
+	"net/http"
+	"time"
+
+	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
+	"github.jpl.nasa.gov/HCIT/go-hcit/server"
+)
+
 // this file contains values relevant to the SuperK Varia accessory
 
 const (
@@ -7,8 +20,8 @@ const (
 )
 
 var (
-	// SuperKVaria describes the SuperK Varia module
-	SuperKVaria = &ModuleInformation{
+	// SuperKVariaInfo describes the SuperK Varia module
+	SuperKVariaInfo = &ModuleInformation{
 		Addresses: map[string]byte{
 			"Input":               0x13,
 			"ND Setpoint":         0x32,
@@ -36,10 +49,116 @@ var (
 			}}}
 )
 
-// NewSuperKVaria create a new Module representing a SuperKExtreme's main module
-func NewSuperKVaria(addr string) Module {
-	return Module{
-		AddrConn: addr,
-		AddrDev:  variaDefaultAddr,
-		Info:     SuperKExtremeMain}
+// CenterBandwidth is a struct holding the center wavelength (nm) and full bandwidth (nm) of a VARIA
+type CenterBandwidth struct {
+	Center    float64 `json:"center"`
+	Bandwidth float64 `json:"bandwidth"`
+}
+
+// SuperKVaria embeds Module and has some quick usage methods
+type SuperKVaria struct {
+	Module
+}
+
+func (sk *SuperKVaria) httpFloatValue(w http.ResponseWriter, r *http.Request, value string) {
+	switch r.Method {
+	case http.MethodGet:
+		mp, err := sk.GetValue(value)
+		if err != nil {
+			fstr := fmt.Sprintf("Error getting %s, %q", value, err)
+			log.Println(err)
+			http.Error(w, fstr, http.StatusInternalServerError)
+			return
+		}
+		// if there is not an error, the message is well-formed and we have a Datagram
+		wvl := float64(dataOrder.Uint16(mp.Data)) / 10
+		hp := server.HumanPayload{Float: wvl, T: types.Float64}
+		hp.EncodeAndRespond(w, r)
+	case http.MethodPost:
+		s := "not implemented"
+		http.Error(w, s, http.StatusNotImplemented)
+	default:
+		server.BadMethod(w, r)
+	}
+	return
+}
+
+// HTTPShortWave gets the short wavelength on a GET request, or sets it on a POST request.
+// POST should be JSON with a single f64 field.
+func (sk *SuperKVaria) HTTPShortWave(w http.ResponseWriter, r *http.Request) {
+	sk.httpFloatValue(w, r, "Short Wave Setpoint")
+}
+
+// HTTPLongWave gets the long wavelength on a GET request, or sets it on a POST request.
+// POST should be JSON with a single f64 field.
+func (sk *SuperKVaria) HTTPLongWave(w http.ResponseWriter, r *http.Request) {
+	sk.httpFloatValue(w, r, "Long Wave Setpoint")
+}
+
+// HTTPCenterBandwidth gets the center wavelength and Bandwidth in nm on a GET request, or sets it on a POST request.
+// POST should be JSON with two fields, "center", and "bandwidth"
+func (sk *SuperKVaria) HTTPCenterBandwidth(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		vals := make([]float64, 0, 2)
+		for _, v := range []string{"Short Wave Setpoint", "Long Wave Setpoint"} {
+			mp, err := sk.GetValue(v)
+			if err != nil {
+				fstr := fmt.Sprintf("Error getting %s, %q", v, err)
+				log.Println(err)
+				http.Error(w, fstr, http.StatusInternalServerError)
+				return
+			}
+			// if there is not an error, the message is well-formed and we have a Datagram
+			wvl := float64(dataOrder.Uint16(mp.Data)) / 10
+			vals = append(vals, wvl)
+			time.Sleep(1 * time.Second) // sleep as a hack to avoid connection refused
+
+			// we shouldn't sleep and should just use one connection...
+		}
+
+		// unpack the nasty structure into a centerBandwidth for response
+		low := vals[0]
+		high := vals[1]
+		center := (high + low) / 2
+		bw := math.Abs(high - low)
+		cbw := CenterBandwidth{Center: center, Bandwidth: bw}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		err := json.NewEncoder(w).Encode(cbw)
+		if err != nil {
+			fstr := fmt.Sprintf("Error encoding struct to json %q", err)
+			log.Println(fstr)
+			http.Error(w, fstr, http.StatusInternalServerError)
+		}
+		return
+	case http.MethodPost:
+		s := "not implemented"
+		http.Error(w, s, http.StatusNotImplemented)
+	default:
+		server.BadMethod(w, r)
+	}
+	return
+}
+
+// HTTPND gets the ND filter strength on GET, or sets it on POST.
+// POST should be JSON with single f64 field which is the ND strength in pct (100 = full blockage).
+func (sk *SuperKVaria) HTTPND(w http.ResponseWriter, r *http.Request) {
+	return
+}
+
+// NewSuperKVaria create a new Module representing a SuperKVaria module
+func NewSuperKVaria(addr, urlStem string, serial bool) *SuperKVaria {
+	rd := comm.NewRemoteDevice(addr, serial)
+	srv := server.NewServer(urlStem)
+	sk := SuperKVaria{Module{
+		RemoteDevice: rd,
+		AddrDev:      variaDefaultAddr,
+		Info:         SuperKVariaInfo}}
+	srv.RouteTable["wl-short"] = sk.HTTPShortWave
+	srv.RouteTable["wl-long"] = sk.HTTPLongWave
+	srv.RouteTable["wl-center-bandwidth"] = sk.HTTPCenterBandwidth
+	srv.RouteTable["nd"] = sk.HTTPND
+	sk.Module.Server = srv
+	return &sk
 }

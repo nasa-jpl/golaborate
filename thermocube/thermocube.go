@@ -1,7 +1,7 @@
 // Package thermocube enables working with 200~400 series temperature controllers.
 package thermocube
 
-import "math"
+import "github.jpl.nasa.gov/HCIT/go-hcit/mathx"
 
 func twoBytesToFloat(b []byte) float64 {
 	// this algorithm has an equivalent, slower implementation that is perhaps
@@ -34,7 +34,7 @@ func twoBytesToFloat(b []byte) float64 {
 // we use Go 1.9 so that we can compile for XP.  Leave this here for now,
 // hopefully we can update to (latest) before this code is really needed
 func floatToTwoBytes(f float64) []byte {
-	n := int(math.Round(f * 10.0))
+	n := int(mathx.Round(f*10.0, 1))
 	b := []byte{byte(n >> 8), byte(n)}
 	return b
 }

@@ -37,12 +37,6 @@ var (
 		"laser-current":       "las:ldi"}
 )
 
-func badMethod(w http.ResponseWriter, r *http.Request) {
-	fstr := fmt.Sprintf("%s queried %s with bad method %s, must be either GET or POST", r.RemoteAddr, r.URL, r.Method)
-	log.Println(fstr)
-	http.Error(w, fstr, http.StatusMethodNotAllowed)
-}
-
 func stringToBool(s string) bool {
 	return s == "1"
 }
@@ -112,7 +106,7 @@ func (ldc *LDC3916) ChanDispatch(w http.ResponseWriter, r *http.Request) {
 		resp, err := ldc.processCommand(cmd, false, util.IntSliceToCSV(obj.ints))
 		httpResponder(resp, typ, err)(w, r)
 	default:
-		badMethod(w, r)
+		server.BadMethod(w, r)
 	}
 }
 
@@ -137,7 +131,7 @@ func (ldc *LDC3916) TempControlDispatch(w http.ResponseWriter, r *http.Request) 
 		resp, err := ldc.processCommand(cmd, false, boolToString(boo.Bool))
 		httpResponder(resp, typ, err)(w, r)
 	default:
-		badMethod(w, r)
+		server.BadMethod(w, r)
 	}
 }
 
@@ -150,6 +144,7 @@ func (ldc *LDC3916) LaserOutputDispatch(w http.ResponseWriter, r *http.Request) 
 	case http.MethodGet:
 		resp, err := ldc.processCommand(cmd, true, "")
 		httpResponder(resp, typ, err)(w, r)
+		return
 	case http.MethodPost:
 		boo := server.BoolT{}
 		err := json.NewDecoder(r.Body).Decode(boo)
@@ -158,11 +153,14 @@ func (ldc *LDC3916) LaserOutputDispatch(w http.ResponseWriter, r *http.Request) 
 			fstr := fmt.Sprintf("unable to decode boolean from query.  Query must be a JSON request with \"bool\" field.  %q", err)
 			log.Println(fstr)
 			http.Error(w, fstr, http.StatusBadRequest)
+			return
 		}
 		resp, err := ldc.processCommand(cmd, false, boolToString(boo.Bool))
 		httpResponder(resp, typ, err)(w, r)
+		return
 	default:
-		badMethod(w, r)
+		server.BadMethod(w, r)
+		return
 	}
 }
 
@@ -175,6 +173,7 @@ func (ldc *LDC3916) LaserCurrentDispatch(w http.ResponseWriter, r *http.Request)
 	case http.MethodGet:
 		resp, err := ldc.processCommand(cmd, true, "")
 		httpResponder(resp, typ, err)(w, r)
+		return
 	case http.MethodPost:
 		float := server.FloatT{}
 		err := json.NewDecoder(r.Body).Decode(float)
@@ -183,11 +182,14 @@ func (ldc *LDC3916) LaserCurrentDispatch(w http.ResponseWriter, r *http.Request)
 			fstr := fmt.Sprintf("unable to decode boolean from query.  Query must be a JSON request with \"bool\" field.  %q", err)
 			log.Println(fstr)
 			http.Error(w, fstr, http.StatusBadRequest)
+			return
 		}
 		resp, err := ldc.processCommand(cmd, false, floatToString(float.F64))
 		httpResponder(resp, typ, err)(w, r)
+		return
 	default:
-		badMethod(w, r)
+		server.BadMethod(w, r)
+		return
 	}
 }
 
@@ -202,6 +204,7 @@ func (ldc *LDC3916) RawDispatch(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	resp, err := ldc.processCommand(str.Str, true, "")
 	httpResponder(resp, "string", err)(w, r)
+	return
 }
 
 func (ldc *LDC3916) processCommand(cmd string, read bool, data string) (string, error) {

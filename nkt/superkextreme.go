@@ -1,6 +1,13 @@
 package nkt
 
-import "go/types"
+import (
+	"go/types"
+	"log"
+	"net/http"
+
+	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
+	"github.jpl.nasa.gov/HCIT/go-hcit/server"
+)
 
 // this file contains values relevant to the SuperK Extreme modules
 
@@ -15,7 +22,7 @@ var (
 	SuperKExtremeMain = &ModuleInformation{
 		Addresses: map[string]byte{
 			"Inlet Temperature":  0x11,
-			"Emission":           0x13,
+			"Emission":           0x30,
 			"Setup":              0x31,
 			"Interlock":          0x32,
 			"Pulse Picker Ratio": 0x34,
@@ -80,10 +87,42 @@ var (
 			}}}
 )
 
+// SuperKExtreme embeds Module and has some quick usage methods
+type SuperKExtreme struct {
+	Module
+}
+
+// HTTPEmissionOn responds to an HTTP request by turning on the laser
+func (sk *SuperKExtreme) HTTPEmissionOn(w http.ResponseWriter, r *http.Request) {
+	mp, err := sk.SetValue("Emission", []byte{3}) // 3 turns the laser on, not 1 or 2
+	log.Println(mp)
+	log.Println(err)
+}
+
+// HTTPEmissionOff responds to an HTTP request by turning off the laser
+func (sk *SuperKExtreme) HTTPEmissionOff(w http.ResponseWriter, r *http.Request) {
+	mp, err := sk.SetValue("Emission", []byte{0})
+	log.Println(mp)
+	log.Println(err)
+	return
+}
+
+// HTTPPower responds to HTTP requests by getting or setting the power level in percent
+func (sk *SuperKExtreme) HTTPPower(w http.ResponseWriter, r *http.Request) {
+	return
+}
+
 // NewSuperKExtreme create a new Module representing a SuperKExtreme's main module
-func NewSuperKExtreme(addr string) Module {
-	return Module{
-		AddrConn: addr,
-		AddrDev:  extremeDefaultAddr,
-		Info:     SuperKExtremeMain}
+func NewSuperKExtreme(addr, urlStem string, serial bool) *SuperKExtreme {
+	rd := comm.NewRemoteDevice(addr, serial)
+	srv := server.NewServer(urlStem)
+	sk := SuperKExtreme{Module{
+		RemoteDevice: rd,
+		AddrDev:      extremeDefaultAddr,
+		Info:         SuperKExtremeMain}}
+	srv.RouteTable["emission/on"] = sk.HTTPEmissionOn
+	srv.RouteTable["emission/off"] = sk.HTTPEmissionOff
+	srv.RouteTable["power"] = sk.HTTPPower
+	sk.Module.Server = srv
+	return &sk
 }
