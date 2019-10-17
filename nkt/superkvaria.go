@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
+	"github.jpl.nasa.gov/HCIT/go-hcit/mathx"
 	"github.jpl.nasa.gov/HCIT/go-hcit/server"
 )
 
@@ -52,6 +53,21 @@ var (
 type CenterBandwidth struct {
 	Center    float64 `json:"center"`
 	Bandwidth float64 `json:"bandwidth"`
+}
+
+// ShortLongToCB converts short, long wavelengths to a CenterBandwidth struct
+func ShortLongToCB(short, long float64) CenterBandwidth {
+	center := (short + long) / 2
+	bw := math.Abs(long - short)
+	return CenterBandwidth{Center: center, Bandwidth: bw}
+}
+
+// ToShortLong converts a CenterBandwidth to (short, long)
+func (cb CenterBandwidth) ToShortLong() (float64, float64) {
+	hb := cb.Bandwidth / 2
+	low := cb.Center - hb
+	high := cb.Center + hb
+	return low, high
 }
 
 // SuperKVaria embeds Module and has some quick usage methods
@@ -103,12 +119,11 @@ func (sk *SuperKVaria) HTTPCenterBandwidth(w http.ResponseWriter, r *http.Reques
 		if err != nil {
 			log.Println(err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 		low := float64(dataOrder.Uint16(mps[0].Data)) / 10
 		high := float64(dataOrder.Uint16(mps[1].Data)) / 10
-		center := (high + low) / 2
-		bw := math.Abs(high - low)
-		cbw := CenterBandwidth{Center: center, Bandwidth: bw}
+		cbw := ShortLongToCB(low, high)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		err = json.NewEncoder(w).Encode(cbw)
@@ -119,8 +134,35 @@ func (sk *SuperKVaria) HTTPCenterBandwidth(w http.ResponseWriter, r *http.Reques
 		}
 		return
 	case http.MethodPost:
-		s := "not implemented"
-		http.Error(w, s, http.StatusNotImplemented)
+		cbw := CenterBandwidth{}
+		buf := []byte{}
+		r.Body.Read(buf)
+		fmt.Println(string(buf))
+		err := json.NewDecoder(r.Body).Decode(&cbw)
+		defer r.Body.Close()
+		if err != nil {
+			fstr := fmt.Sprintf("error decoding json, should have fields of \"center\" and \"bandwidth\", %q", err)
+			log.Println(fstr)
+			http.Error(w, fstr, http.StatusBadRequest)
+			return
+		}
+		low, high := cbw.ToShortLong()
+		addrs := []string{"Short Wave Setpoint", "Long Wave Setpoint"}
+		l := len(addrs)
+		datas := make([][]byte, l, l)
+		for idx, wav := range []float64{low, high} {
+			f := mathx.Round(wav*10, 1)
+			buf := make([]byte, 2)
+			dataOrder.PutUint16(buf, uint16(f))
+			datas[idx] = buf
+		}
+		_, err = sk.SetValueMulti(addrs, datas)
+		if err != nil {
+			log.Println(err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
 	default:
 		server.BadMethod(w, r)
 	}
