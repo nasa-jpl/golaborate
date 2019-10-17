@@ -7,7 +7,6 @@ import (
 	"log"
 	"math"
 	"net/http"
-	"time"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
 	"github.jpl.nasa.gov/HCIT/go-hcit/server"
@@ -100,32 +99,19 @@ func (sk *SuperKVaria) HTTPLongWave(w http.ResponseWriter, r *http.Request) {
 func (sk *SuperKVaria) HTTPCenterBandwidth(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		vals := make([]float64, 0, 2)
-		for _, v := range []string{"Short Wave Setpoint", "Long Wave Setpoint"} {
-			mp, err := sk.GetValue(v)
-			if err != nil {
-				fstr := fmt.Sprintf("Error getting %s, %q", v, err)
-				log.Println(err)
-				http.Error(w, fstr, http.StatusInternalServerError)
-				return
-			}
-			// if there is not an error, the message is well-formed and we have a Datagram
-			wvl := float64(dataOrder.Uint16(mp.Data)) / 10
-			vals = append(vals, wvl)
-			time.Sleep(1 * time.Second) // sleep as a hack to avoid connection refused
-
-			// we shouldn't sleep and should just use one connection...
+		mps, err := sk.GetValueMulti([]string{"Short Wave Setpoint", "Long Wave Setpoint"})
+		if err != nil {
+			log.Println(err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
-
-		// unpack the nasty structure into a centerBandwidth for response
-		low := vals[0]
-		high := vals[1]
+		low := float64(dataOrder.Uint16(mps[0].Data)) / 10
+		high := float64(dataOrder.Uint16(mps[1].Data)) / 10
 		center := (high + low) / 2
 		bw := math.Abs(high - low)
 		cbw := CenterBandwidth{Center: center, Bandwidth: bw}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		err := json.NewEncoder(w).Encode(cbw)
+		err = json.NewEncoder(w).Encode(cbw)
 		if err != nil {
 			fstr := fmt.Sprintf("Error encoding struct to json %q", err)
 			log.Println(fstr)

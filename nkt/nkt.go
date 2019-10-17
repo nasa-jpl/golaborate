@@ -298,7 +298,8 @@ func (m *Module) GetValueMulti(addrNames []string) ([]MessagePrimitive, error) {
 	}
 	defer m.Close()
 
-	messages := make([]MessagePrimitive, 0, len(addrNames))
+	l := len(addrNames)
+	messages := make([]MessagePrimitive, l, l)
 	for idx, addr := range addrNames {
 		register, err := m.getRegister(addr)
 		if err != nil {
@@ -328,7 +329,8 @@ func (m *Module) SetValueMulti(addrNames []string, data [][]byte) ([]MessagePrim
 	}
 	defer m.Close()
 
-	messages := make([]MessagePrimitive, 0, len(addrNames))
+	l := len(addrNames)
+	messages := make([]MessagePrimitive, l, l)
 	for idx, addr := range addrNames {
 		register, err := m.getRegister(addr)
 		if err != nil {
