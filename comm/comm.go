@@ -40,10 +40,13 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"net"
+	"strings"
 	"time"
 
+	"github.com/cenkalti/backoff"
 	"github.com/tarm/serial"
 )
 
@@ -130,6 +133,43 @@ func (rd *RemoteDevice) SerialConf() *serial.Config {
 
 // Open the connection, setting the Conn variable
 func (rd *RemoteDevice) Open() error {
+	// we use an exponential backoff, the NKT sources
+	// do not like being connection thrashed
+	wasTimeout := false
+	op := func() error {
+		err := rd.open()
+		if err != nil {
+			errS := err.Error()
+			errS = strings.ToLower(errS)
+			if strings.Contains(errS, "refused") {
+				return err
+			}
+			wasTimeout = true
+			return nil
+		}
+		return nil
+	}
+
+	// backoff will cease on a timeout so we don't wait
+	// forever, so we need to check for err != nil && !wasTimeout
+	err := backoff.Retry(op, &backoff.ExponentialBackOff{
+		InitialInterval:     25 * time.Millisecond,
+		RandomizationFactor: 0.,
+		Multiplier:          2.,
+		MaxInterval:         1 * time.Second,
+		MaxElapsedTime:      3 * time.Second,
+		Clock:               backoff.SystemClock})
+	if err == nil && !wasTimeout {
+		return nil
+	}
+	// err != nil
+	if wasTimeout {
+		return fmt.Errorf("connection timeout to %s", rd.Addr)
+	}
+	return err
+}
+
+func (rd *RemoteDevice) open() error {
 	var err error
 	var conn io.ReadWriteCloser
 	if rd.IsSerial {
