@@ -71,9 +71,13 @@ var (
 
 // ModuleInformation is a struct holding information needed to communicate with a given module.
 type ModuleInformation struct {
-	Addresses  map[string]byte
-	CodeBanks  map[string]map[int]string
-	ValueTypes map[string]types.BasicKind
+	// Addresses is a map from friendly names like "Emission" to byte codes (hardware addresses)
+	Addresses map[string]byte
+	// CodeBanks maps friendly names like "Statuses" to bitfield maps
+	CodeBanks map[string]map[int]string
+
+	// Decoders maps friendly names like "Emission" to decoding functions that return a thinning json-serializable object
+	Decoders map[string]func([]byte) server.HumanPayload
 }
 
 // UnpackRegister converts the raw data from a register into a server.HumanPayload
@@ -179,16 +183,6 @@ type Module struct {
 // SerialConf satisfies comm.SerialConfigurator and enables operation over a serial port
 func (m *Module) SerialConf() serial.Config {
 	return makeSerConf(m.RemoteDevice.Addr)
-}
-func (m *Module) valueType(addrName string) types.BasicKind {
-	if value, ok := m.Info.ValueTypes[addrName]; ok {
-		return value
-	} else if value, ok = StandardTypes[addrName]; ok {
-		return value
-	} else {
-		return 0
-	}
-
 }
 
 // Send overloads RemoteDevice.Send to handle telegram encoding of message primitives

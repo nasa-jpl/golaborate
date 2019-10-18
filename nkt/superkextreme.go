@@ -1,7 +1,6 @@
 package nkt
 
 import (
-	"go/types"
 	"log"
 	"net/http"
 
@@ -56,10 +55,7 @@ var (
 				13: "CRC error on startup (possible module address conflict)",
 				14: "Log error code present",
 				15: "System error code present",
-			}},
-		ValueTypes: map[string]types.BasicKind{
-			"Emission": types.Bool,
-		}}
+			}}}
 
 	// SuperKFrontDisplay describes the SuperK front display module
 	SuperKFrontDisplay = ModuleInformation{

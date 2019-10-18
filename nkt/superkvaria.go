@@ -190,7 +190,7 @@ func (sk *SuperKVaria) HTTPCenterBandwidth(w http.ResponseWriter, r *http.Reques
 // HTTPND gets the ND filter strength on GET, or sets it on POST.
 // POST should be JSON with single f64 field which is the ND strength in pct (100 = full blockage).
 func (sk *SuperKVaria) HTTPND(w http.ResponseWriter, r *http.Request) {
-	return
+	sk.httpFloatValue(w, r, "ND Setpoint")
 }
 
 // NewSuperKVaria create a new Module representing a SuperKVaria module
