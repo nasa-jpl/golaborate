@@ -1,7 +1,6 @@
 package nkt
 
 import (
-	"log"
 	"net/http"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
@@ -90,22 +89,28 @@ type SuperKExtreme struct {
 
 // HTTPEmissionOn responds to an HTTP request by turning on the laser
 func (sk *SuperKExtreme) HTTPEmissionOn(w http.ResponseWriter, r *http.Request) {
-	mp, err := sk.SetValue("Emission", []byte{3}) // 3 turns the laser on, not 1 or 2
-	log.Println(mp)
-	log.Println(err)
+	_, err := sk.SetValue("Emission", []byte{3}) // 3 turns the laser on, not 1 or 2
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 // HTTPEmissionOff responds to an HTTP request by turning off the laser
 func (sk *SuperKExtreme) HTTPEmissionOff(w http.ResponseWriter, r *http.Request) {
-	mp, err := sk.SetValue("Emission", []byte{0})
-	log.Println(mp)
-	log.Println(err)
+	_, err := sk.SetValue("Emission", []byte{0})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 	return
 }
 
 // HTTPPower responds to HTTP requests by getting or setting the power level in percent
 func (sk *SuperKExtreme) HTTPPower(w http.ResponseWriter, r *http.Request) {
-	return
+	sk.httpFloatValue(w, r, "Power Level")
 }
 
 // NewSuperKExtreme create a new Module representing a SuperKExtreme's main module

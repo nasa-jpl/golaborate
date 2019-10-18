@@ -90,7 +90,6 @@ func getSourceAddr() byte {
 	// read the current address from the channel, then put either
 	// addr + 1 on the channel (incremement), or wrap down to minSourceAddr
 	// if we will overflow a single byte
-	return byte(161)
 	addr := <-currentSourceAddr
 	if addr <= 254 {
 		currentSourceAddr <- addr + 1

@@ -5,12 +5,16 @@ import (
 	"bufio"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"go/types"
+	"log"
+	"net/http"
 	"time"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
+	"github.jpl.nasa.gov/HCIT/go-hcit/mathx"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/server"
 	"github.jpl.nasa.gov/HCIT/go-hcit/util"
@@ -233,7 +237,7 @@ func (m *Module) SendRecv(mp MessagePrimitive) (MessagePrimitive, error) {
 	}
 	var err error
 	// try to send the message up to 3 times.  transient CRC errors are pretty common with the NKTs
-	for idx := 0; idx < 3; idx++ {
+	for idx := 0; idx < 5; idx++ {
 		err = m.Send(mp)
 		if err != nil {
 			return mpRecv, err
@@ -242,6 +246,7 @@ func (m *Module) SendRecv(mp MessagePrimitive) (MessagePrimitive, error) {
 		if err == nil {
 			break
 		}
+		mp.Src = getSourceAddr()
 	}
 	return mpRecv, err
 
@@ -354,4 +359,46 @@ func (m *Module) SetValueMulti(addrNames []string, data [][]byte) ([]MessagePrim
 		}
 	}
 	return messages, nil
+}
+
+func (m *Module) httpFloatValue(w http.ResponseWriter, r *http.Request, value string) {
+	switch r.Method {
+	case http.MethodGet:
+		mp, err := m.GetValue(value)
+		if err != nil {
+			fstr := fmt.Sprintf("Error getting %s, %q", value, err)
+			log.Println(err)
+			http.Error(w, fstr, http.StatusInternalServerError)
+			return
+		}
+		// if there is not an error, the message is well-formed and we have a Datagram
+		wvl := float64(dataOrder.Uint16(mp.Data)) / 10
+		hp := server.HumanPayload{Float: wvl, T: types.Float64}
+		hp.EncodeAndRespond(w, r)
+		log.Printf("%s got %s NKT %s, %f", r.RemoteAddr, value, m.Addr, wvl)
+	case http.MethodPost:
+		vT := server.FloatT{}
+		err := json.NewDecoder(r.Body).Decode(&vT)
+		defer r.Body.Close()
+		if err != nil {
+			fstr := fmt.Sprintf("error decoding json, should have field \"f64\", %q", err)
+			log.Println(fstr)
+			http.Error(w, fstr, http.StatusBadRequest)
+			return
+		}
+		intt := uint16(mathx.Round(vT.F64*10, 1))
+		buf := make([]byte, 2, 2)
+		dataOrder.PutUint16(buf, intt)
+		_, err = m.SetValue(value, buf)
+		if err != nil {
+			fstr := fmt.Sprintf("Erorr getting %s, %q", value, err)
+			log.Println(fstr)
+			http.Error(w, fstr, http.StatusInternalServerError)
+			return
+		}
+		log.Printf("%s set %s NKT %s, %f", r.RemoteAddr, value, m.Addr, vT.F64)
+	default:
+		server.BadMethod(w, r)
+	}
+	return
 }

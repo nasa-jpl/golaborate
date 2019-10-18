@@ -3,7 +3,6 @@ package nkt
 import (
 	"encoding/json"
 	"fmt"
-	"go/types"
 	"log"
 	"math"
 	"net/http"
@@ -67,54 +66,12 @@ func (cb CenterBandwidth) ToShortLong() (float64, float64) {
 	hb := cb.Bandwidth / 2
 	low := cb.Center - hb
 	high := cb.Center + hb
-	return low, high
+	return high, low
 }
 
 // SuperKVaria embeds Module and has some quick usage methods
 type SuperKVaria struct {
 	Module
-}
-
-func (sk *SuperKVaria) httpFloatValue(w http.ResponseWriter, r *http.Request, value string) {
-	switch r.Method {
-	case http.MethodGet:
-		mp, err := sk.GetValue(value)
-		if err != nil {
-			fstr := fmt.Sprintf("Error getting %s, %q", value, err)
-			log.Println(err)
-			http.Error(w, fstr, http.StatusInternalServerError)
-			return
-		}
-		// if there is not an error, the message is well-formed and we have a Datagram
-		wvl := float64(dataOrder.Uint16(mp.Data)) / 10
-		hp := server.HumanPayload{Float: wvl, T: types.Float64}
-		hp.EncodeAndRespond(w, r)
-		log.Printf("%s got %s NKT %s, %f", r.RemoteAddr, value, sk.Addr, wvl)
-	case http.MethodPost:
-		vT := server.FloatT{}
-		err := json.NewDecoder(r.Body).Decode(&vT)
-		defer r.Body.Close()
-		if err != nil {
-			fstr := fmt.Sprintf("error decoding json, should have field \"f64\", %q", err)
-			log.Println(fstr)
-			http.Error(w, fstr, http.StatusBadRequest)
-			return
-		}
-		intt := uint16(mathx.Round(vT.F64*10, 1))
-		buf := make([]byte, 2, 2)
-		dataOrder.PutUint16(buf, intt)
-		_, err = sk.SetValue(value, buf)
-		if err != nil {
-			fstr := fmt.Sprintf("Erorr getting %s, %q", value, err)
-			log.Println(fstr)
-			http.Error(w, fstr, http.StatusInternalServerError)
-			return
-		}
-		log.Printf("%s set %s NKT %s, %f", r.RemoteAddr, value, sk.Addr, vT.F64)
-	default:
-		server.BadMethod(w, r)
-	}
-	return
 }
 
 // HTTPShortWave gets the short wavelength on a GET request, or sets it on a POST request.
