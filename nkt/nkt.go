@@ -358,7 +358,6 @@ func (m *Module) GetStatus() (map[string]bool, error) {
 	if err != nil {
 		return resp, err
 	}
-	fmt.Println(mp)
 
 	// pop the bitfield and codebank for the module's status codes
 	bitfield := mp.Data

@@ -1,0 +1,688 @@
+openapi: 3.0.1
+info:
+  title: HCIT HTTP servers
+  description: This document provides a specification and documentation for communication
+    with lab hardware through the http adaptors contained in the go-hcit repository.  The
+    requests on this page can be executed, and fire against a mock instance of the
+    hardware.  We complete the /omc paths here for the OMC/MCB/Performance Testbed,
+    but there are analogs DST and GPCT.
+  contact:
+    email: brandon.dube@jpl.nasa.gov
+  version: "1"
+externalDocs:
+  description: source code
+  url: https://github.jpl.nasa.gov/HCIT/go-hcit
+servers:
+- url: http://misery.jpl.nasa.gov:8080/mock
+- url: http://misery.jpl.nasa.gov:8080/omc
+paths:
+  /route-graph:
+    get:
+      summary: get a map of top-level endpoints and the routes served on them
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              example:
+                /omc/nkt:
+                - power
+                - emission
+                - emission/on
+                - emission/off
+                - nd
+                - wl-short
+                - wl-long
+                - wl-center-bandwidth
+                - main-module-status
+                - varia-status
+                /omc/fluke:
+                - temphumid
+                /omc/ixl-diode:
+                - raw
+                - chan
+                - temperature-control
+                - laser-output
+                - laser-current
+                /omc/lesker:
+                - pressure
+                - version
+                - set-span
+                - set-zero
+                - factory-reset
+                - void-calibration
+                /omc/esp300:
+                - cmd-list
+                - raw
+                - single-cmd
+                - multi-cmd
+                - simple-pos-abs
+                /zygo-bench:
+                - measure
+                - temphumid
+  /ixl-diode/raw:
+    post:
+      summary: send a raw ASCII command to the IXL diode
+      description: the server will not process the command except by appending the termination byte and stripping any trailing newlines on the input.  Use this route to implement functionality not present in the server.
+      requestBody:
+        description: raw ASCII text, with or without termination newline.  A newline will be stripped by the server.
+        content:
+          text/plain:
+            schema:
+              type: string
+              example: "las:out?"
+      responses:
+        200:
+          description: OK
+          content:
+            text/plain:
+              example: "1"
+  /ixl-diode/chan:
+    get:
+      summary: get the current channel(s) of the IXL controler
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              examples:
+                single:
+                  value:
+                    int: 7
+                  summary: only a single channel is active
+                multi:
+                  value:
+                    int: [6,7]
+                  summary: multiple channels are active
+  /ixl-diode/laser-output:
+    get:
+      summary: get whether laser output is active (true) or not (false)
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              example:
+                bool: true
+    post:
+      summary: set whether laser output is active (true) or not (false)
+      requestBody:
+        description: JSON with single key bool
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                bool:
+                  type: boolean
+                  example: true
+      responses:
+        200:
+          description: OK
+  /ixl-diode/temperature-control:
+    get:
+      summary: get whether temperature control is active (true) or not (false)
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              example:
+                bool: true
+    post:
+      summary: set whether temperature control is active (true) or not (false)
+      requestBody:
+        description: JSON with single key bool
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                bool:
+                  type: boolean
+                  example: true
+      responses:
+        200:
+          description: OK
+  /ixl-diode/laser-current:
+    get:
+      summary: get the current laser current in mA
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              example:
+                f64: 55
+    post:
+      summary: set the laser current in mA
+      requestBody:
+        description: JSON with single key f64
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                f64:
+                  type: number
+                  example: 60.1
+      responses:
+        200:
+          description: OK
+  /lesker/pressure:
+    get:
+      summary: get the current pressure of the chamber in Torr.  The server automatically does unit conversion if the sensor is programmed in mT at the time of measurement.
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  f64:
+                    type: number
+                    example: 0.0004
+  /lesker/version:
+    get:
+      summary: Get the firmware version of the sensor.
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  str:
+                    type: string
+                    example: "13627"
+  /lesker/factory-reset:
+    get:
+      summary: trigger a factory reset on the sensor, dumping the set point and resetting calibration values to factory
+      responses:
+        200:
+          description: OK
+  /lesker/void-calibration:
+    get:
+      summary: trigger a void calibration on the sensor, setting the NIST-tracable calibration register to false and unlocking the setpoint functions
+      responses:
+        200:
+          description: OK
+  /lesker/set-span:
+    get:
+      summary: set the "span" of the sensor to the current observation.  This is typically done at atmospheric pressure, and must be done above 399 Torr.
+      responses:
+        200:
+          description: OK
+  /lesker/set-zero:
+    get:
+      summary: set the zero point of the sensor to the current observation.
+      responses:
+        200:
+          description: OK
+  /nkt/power:
+    get:
+      summary: retrieve the current power level of the laser in percent
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              example:
+                f64: 40.5
+    post:
+      summary: set the power level of the laser in percent
+      requestBody:
+        description: The power level.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                f64:
+                  type: number
+                  example: 50.5
+        required: true
+      responses:
+        200:
+          description: OK
+          content: {}
+      x-codegen-request-body-name: f64
+  /nkt/emission:
+    get:
+      summary: get the curent emission state (on/off)
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              example:
+                bool: true
+  /nkt/emission/on:
+    get:
+      summary: turn on laser emission
+      responses:
+        200:
+          description: OK
+          content: {}
+  /nkt/emission/off:
+    get:
+      summary: turn off laser emission
+      responses:
+        200:
+          description: OK
+          content: {}
+  /nkt/nd:
+    get:
+      summary: get the ND filter current strength in percent
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              example:
+                f64: 0.0
+    post:
+      summary: set the ND filter strength in percent
+      requestBody:
+        description: The power level.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                f64:
+                  type: number
+                  example: 25
+        required: true
+      responses:
+        200:
+          description: OK
+  /nkt/wl-short:
+    get:
+      summary: get the short wavelength setpoint in nm to .1 nm precision.  Note that
+        the hardware will not function properly if short wave < long wave.  I think
+        they really are low and high frequency.
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              example:
+                f64: 545.2
+    post:
+      summary: set the short wavelength setpoint in nm to .1 nm precision.  Note that
+        the hardware will not function properly if short wave < long wave.  I think
+        they really are low and high frequency.
+      requestBody:
+        description: The power level.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                f64:
+                  type: number
+                  example: 550.1
+        required: true
+      responses:
+        200:
+          description: OK
+          content: {}
+  /nkt/wl-long:
+    get:
+      summary: get the long wavelength setpoint in nm to .1 nm precision.  Note that
+        the hardware will not function properly if short wave < long wave.  I think
+        they really are low and high frequency.
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              example:
+                f64: 525.2
+    post:
+      summary: set the long wavelength setpoint in nm to .1 nm precision.  Note that
+        the hardware will not function properly if short wave < long wave.  I think
+        they really are low and high frequency.
+      requestBody:
+        description: The power level.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                f64:
+                  type: number
+                  example: 550.1
+        required: true
+      responses:
+        200:
+          description: OK
+          content: {}
+      x-codegen-request-body-name: f64
+  /nkt/wl-center-bandwidth:
+    get:
+      summary: get the center wavelength and full bandwidth (i.e., a response of 500,
+        100 means low and high are 450,550).
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              example:
+                center: 575
+                bandwidth: 128
+    post:
+      summary: set the center wavelength and full bandwidth (i.e., a response of 500,
+        100 means low and high are 450,550).
+      requestBody:
+        description: center wavelength and bandwidth
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                center:
+                  type: number
+                  example: 575
+                bandwidth:
+                  type: number
+                  example: 128
+      responses:
+        200:
+          description: OK
+          content: {}
+  /nkt/main-module-status:
+    get:
+      description: read the status bitfield from the SuperK main module
+      responses:
+        200:
+          description: ok
+          content:
+            application/json:
+              example:
+                CRC error on startup (possible module address conflict): false
+                Clock battery low voltage: false
+                Emission on: false
+                Inlet temperature out of range: false
+                Interlock loop open: false
+                Interlock relays off: false
+                Interlock supply voltage low (possible short circuit): false
+                Log error code present: false
+                Output control signal low: false
+                Supply voltage low: false
+                System error code present: false
+  /nkt/varia-status:
+    get:
+      description: read the status bitfield from the SuperK main module
+      responses:
+        200:
+          description: ok
+          content:
+            application/json:
+              example:
+                Error code present: false
+                Filter 1 moving: false
+                Filter 2 moving: false
+                Filter 3 moving: false
+                Interlock loop in: false
+                Interlock loop out: false
+                Interlock off: false
+                Shutter sensor 1: true
+                Shutter sensor 2: false
+                Supply voltage low: false
+                              
+  /esp300/raw:
+    post:
+      summary: send raw text to the motion controller and get back its raw response, termination characters from the remote device stripped and trailing newline appended.
+      requestBody:
+        description: raw ASCII bytes, closing newline makes this a valid POSIX file.  A trailing newline will be stripped if present.
+        content:
+          text/plain:
+            schema:
+              type: string
+              example: VE ?
+      responses:
+        200:
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: ESP300 Version 3.08 09/09/02
+  /esp300/cmd-list:
+    get:
+      summary: gets a list of commands and their descriptions from the ESP server
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              example:
+              - cmd: TE
+                alias: err-num
+                description: get error number
+                usesAxis: false
+                isReadOnly: true
+              - cmd: TP
+                alias: get-position
+                description: get position
+                usesAxis: true
+                isReadOnly: true
+              - cmd: TS
+                alias: controller-status
+                description: get controller status
+                usesAxis: false
+                isReadOnly: true
+              - cmd: TV
+                alias: get-velocity
+                description: get velocity
+                usesAxis: true
+                isReadOnly: true
+              - cmd: TX
+                alias: controller-activity
+                description: get controller activity
+                usesAxis: false
+                isReadOnly: true
+              - cmd: VE
+                alias: controller-firmware
+                description: get controller firmware version
+                usesAxis: false
+                isReadOnly: true
+              - cmd: AB
+                alias: abort-program
+                description: abort program
+                usesAxis: true
+                isReadOnly: false
+              - cmd: DH
+                alias: define-home
+                description: define home
+                usesAxis: true
+                isReadOnly: false
+              - cmd: MT
+                alias: move-hw-limit
+                description: move to hardware limit
+                usesAxis: true
+                isReadOnly: false
+              - cmd: MV
+                alias: move-indef
+                description: move indefinitely
+                usesAxis: true
+                isReadOnly: false
+              - cmd: OR
+                alias: origin-search
+                description: origin searching
+                usesAxis: true
+                isReadOnly: false
+              - cmd: PA
+                alias: move-abs
+                description: move absolute
+                usesAxis: true
+                isReadOnly: false
+              - cmd: PR
+                alias: move-rel
+                description: move relative
+                usesAxis: true
+                isReadOnly: false
+              - cmd: ST
+                alias: stop
+                description: stop motion
+                usesAxis: true
+                isReadOnly: false
+              - cmd: AC
+                alias: set-accel
+                description: set acceleration
+                usesAxis: true
+                isReadOnly: false
+              - cmd: AE
+                alias: set-estop-accel
+                description: set e-stop acceleration
+                usesAxis: true
+                isReadOnly: false
+              - cmd: AG
+                alias: set-decel
+                description: set deceleration
+                usesAxis: true
+                isReadOnly: false
+              - cmd: AU
+                alias: set-max-accel
+                description: set maximum acceleration
+                usesAxis: true
+                isReadOnly: false
+              - cmd: BA
+                alias: set-backlash-comp
+                description: set backlash compensation on or off
+                usesAxis: true
+                isReadOnly: false
+              - cmd: CO
+                alias: set-linear-comp
+                description: set linear compensation on or off
+                usesAxis: true
+                isReadOnly: false
+              - cmd: VA
+                alias: set-velocity-linear
+                description: set velocity for linear motors
+                usesAxis: true
+                isReadOnly: false
+              - cmd: VB
+                alias: set-velocity-stepper
+                description: set velocity for stepper motors
+                usesAxis: true
+                isReadOnly: false
+              - cmd: VU
+                alias: set-max-speed
+                description: set maximum speed
+                usesAxis: true
+                isReadOnly: false
+  /esp300/single-cmd:
+    post:
+      summary: send a single command to the ESP300-series motion controller
+      requestBody:
+        description: |
+          a single command object.
+          The cmd field can be an alias or a command.  Send write: true if you want to write (trigger motion, etc).
+          write: false (or write: [unset]) sends a read command
+          The f64 field contains the numerical data to write and is ignored if write: false.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                axis:
+                  type: integer
+                  example: 1
+                cmd:
+                  type: string
+                  example: move-abs
+                write:
+                  type: boolean
+                  example: true
+                f64:
+                  type: number
+                  example: 20.0
+      responses:
+        200:
+          description: OK
+  /esp300/multi-cmd:
+    post:
+      summary: send multi commands to the ESP300-series motion controller
+      requestBody:
+        description: an array of command objects.  See single-cmd for documentation on the format.  This example is simply copied from single-cmd and has the same outcome.
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                properties:
+                  axis:
+                    type: integer
+                    example: 1
+                  cmd:
+                    type: string
+                    example: move-abs
+                  write:
+                    type: boolean
+                    example: true
+                  f64:
+                    type: number
+                    example: 20.0
+      responses:
+        200:
+          description: OK
+  /esp300/simple-pos-abs:
+    get:
+      description: get the absolute position of an axis
+      parameters:
+        - in: query
+          name: axis
+          description: the axis you want to query
+          schema:
+            type: integer
+            example: 1
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  f64:
+                    type: number
+                    example: 12.345
+    post:
+      description: set the absolute position of an axis
+      parameters:
+        - in: query
+          name: axis
+          description: the axis you want to query
+          schema:
+            type: integer
+            example: 1
+      requestBody:
+        description: an axis and position
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                f64:
+                  type: number
+                  example: 12.345
+      responses:
+        200:
+          description: OK
+  /temphumid:
+    get:
+      summary: get the current temperature (Celcius) and relative humidity as measured by the DewK temp/humidity sensor on Ch1
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              example:
+                temp: 28.7
+                rh: 6.7
