@@ -1,5 +1,5 @@
-// Package lesker enables working with KJC300 pressure sensors.
-package lesker
+// Package granvillephillips enables working with GP375 pressure sensors.
+package granvillephillips
 
 import (
 	cp "github.jpl.nasa.gov/HCIT/go-hcit/commonpressure"

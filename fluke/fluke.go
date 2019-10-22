@@ -1,3 +1,4 @@
+// Package fluke enables working with 1620a DewK Temp/Humidity sensors
 package fluke
 
 import (

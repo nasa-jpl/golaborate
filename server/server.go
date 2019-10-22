@@ -1,4 +1,4 @@
-// Package server contains misc server utilities.
+// Package server contains reusable / embeddable code for http-ifying sensors and data
 package server
 
 import (

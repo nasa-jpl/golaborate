@@ -2,10 +2,8 @@
 package util
 
 import (
-	"net"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // IntSliceToCSV convets a slice of ints to CSV formatted data.
@@ -24,22 +22,15 @@ func GetBit(b byte, bitIndex uint) bool {
 	return (b & (1<<bitIndex - 1)) != 0
 }
 
-// TCPSetup opens a new TCP connection and sets a timeout on connect, read, and write
-func TCPSetup(addr string, timeout time.Duration) (net.Conn, error) {
-	conn, err := net.DialTimeout("tcp", addr, timeout)
-	if err != nil {
-		return nil, err
-	}
-	deadline := time.Now().Add(timeout)
-	conn.SetReadDeadline(deadline)
-	conn.SetWriteDeadline(deadline)
-	return conn, nil
-}
+/*ArangeByte replicates np.arange for byte slices
 
-// ArangeByte replicates np.arange for byte slices
-// if startEnd is the only argument, it is the end value and start = 0, step = 1
-// if two arguments are given, they are start, end and step is 1.
-// if three arguments are given, they are start, end, step
+if startEnd is the only argument, it is the end value and start = 0, step = 1
+
+if two arguments are given, they are start, end and step is 1.
+
+if three arguments are given, they are start, end, step
+
+*/
 func ArangeByte(startEnd byte, endStep ...byte) []byte {
 	// default values for start and step
 	var start, end, step byte
@@ -60,7 +51,7 @@ func ArangeByte(startEnd byte, endStep ...byte) []byte {
 		return []byte{}
 	}
 	s := make([]byte, 0, 1+(end-start)/step)
-	for start <= end {
+	for start < end {
 		s = append(s, start)
 		start += step
 	}
