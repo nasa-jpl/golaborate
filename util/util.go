@@ -19,7 +19,7 @@ func IntSliceToCSV(is []int) string {
 
 // GetBit returns the value of a given bit in a byte
 func GetBit(b byte, bitIndex uint) bool {
-	return (b & (1<<bitIndex - 1)) != 0
+	return (b>>bitIndex)&1 == 1
 }
 
 /*ArangeByte replicates np.arange for byte slices
