@@ -149,6 +149,7 @@ func NewSuperKExtreme(addr, urlStem string, serial bool) *SuperKExtreme {
 	srv.RouteTable["emission/on"] = sk.HTTPEmissionOn
 	srv.RouteTable["emission/off"] = sk.HTTPEmissionOff
 	srv.RouteTable["power"] = sk.HTTPPower
+	srv.RouteTable["main-module-status"] = sk.HTTPStatus
 	sk.Module.Server = srv
 	return &sk
 }

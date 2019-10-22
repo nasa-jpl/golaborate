@@ -162,6 +162,7 @@ func NewSuperKVaria(addr, urlStem string, serial bool) *SuperKVaria {
 	srv.RouteTable["wl-long"] = sk.HTTPLongWave
 	srv.RouteTable["wl-center-bandwidth"] = sk.HTTPCenterBandwidth
 	srv.RouteTable["nd"] = sk.HTTPND
+	srv.RouteTable["varia-status"] = sk.HTTPStatus
 	sk.Module.Server = srv
 	return &sk
 }

@@ -350,6 +350,55 @@ func (m *Module) SetValueMulti(addrNames []string, data [][]byte) ([]MessagePrim
 	return messages, nil
 }
 
+// GetStatus gets the status bitfield and converts it into a map of descriptive strings to booleans
+func (m *Module) GetStatus() (map[string]bool, error) {
+	// declare the response and get the response from the NKT
+	resp := map[string]bool{}
+	mp, err := m.GetValue("Status")
+	if err != nil {
+		return resp, err
+	}
+	fmt.Println(mp)
+
+	// pop the bitfield and codebank for the module's status codes
+	bitfield := mp.Data
+	codebank := m.Info.CodeBanks["Status"]
+
+	// loop over the number of bits in the codebank (which may be more than 1 byte in size)
+	// each time we are modulo 8, we increment the offset
+	nbits := uint(len(codebank))
+	idx := uint(0)
+	byteOffset := 0
+	for (idx) < nbits { // 8 bits per byte
+		if text, ok := codebank[int(idx)]; ok {
+			bidx := idx - uint(byteOffset*8)
+			resp[text] = util.GetBit(bitfield[byteOffset], bidx)
+		}
+		// increment the loop
+		idx++
+		if idx%8 == 0 {
+			// if we are on a byte boundary, incremement the byte offset and roll down the index
+			byteOffset++
+		}
+	}
+	return resp, nil
+}
+
+// HTTPStatus returns a JSON map of the status bitfield over HTTP
+func (m *Module) HTTPStatus(w http.ResponseWriter, r *http.Request) {
+	bitmap, err := m.GetStatus()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	err = json.NewEncoder(w).Encode(bitmap)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	return
+}
 func (m *Module) httpFloatValue(w http.ResponseWriter, r *http.Request, value string) {
 	switch r.Method {
 	case http.MethodGet:
