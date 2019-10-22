@@ -146,20 +146,20 @@ func reverseSanitize(data []byte) []byte {
 // 2.  Prepend and append [SOT] and [EOT]
 func (mp MessagePrimitive) EncodeTelegram() ([]byte, error) {
 	// make a buffer holding the raw message
-	var typ byte
 	if _, ok := MessageTypesSB[mp.Type]; !ok {
 		return []byte{}, fmt.Errorf("message type %s is invalid", mp.Type)
 	}
-	typ = MessageTypesSB[mp.Type]
+	typ := MessageTypesSB[mp.Type]
 	buf := append([]byte{mp.Dest, mp.Src, typ, mp.Register}, mp.Data...)
+	buf = sanitize(buf)
 
-	// compute its CRC
-	crcBytes := crcHelper(buf)
+	// compute its CRC, and ensure that CRC is sanitized
+	crcBytes := sanitize(crcHelper(buf))
 
 	// assemble the telegram
 	out := append([]byte{telStart}, buf...)
 	out = append(out, crcBytes...)
-	out = append(out, telEnd)
+	// out = append(out, telEnd)
 	return out, nil
 }
 
@@ -169,15 +169,15 @@ func DecodeTelegram(tele []byte) (MessagePrimitive, error) {
 	if !bytes.Contains(tele, []byte{telStart}) {
 		fstr := fmt.Sprintf("telegram start byte %X not found", telStart)
 		return MessagePrimitive{}, errors.New(fstr)
-	} else if !bytes.Contains(tele, []byte{telEnd}) {
-		fstr := fmt.Sprintf("telegram end byte %X not found", telEnd)
-		return MessagePrimitive{}, errors.New(fstr)
-	}
+		// } else if !bytes.Contains(tele, []byte{telEnd}) {
+		// fstr := fmt.Sprintf("telegram end byte %X not found", telEnd)
+		// return MessagePrimitive{}, errors.New(fstr)
+	} // the end byte is stripped on the way in
 
 	// if we do, drop anything else
 	iStart := bytes.IndexByte(tele, telStart)
-	iEnd := bytes.IndexByte(tele, telEnd)
-	tele = tele[iStart+1 : iEnd]
+	// iEnd := bytes.IndexByte(tele, telEnd)
+	tele = tele[iStart+1:] // : iEnd]
 
 	// now desanitize the message
 	tele = reverseSanitize(tele)
@@ -190,8 +190,7 @@ func DecodeTelegram(tele []byte) (MessagePrimitive, error) {
 	// compute the CRC and ensure we match
 	crcBytesCompute := crcHelper(tele)
 	if !bytes.Equal(crcBytesRecv, crcBytesCompute) {
-		fstr := fmt.Sprintf("CRC mismatch, significant data lost in transmission.  NKT device state unknown.")
-		return MessagePrimitive{}, errors.New(fstr)
+		return MessagePrimitive{}, errors.New("CRC mismatch, significant data lost in transmission.  NKT device state unknown")
 	}
 
 	// we have passed all the checks;
