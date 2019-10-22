@@ -2,9 +2,8 @@
 
 Most usages of this package will boil down to:
 	1.  embed RemoteDevice in a type that represents your hardware.
-	2.  overload RxTerminator and TxTerminator to return the right value.  You
-		can skip this step if the values are both carriage returns
-		(this is the default provided by Package comm)
+	2.  If you do not use carriage returns as terminators, pass a pointer to a
+		length 2 slice of bytes in NewRemoteDevice
 	3.  if you need to prepend a start of transmission, overload Send to do this
 	4.  if you want to work with ASCII strings, overload to convert them to bytes
 	5.  Write any methods you see fit based on this low-level communication implementation,
@@ -15,18 +14,22 @@ OK
 
 	import "strconv"
 
-	type MySensor struct {
+	type Sensor struct {
 		comm.RemoteDevice
 	}
 
-	func (ms *MySensor) ReadTemp() (float64, error) {
+	func NewSensor(addr string, serial bool) Sensor {
+		rd := NewRemoteDevice(addr, serial)
+	}
+
+	func (s *Sensor) ReadTemp() (float64, error) {
 		cmd := []byte("RD?")
-		err := ms.Open()
+		err := s.Open()
 		if err != nil {
 			return 0, err
 		}
-		defer ms.Close()
-		resp, err := ms.SendRecv(cmd)
+		defer s.Close()
+		resp, err := s.SendRecv(cmd)
 		if err != nil {
 			return 0, err
 		}
@@ -44,6 +47,7 @@ import (
 	"io"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cenkalti/backoff"
@@ -51,8 +55,6 @@ import (
 )
 
 var (
-	terminator = byte('\r')
-
 	// ErrNoSerialConf is generated when .SerialConf is not overriden
 	ErrNoSerialConf = errors.New("type does not define .SerialConf() method and instance IsSerial=true")
 
@@ -61,20 +63,26 @@ var (
 
 	// ErrTerminatorNotFound is generated when the termination byte is not found in a response
 	ErrTerminatorNotFound = errors.New("termination byte not found")
+
+	// ErrCloseTooSoon is generated when one attempts to close a connection too soon after communicating
+	ErrCloseTooSoon = errors.New("attempt to close a connection sooner than closeDelay after the last communication")
 )
 
-// Sender has a Send method that passes along a byte slice as well as a
-// TxTerminator returning the transmission termination byte
+const (
+	// DefaultTerminator is the default transmission termination byte
+	DefaultTerminator = byte('\r')
+
+	closeDelay = 5 * time.Second
+)
+
+// Sender has a Send method that passes along a byte slice with the transmission termination appended
 type Sender interface {
 	Send([]byte) error
-	TxTerminator() byte
 }
 
-// Recver has a Recv method that gets a byte slice as well as an
-// RxTerminator returning the receipt termination byte
+// Recver has a Recv method that gets a byte slice and strips the termination byte
 type Recver interface {
 	Recv() ([]byte, error)
-	RxTerminator() byte
 }
 
 // SendRecver can send and recieve, and provides a method that sends then recieves
@@ -90,57 +98,91 @@ type Opener interface {
 	Open() error
 }
 
-// A Communicator can Open, Send, Recv and Close
+// A Communicator can Open, Send, Recv and Close.
+//
+// It makes no promises about concurrent behavior or stability
 type Communicator interface {
 	io.Closer
 	Opener
 	SendRecver
 }
 
-// SerialConfigurator has a SerialConf method that provides a serial.Conf suitable
-// for passing to serial.OpenPort
-type SerialConfigurator interface {
-	SerialConf() serial.Config
+// Terminators holds Rx and Tx terminators where are each a single byte
+type Terminators struct {
+	Rx, Tx byte
 }
 
 /*RemoteDevice has an address and implements Communicator
 
-note that if IsSerial is true, the embedding type must satisfy the
-SerialConfigurator interface
+All connects, disconnects, and write->read communication is done
+with locks.  This makes the RemoteDevice concurrent-safe through blocking over
+TCP.  This behavior is untested over serial.
 
-the device is always concurrent-safe, and utilizes an internal queue to maintain
-the order of commands
+note that if IsSerial is true, the serCfg must not be nil or calls to Open will
+always return ErrNoSerialConf.
+
 */
 type RemoteDevice struct {
-	Addr     string
+	sync.Mutex
+
+	// Addr is the address to connect to
+	Addr string
+
+	// IsSerial indicates if the connection type is serial or not
 	IsSerial bool
+
 	Conn     io.ReadWriteCloser
-	queue    chan []byte
+	lastComm time.Time
+	txTerm   byte
+	rxTerm   byte
+
+	serCfg *serial.Config
 }
 
-// NewRemoteDevice creates a new RemoteDevice instance
-func NewRemoteDevice(addr string, serial bool) RemoteDevice {
+/*NewRemoteDevice creates a new RemoteDevice instance
+
+Addr is the remote address to connect to
+
+IsSerial is whether the connection is serial (true) or TCP (false)
+
+terminators is a length-2 array of bytes (TxTerm, RxTerm)
+*/
+func NewRemoteDevice(addr string, serial bool, t *Terminators, s *serial.Config) RemoteDevice {
+	var rx, tx byte
+	if t == nil {
+		rx = DefaultTerminator
+		tx = DefaultTerminator
+	} else {
+		rx = t.Rx
+		tx = t.Tx
+	}
 	return RemoteDevice{
 		Addr:     addr,
 		IsSerial: serial,
-		queue:    make(chan []byte)}
+		txTerm:   tx,
+		rxTerm:   rx,
+		serCfg:   s}
 }
 
-// SerialConf yields a pointer to a serial config object for use with serial.OpenPort
-func (rd *RemoteDevice) SerialConf() *serial.Config {
-	return nil
-}
+/*Open the connection, setting the Conn variable
 
-// Open the connection, setting the Conn variable
+This function transparently opens either a TCP or a serial connection.
+
+If conn is not nil, this function is a noopt and does not error.
+*/
 func (rd *RemoteDevice) Open() error {
+	if rd.Conn != nil {
+		return nil
+	}
+	rd.Lock()
+	defer rd.Unlock()
 	// we use an exponential backoff, the NKT sources
 	// do not like being connection thrashed
 	wasTimeout := false
 	op := func() error {
 		err := rd.open()
 		if err != nil {
-			errS := err.Error()
-			errS = strings.ToLower(errS)
+			errS := strings.ToLower(err.Error())
 			if strings.Contains(errS, "refused") {
 				return err
 			}
@@ -154,8 +196,8 @@ func (rd *RemoteDevice) Open() error {
 	// forever, so we need to check for err != nil && !wasTimeout
 	err := backoff.Retry(op, &backoff.ExponentialBackOff{
 		InitialInterval:     25 * time.Millisecond,
-		RandomizationFactor: 0.,
-		Multiplier:          2.,
+		RandomizationFactor: 0,
+		Multiplier:          2,
 		MaxInterval:         1 * time.Second,
 		MaxElapsedTime:      3 * time.Second,
 		Clock:               backoff.SystemClock})
@@ -173,7 +215,7 @@ func (rd *RemoteDevice) open() error {
 	var err error
 	var conn io.ReadWriteCloser
 	if rd.IsSerial {
-		conf := rd.SerialConf()
+		conf := rd.serCfg
 		if conf == nil {
 			return ErrNoSerialConf
 		}
@@ -189,17 +231,49 @@ func (rd *RemoteDevice) open() error {
 }
 
 // Close the connection, nil-ing the Conn variable
+//
+// A lock is acquired and released during this operation
 func (rd *RemoteDevice) Close() error {
-	err := rd.Conn.Close()
-	if err == nil {
-		rd.Conn = nil
+	rd.Lock()
+	defer rd.Unlock()
+	if rd.Conn != nil {
+		err := rd.Conn.Close()
+		if err == nil {
+			rd.Conn = nil
+			return nil
+		}
+		errS := strings.ToLower(err.Error())
+		if strings.Contains(errS, "closed") { // errors containing the "closed" trigger phrase are benign
+			err = nil
+		}
+		return err
 	}
-	return err
+	return nil
 }
 
-// TxTerminator returns the transmission termination byte
-func (rd *RemoteDevice) TxTerminator() byte {
-	return terminator
+func (rd *RemoteDevice) closeMaybe() error {
+	now := time.Now()
+	if now.Sub(rd.lastComm) < closeDelay {
+		return ErrCloseTooSoon
+	}
+	return rd.Close()
+}
+
+/*CloseEventually will trigger an infinite number of attempts to close
+the connection, spaced some time apart.  After the first successful close
+or error on close, the function will return.
+
+This function spawns a goroutine and is used to allow connection
+persistence between communications.  Use Close if you wish to close immediately.
+*/
+func (rd *RemoteDevice) CloseEventually() {
+	go rd.closeEventually()
+}
+
+func (rd *RemoteDevice) closeEventually() error {
+	back := backoff.NewConstantBackOff(closeDelay)
+	time.Sleep(closeDelay)
+	return backoff.Retry(rd.closeMaybe, back)
 }
 
 // Send writes data to the remote
@@ -207,15 +281,16 @@ func (rd *RemoteDevice) Send(b []byte) error {
 	if rd.Conn == nil {
 		return ErrNotConnected
 	}
+	if conn, ok := rd.Conn.(net.Conn); ok {
+		deadline := time.Now().Add(3 * time.Second)
+		conn.SetReadDeadline(deadline)
+		conn.SetWriteDeadline(deadline)
+	}
 
-	b = append(b, rd.TxTerminator())
+	b = append(b, rd.txTerm)
 	_, err := rd.Conn.Write(b)
+	rd.lastComm = time.Now()
 	return err
-}
-
-// RxTerminator returns the receipt termination byte
-func (rd *RemoteDevice) RxTerminator() byte {
-	return terminator
 }
 
 // Recv recieves data from the remote and strips the Rx terminator
@@ -223,8 +298,9 @@ func (rd *RemoteDevice) Recv() ([]byte, error) {
 	if rd.Conn == nil {
 		return nil, ErrNotConnected
 	}
-	term := rd.RxTerminator()
+	term := rd.rxTerm
 	buf, err := bufio.NewReader(rd.Conn).ReadBytes(term)
+	rd.lastComm = time.Now()
 	if err != nil {
 		return []byte{}, err
 	}
@@ -242,6 +318,8 @@ func (rd *RemoteDevice) SendRecv(b []byte) ([]byte, error) {
 	if rd.Conn == nil {
 		return []byte{}, ErrNotConnected
 	}
+	rd.Lock()
+	defer rd.Unlock()
 	err := rd.Send(b)
 	if err != nil {
 		return []byte{}, err
