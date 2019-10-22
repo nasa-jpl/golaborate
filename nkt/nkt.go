@@ -381,6 +381,7 @@ func (m *Module) GetStatus() (map[string]bool, error) {
 			byteOffset++
 		}
 	}
+	delete(resp, "-")
 	return resp, nil
 }
 
