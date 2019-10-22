@@ -147,7 +147,7 @@ func makeSerConf(addr string) *serial.Config {
 
 // ESP301 represents an ESP301 motion controller
 type ESP301 struct {
-	comm.RemoteDevice
+	*comm.RemoteDevice
 	server.Server
 }
 
@@ -159,13 +159,14 @@ func (esp *ESP301) SerialConf() serial.Config {
 
 // NewESP301 makes a new ESP301 motion controller instance
 func NewESP301(addr, urlStem string, serial bool) *ESP301 {
-	rd := comm.NewRemoteDevice(addr, serial)
+	rd := comm.NewRemoteDevice(addr, serial, nil, makeSerConf(addr))
 	srv := server.NewServer(urlStem)
-	esp := ESP301{RemoteDevice: rd}
+	esp := ESP301{RemoteDevice: &rd}
 	srv.RouteTable["raw"] = esp.HTTPRaw
 	srv.RouteTable["single-cmd"] = esp.HTTPJSONSingle
 	srv.RouteTable["multi-cmd"] = esp.HTTPJSONArray
 	srv.RouteTable["cmd-list"] = esp.HTTPCmdList
+	srv.RouteTable["simple-pos-abs"] = esp.HTTPPosAbs
 	esp.Server = srv
 	return &esp
 }
@@ -176,13 +177,18 @@ func (esp *ESP301) RawCommand(cmd string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer esp.Close()
+	defer esp.CloseEventually()
 	r, err := esp.SendRecv([]byte(cmd))
 	if err != nil {
 		return "", err
 	}
 	return string(r), nil
 
+}
+
+// HTTPPosAbs gets the absolute position of an axis on GET or sets it on POST
+func (esp *ESP301) HTTPPosAbs(w http.ResponseWriter, r *http.Request) {
+	return
 }
 
 // HTTPRaw handles requests with raw string payloads
@@ -202,7 +208,7 @@ func (esp *ESP301) HTTPRaw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	b = []byte(resp)
+	b = append([]byte(resp), '\n')
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "text/plain")
 	w.Header().Set("Content-Length", string(len(b)))
@@ -235,7 +241,7 @@ func (esp *ESP301) HTTPJSONSingle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fstr, http.StatusInternalServerError)
 		return
 	}
-	defer esp.Close()
+	defer esp.CloseEventually()
 	resp, err := esp.SendRecv([]byte(tele))
 	if err != nil {
 		fstr := fmt.Sprintf("error communicating with motion controller %q.  Received response %q", err, resp)
@@ -244,10 +250,9 @@ func (esp *ESP301) HTTPJSONSingle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "text/plain")
 	w.Header().Set("Content-Length", string(len(resp)))
-	w.Write(resp)
+	w.Write(append(resp, byte('\n')))
 }
 
 // HTTPJSONArray handles arrays of commands over HTTP of JSONCommand type
@@ -296,7 +301,7 @@ func (esp *ESP301) HTTPJSONArray(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fstr, http.StatusInternalServerError)
 		return
 	}
-	defer esp.Close()
+	defer esp.CloseEventually()
 	resp, err := esp.SendRecv([]byte(tele))
 	if err != nil {
 		fstr := fmt.Sprintf("error communicating with motion controller %q", err)
@@ -305,10 +310,9 @@ func (esp *ESP301) HTTPJSONArray(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "text/plain")
 	w.Header().Set("Content-Length", string(len(resp)))
-	w.Write(resp)
+	w.Write(append(resp, '\n'))
 }
 
 // HTTPCmdList returns a list of command objects which include:

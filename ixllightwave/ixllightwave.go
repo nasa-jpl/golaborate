@@ -59,8 +59,8 @@ type LDC3916 struct {
 }
 
 // NewLDC3916 creates a new LDC3916 instance, which embeds both comm.RemoteDevice and server.Server
-func NewLDC3916(addr, urlStem string, serial bool) *LDC3916 {
-	rd := comm.NewRemoteDevice(addr, serial, nil, nil)
+func NewLDC3916(addr, urlStem string) *LDC3916 {
+	rd := comm.NewRemoteDevice(addr, false, nil, nil)
 	srv := server.NewServer(urlStem)
 	ldc := LDC3916{RemoteDevice: &rd}
 	srv.RouteTable["chan"] = ldc.ChanDispatch

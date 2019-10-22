@@ -10,7 +10,7 @@ import (
 // DewK talks to a DewK 1620 temperature and humidity sensor
 // and serves data HTTP routes and meta HTTP routes (route list)
 type DewK struct {
-	comm.RemoteDevice
+	*comm.RemoteDevice
 	server.Server
 }
 
@@ -19,9 +19,9 @@ func NewDewK(addr string, urlStem string, serial bool) *DewK {
 	if !serial {
 		addr = addr + ":10001"
 	}
-	rd := comm.NewRemoteDevice(addr, serial)
+	rd := comm.NewRemoteDevice(addr, serial, nil, nil)
 	srv := server.NewServer(urlStem)
-	dk := DewK{RemoteDevice: rd}
+	dk := DewK{RemoteDevice: &rd}
 	srv.RouteTable["temphumid"] = dk.HTTPHandler
 	dk.Server = srv
 	return &dk
