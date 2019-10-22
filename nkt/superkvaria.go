@@ -152,10 +152,10 @@ func (sk *SuperKVaria) HTTPND(w http.ResponseWriter, r *http.Request) {
 
 // NewSuperKVaria create a new Module representing a SuperKVaria module
 func NewSuperKVaria(addr, urlStem string, serial bool) *SuperKVaria {
-	rd := comm.NewRemoteDevice(addr, serial)
+	rd := comm.NewRemoteDevice(addr, serial, &comm.Terminators{Rx: telEnd, Tx: telEnd})
 	srv := server.NewServer(urlStem)
 	sk := SuperKVaria{Module{
-		RemoteDevice: rd,
+		RemoteDevice: &rd,
 		AddrDev:      variaDefaultAddr,
 		Info:         SuperKVariaInfo}}
 	srv.RouteTable["wl-short"] = sk.HTTPShortWave

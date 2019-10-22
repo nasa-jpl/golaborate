@@ -1,6 +1,7 @@
 package nkt
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
@@ -87,6 +88,24 @@ type SuperKExtreme struct {
 	Module
 }
 
+// HTTPEmissionGet gets the emission state and pipes it back as a bool json
+func (sk *SuperKExtreme) HTTPEmissionGet(w http.ResponseWriter, r *http.Request) {
+	mp, err := sk.GetValue("Emission")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
+	b := server.BoolT{Bool: mp.Data[0] == byte(1)}
+	err = json.NewEncoder(w).Encode(b)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	return
+}
+
 // HTTPEmissionOn responds to an HTTP request by turning on the laser
 func (sk *SuperKExtreme) HTTPEmissionOn(w http.ResponseWriter, r *http.Request) {
 	_, err := sk.SetValue("Emission", []byte{3}) // 3 turns the laser on, not 1 or 2
@@ -115,12 +134,13 @@ func (sk *SuperKExtreme) HTTPPower(w http.ResponseWriter, r *http.Request) {
 
 // NewSuperKExtreme create a new Module representing a SuperKExtreme's main module
 func NewSuperKExtreme(addr, urlStem string, serial bool) *SuperKExtreme {
-	rd := comm.NewRemoteDevice(addr, serial)
+	rd := comm.NewRemoteDevice(addr, serial, &comm.Terminators{Rx: telEnd, Tx: telEnd})
 	srv := server.NewServer(urlStem)
 	sk := SuperKExtreme{Module{
-		RemoteDevice: rd,
+		RemoteDevice: &rd,
 		AddrDev:      extremeDefaultAddr,
 		Info:         SuperKExtremeMain}}
+	srv.RouteTable["emission"] = sk.HTTPEmissionGet
 	srv.RouteTable["emission/on"] = sk.HTTPEmissionOn
 	srv.RouteTable["emission/off"] = sk.HTTPEmissionOff
 	srv.RouteTable["power"] = sk.HTTPPower

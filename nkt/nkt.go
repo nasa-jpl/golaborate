@@ -2,7 +2,6 @@
 package nkt
 
 import (
-	"bufio"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -127,7 +126,7 @@ func crcHelper(buf []byte) []byte {
 // and returns a map that connects addresses to (string) module types
 func AddressScan(addr string) (map[byte]string, error) {
 	// first establish a connection and dummy context for the limiter
-	conn, err := util.TCPSetup(addr, 3*time.Second)
+	conn, err := comm.TCPSetup(addr, 3*time.Second)
 	if err != nil {
 		return map[byte]string{}, err
 	}
@@ -181,39 +180,12 @@ type Module struct {
 	Info *ModuleInformation
 
 	server.Server
-	comm.RemoteDevice
+	*comm.RemoteDevice
 }
 
 // SerialConf satisfies comm.SerialConfigurator and enables operation over a serial port
 func (m *Module) SerialConf() serial.Config {
 	return makeSerConf(m.RemoteDevice.Addr)
-}
-
-// Send overloads RemoteDevice.Send to handle telegram encoding of message primitives
-func (m *Module) Send(mp MessagePrimitive) error {
-	if m.RemoteDevice.Conn == nil {
-		return comm.ErrNotConnected
-	}
-
-	tele, err := mp.EncodeTelegram()
-	if err != nil {
-		return err
-	}
-	_, err = m.RemoteDevice.Conn.Write(tele)
-	return err
-}
-
-// Recv overloads RemoteDevice.Recv to handle telegram decoding into message primitives
-func (m *Module) Recv() (MessagePrimitive, error) {
-	if m.RemoteDevice.Conn == nil {
-		return MessagePrimitive{}, comm.ErrNotConnected
-	}
-
-	buf, err := bufio.NewReader(m.RemoteDevice.Conn).ReadBytes(telEnd)
-	if err != nil {
-		return MessagePrimitive{}, err
-	}
-	return DecodeTelegram(buf)
 }
 
 func (m *Module) getRegister(addrName string) (byte, error) {
@@ -228,21 +200,41 @@ func (m *Module) getRegister(addrName string) (byte, error) {
 	return register, nil
 }
 
-// SendRecv sends a buffer after appending the Tx terminator,
-// then returns the response with the Rx terminator stripped
-func (m *Module) SendRecv(mp MessagePrimitive) (MessagePrimitive, error) {
-	mpRecv := MessagePrimitive{}
-	if m.RemoteDevice.Conn == nil {
-		return mpRecv, comm.ErrNotConnected
+// SendMP overloads RemoteDevice.Send to handle telegram encoding of message primitives
+func (m *Module) SendMP(mp MessagePrimitive) error {
+	tele, err := mp.EncodeTelegram()
+	if err != nil {
+		return err
 	}
-	var err error
+	err = m.Send(tele)
+	return err
+}
+
+// RecvMP overloads RemoteDevice.Recv to handle telegram decoding into message primitives
+func (m *Module) RecvMP() (MessagePrimitive, error) {
+	buf, err := m.Recv()
+	if err != nil {
+		return MessagePrimitive{}, err
+	}
+	return DecodeTelegram(buf)
+}
+
+// SendRecvMP sends a buffer after appending the Tx terminator,
+// then returns the response with the Rx terminator stripped
+func (m *Module) SendRecvMP(mp MessagePrimitive) (MessagePrimitive, error) {
+	var (
+		mpRecv MessagePrimitive
+		err    error
+	)
+	m.Lock()
+	defer m.Unlock()
 	// try to send the message up to 3 times.  transient CRC errors are pretty common with the NKTs
 	for idx := 0; idx < 5; idx++ {
-		err = m.Send(mp)
+		err = m.SendMP(mp)
 		if err != nil {
 			return mpRecv, err
 		}
-		mpRecv, err = m.Recv()
+		mpRecv, err = m.RecvMP()
 		if err == nil {
 			break
 		}
@@ -258,21 +250,20 @@ func (m *Module) GetValue(addrName string) (MessagePrimitive, error) {
 	if err != nil {
 		return MessagePrimitive{}, err
 	}
-
+	fmt.Println(m.RemoteDevice.Conn)
 	err = m.Open()
 	if err != nil {
 		return MessagePrimitive{}, err
 	}
-	defer m.Close()
+	defer m.CloseEventually()
 
 	mpSend := MessagePrimitive{
 		Dest:     m.AddrDev,
 		Src:      getSourceAddr(), // GSA returns a quasi-unique source address (up to ~154 per message interval)
 		Register: register,
-		Type:     "Read",
-		Data:     []byte{}}
+		Type:     "Read"}
 
-	return m.SendRecv(mpSend)
+	return m.SendRecvMP(mpSend)
 }
 
 //SetValue writes a register
@@ -295,7 +286,7 @@ func (m *Module) SetValue(addrName string, data []byte) (MessagePrimitive, error
 	}
 	defer m.Close()
 
-	return m.SendRecv(mpSend)
+	return m.SendRecvMP(mpSend)
 }
 
 // GetValueMulti is equivalent to GetValue for multiple addresses
@@ -320,7 +311,7 @@ func (m *Module) GetValueMulti(addrNames []string) ([]MessagePrimitive, error) {
 			Register: register,
 			Type:     "Read",
 			Data:     []byte{}}
-		mpRecv, err := m.SendRecv(mpSend)
+		mpRecv, err := m.SendRecvMP(mpSend)
 		messages[idx] = mpRecv
 		if err != nil {
 			return messages, err
@@ -352,7 +343,7 @@ func (m *Module) SetValueMulti(addrNames []string, data [][]byte) ([]MessagePrim
 			Register: register,
 			Type:     "Write",
 			Data:     d}
-		mpRecv, err := m.SendRecv(mpSend)
+		mpRecv, err := m.SendRecvMP(mpSend)
 		messages[idx] = mpRecv
 		if err != nil {
 			return messages, err
