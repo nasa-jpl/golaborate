@@ -2,6 +2,7 @@ package nkt
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
@@ -103,6 +104,7 @@ func (sk *SuperKExtreme) HTTPEmissionGet(w http.ResponseWriter, r *http.Request)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	log.Printf("%s got emission state NKT %s, %t\n", r.RemoteAddr, sk.Addr, b.Bool)
 	return
 }
 
@@ -114,6 +116,8 @@ func (sk *SuperKExtreme) HTTPEmissionOn(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	w.WriteHeader(http.StatusOK)
+	log.Printf("%s set emission state NKT %s, true\n", r.RemoteAddr, sk.Addr)
+	return
 }
 
 // HTTPEmissionOff responds to an HTTP request by turning off the laser
@@ -124,6 +128,7 @@ func (sk *SuperKExtreme) HTTPEmissionOff(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
+	log.Printf("%s set emission state NKT %s, false\n", r.RemoteAddr, sk.Addr)
 	return
 }
 
@@ -134,7 +139,7 @@ func (sk *SuperKExtreme) HTTPPower(w http.ResponseWriter, r *http.Request) {
 
 // NewSuperKExtreme create a new Module representing a SuperKExtreme's main module
 func NewSuperKExtreme(addr, urlStem string, serial bool) *SuperKExtreme {
-	rd := comm.NewRemoteDevice(addr, serial, &comm.Terminators{Rx: telEnd, Tx: telEnd})
+	rd := comm.NewRemoteDevice(addr, serial, &comm.Terminators{Rx: telEnd, Tx: telEnd}, nil)
 	srv := server.NewServer(urlStem)
 	sk := SuperKExtreme{Module{
 		RemoteDevice: &rd,

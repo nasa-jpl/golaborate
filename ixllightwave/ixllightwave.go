@@ -54,15 +54,15 @@ func floatToString(f float64) string {
 
 // LDC3916 represents an LDC3916 laser diode controller
 type LDC3916 struct {
-	comm.RemoteDevice
+	*comm.RemoteDevice
 	server.Server
 }
 
 // NewLDC3916 creates a new LDC3916 instance, which embeds both comm.RemoteDevice and server.Server
-func NewLDC3916(addr, urlStem string) *LDC3916 {
-	rd := comm.NewRemoteDevice(addr, false)
+func NewLDC3916(addr, urlStem string, serial bool) *LDC3916 {
+	rd := comm.NewRemoteDevice(addr, serial, nil, nil)
 	srv := server.NewServer(urlStem)
-	ldc := LDC3916{RemoteDevice: rd}
+	ldc := LDC3916{RemoteDevice: &rd}
 	srv.RouteTable["chan"] = ldc.ChanDispatch
 	srv.RouteTable["temperature-control"] = ldc.TempControlDispatch
 	srv.RouteTable["laser-output"] = ldc.LaserOutputDispatch

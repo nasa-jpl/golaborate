@@ -160,7 +160,6 @@ func AddressScan(addr string) (map[byte]string, error) {
 			if len(resp) > 0 {
 				mpr, err := DecodeTelegram(resp)
 				if err == nil {
-					fmt.Println(a, mpr.Data)
 					modules[a] = ModuleTypeMap[mpr.Data[0]]
 				}
 			}
@@ -250,7 +249,6 @@ func (m *Module) GetValue(addrName string) (MessagePrimitive, error) {
 	if err != nil {
 		return MessagePrimitive{}, err
 	}
-	fmt.Println(m.RemoteDevice.Conn)
 	err = m.Open()
 	if err != nil {
 		return MessagePrimitive{}, err

@@ -152,7 +152,7 @@ func (sk *SuperKVaria) HTTPND(w http.ResponseWriter, r *http.Request) {
 
 // NewSuperKVaria create a new Module representing a SuperKVaria module
 func NewSuperKVaria(addr, urlStem string, serial bool) *SuperKVaria {
-	rd := comm.NewRemoteDevice(addr, serial, &comm.Terminators{Rx: telEnd, Tx: telEnd})
+	rd := comm.NewRemoteDevice(addr, serial, &comm.Terminators{Rx: telEnd, Tx: telEnd}, nil)
 	srv := server.NewServer(urlStem)
 	sk := SuperKVaria{Module{
 		RemoteDevice: &rd,
