@@ -1,11 +1,21 @@
 openapi: 3.0.1
 info:
   title: HCIT HTTP servers
-  description: This document provides a specification and documentation for communication
-    with lab hardware through the http adaptors contained in the go-hcit repository.  The
-    requests on this page can be executed, and fire against a mock instance of the
-    hardware.  We complete the /omc paths here for the OMC/MCB/Performance Testbed,
-    but there are analogs DST and GPCT.
+  description: >-
+    This document provides a specification and documentation for communication
+    with lab hardware through the http adaptors contained in the go-hcit repository.
+    The requests on this page can be executed, and fire against a mock instance of the
+    hardware.  Change the servers dropdown to change between the mock server and real
+    testbeds.  Please respect your fellow operations and don't change the state of
+    their testbeds unexpectedly.  Some paths will not return results on all servers
+    (testbeds) because they are missing hardware.  We complete them all here for
+    completeness.  Trying the /route-graph endpoint will let you know what routes
+    will complete for a given server.
+
+
+    The /zygo/measure route only works on the mock server since its real url
+    is an IP on the HCIT network and the "brain" running on misery has no
+    knowledge of it.
   contact:
     email: brandon.dube@jpl.nasa.gov
   version: "1"
@@ -433,7 +443,6 @@ paths:
                 Shutter sensor 1: true
                 Shutter sensor 2: false
                 Supply voltage low: false
-                              
   /esp300/raw:
     post:
       summary: send raw text to the motion controller and get back its raw response, termination characters from the remote device stripped and trailing newline appended.
@@ -576,6 +585,19 @@ paths:
                 description: set maximum speed
                 usesAxis: true
                 isReadOnly: false
+  /esp300/errors:
+    get:
+      description: get the list of errors from the motion controller
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                  example: "COMMAND NOT FOUND"
   /esp300/single-cmd:
     post:
       summary: send a single command to the ESP300-series motion controller
@@ -686,3 +708,21 @@ paths:
               example:
                 temp: 28.7
                 rh: 6.7
+  /zygo/measure:
+    get:
+      description: trigger a measurement on the VeriFire and return the .dat file that is generated as a binary file transfer
+      parameters:
+      - in: query
+        name: filename
+        description: filename to save as and return with header indicating
+        schema:
+          type: string
+          example: tmp.dat
+      responses:
+        200:
+          description: OK
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
