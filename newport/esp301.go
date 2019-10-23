@@ -26,46 +26,7 @@ var (
 	// ErrBufferWouldOverflow is generated when the buffer on the ESP controller
 	// would overflow if the message was transmitted
 	ErrBufferWouldOverflow = errors.New("buffer too long, maximum command length is 80 characters")
-)
 
-// Command describes a command
-type Command struct {
-	Cmd         string `json:"cmd"`
-	Alias       string `json:"alias"`
-	Description string `json:"description"`
-	UsesAxis    bool   `json:"usesAxis"`
-	IsReadOnly  bool   `json:"isReadOnly"`
-}
-
-// JSONCommand is a primitive describing a command sent as JSON.
-// CMD may either be a command (Command.Cmd) or an alias (Command.Alias)
-// if Write is true, the data (F64) will be used.  If false, it will be ignored.
-type JSONCommand struct {
-	Axis  int     `json:"axis"`
-	Cmd   string  `json:"cmd"`
-	F64   float64 `json:"f64"`
-	Write bool    `json:"write"`
-}
-
-// ErrCommandNotFound is generated when a command is unknown to the newport module
-type ErrCommandNotFound struct {
-	Cmd string
-}
-
-func (e ErrCommandNotFound) Error() string {
-	return fmt.Sprintf("command %s not found", e.Cmd)
-}
-
-// ErrAliasNotFound is generated when an alias is unknown to the newport module
-type ErrAliasNotFound struct {
-	Alias string
-}
-
-func (e ErrAliasNotFound) Error() string {
-	return fmt.Sprintf("alias %s not found", e.Alias)
-}
-
-var (
 	commands = []Command{
 		// Status functions
 		{Cmd: "TE", Alias: "err-num", Description: "get error number", IsReadOnly: true},
@@ -105,7 +66,116 @@ var (
 		// - digital filters
 		// - master-slave mode definition
 	}
+
+	// ErrorCodesWithoutAxes maps error codes to error strings when the errors
+	// are not axis specific
+	ErrorCodesWithoutAxes = map[int]string{
+		0:  "NO ERROR DETECTED",
+		4:  "EMERGENCY STOP ACTIVATED",
+		6:  "COMMAND DOES NOT EXIST",
+		7:  "PARAMETER OUT OF RANGE",
+		8:  "CABLE INTERLOCK ERROR",
+		9:  "AXIS NUMBER OUT OF RANGE",
+		13: "GROUP NUMBER MISSING",
+		14: "GROUP NUMBER OUT OF RANGE",
+		15: "GROUP NUMBER NOT ASSIGNED",
+		16: "GROUP NUMBER ALREADY ASSIGNED",
+		17: "GROUP AXIS OUT OF RANGE",
+		18: "GROUP AXIS ALREADY ASSIGNED",
+		19: "GROUP AXIS DUPLICATED",
+		20: "DATA ACQUISITION IS BUSY",
+		21: "DATA ACQUISITION SETUP ERROR",
+		22: "DATA ACQUISITION NOT ENABLED",
+		23: "SERVO CYCLE (400μS) TICK FAILURE",
+		25: "DOWNLOAD IN PROGRESS",
+		26: "STORED PROGRAM NOT STARTED",
+		27: "COMMAND NOT ALLOWED",
+		28: "STORED PROGRAM FLASH AREA FULL",
+		29: "GROUP PARAMETER MISSING",
+		30: "GROUP PARAMETER OUT OF RANGE",
+		31: "GROUP MAXIMUM VELOCITY EXCEEDED",
+		32: "GROUP MAXIMUM ACCELERATION EXCEEDED",
+		33: "GROUP MAXIMUM DECELERATION EXCEEDED",
+		34: "GROUP MOVE NOT ALLOWED DURING MOTION",
+		35: "PROGRAM NOT FOUND",
+		37: "AXIS NUMBER MISSING",
+		38: "COMMAND PARAMETER MISSING",
+		40: "LAST COMMAND CANNOT BE REPEATED",
+		41: "MAX NUMBER OF LABELS PER PROGRAM EXCEEDED",
+	}
+
+	// ErrorCodesWithAxes maps the final two digits of an axis-specific
+	// error code to a string.  The axis number is excluded from the key.
+	ErrorCodesWithAxes = map[int]string{
+		0:  "MOTOR TYPE NOT DEFINED",
+		1:  "PARAMETER OUT OF RANGE",
+		2:  "AMPLIFIER FAULT DETECTED",
+		3:  "FOLLOWING ERROR THRESHLD EXCEEDED",
+		4:  "POSITIVE HARDWARE LIMIT REACHED",
+		5:  "NEGATIVE HARDWARE LIMIT REACHED",
+		6:  "POSITIVE SOFTWARE LIMIT REACHED",
+		7:  "NEGATIVE SOFTWARE LIMIT REACHED",
+		8:  "MOTOR / STAGE NOT CONNECTED",
+		9:  "FEEDBACK SIGNAL FAULT DETECTED",
+		10: "MAXIMUM VELOCITY EXCEEDED",
+		11: "MAXIMUM ACCELERATION EXCEEDED",
+		13: "MOTOR NOT ENABLED",
+		15: "MAXIMUM JERK EXCEEDED",
+		16: "MAXIMUM DAC OFFSET EXCEEDED",
+		17: "ESP CRITICAL SETTINGS ARE PROTECTED",
+		18: "ESP STAGE DEVICE ERROR",
+		19: "ESP STAGE DATA INVALID",
+		20: "HOMING ABORTED",
+		21: "MOTOR CURRENT NOT DEFINED",
+		22: "UNIDRIVE COMMUNICATIONS ERROR",
+		23: "UNIDRIVE NOT DETECTED",
+		24: "SPEED OUT OF RANGE",
+		25: "INVALID TRAJECTORY MASTER AXIS",
+		26: "PARAMETER CHARGE NOT ALLOWED",
+		28: "INVALID ENCODER STEP RATIO",
+		29: "DIGITAL I/O INTERLOCK DETECTED",
+		30: "COMMAND NOT ALLOWED DURING HOMING",
+		31: "COMMAND NOT ALLOWED DUE TO GROUP ASSIGNMENT",
+		32: "INVALID TRAJECTORY MODE FOR MOVING",
+	}
 )
+
+// Command describes a command
+type Command struct {
+	Cmd         string `json:"cmd"`
+	Alias       string `json:"alias"`
+	Description string `json:"description"`
+	UsesAxis    bool   `json:"usesAxis"`
+	IsReadOnly  bool   `json:"isReadOnly"`
+}
+
+// JSONCommand is a primitive describing a command sent as JSON.
+// CMD may either be a command (Command.Cmd) or an alias (Command.Alias)
+// if Write is true, the data (F64) will be used.  If false, it will be ignored.
+type JSONCommand struct {
+	Axis  int     `json:"axis"`
+	Cmd   string  `json:"cmd"`
+	F64   float64 `json:"f64"`
+	Write bool    `json:"write"`
+}
+
+// ErrCommandNotFound is generated when a command is unknown to the newport module
+type ErrCommandNotFound struct {
+	Cmd string
+}
+
+func (e ErrCommandNotFound) Error() string {
+	return fmt.Sprintf("command %s not found", e.Cmd)
+}
+
+// ErrAliasNotFound is generated when an alias is unknown to the newport module
+type ErrAliasNotFound struct {
+	Alias string
+}
+
+func (e ErrAliasNotFound) Error() string {
+	return fmt.Sprintf("alias %s not found", e.Alias)
+}
 
 func commandFromCmd(cmd string) (Command, error) {
 	for _, c := range commands {
@@ -134,6 +204,28 @@ func commandFromCmdOrAlias(cmdAlias string) (Command, error) {
 	return cmd, err
 }
 
+func makeTelegram(c Command, axis int, write bool, data float64) string {
+	pieces := []string{}
+	if c.UsesAxis {
+		pieces = append(pieces, strconv.Itoa(axis))
+	}
+	pieces = append(pieces, c.Cmd)
+	if c.IsReadOnly || !write {
+		pieces = append(pieces, "?")
+	} else {
+		pieces = append(pieces, strconv.FormatFloat(data, 'g', -1, 64))
+	}
+	return strings.Join(pieces, "")
+}
+
+func makeTelegramPlural(c []Command, axes []int, write []bool, data []float64) string {
+	telegrams := make([]string, 0, len(c))
+	for idx, c := range c {
+		telegrams = append(telegrams, makeTelegram(c, axes[idx], write[idx], data[idx]))
+	}
+	return strings.Join(telegrams, ";")
+}
+
 // makeSerConf makes a new serial.Config with correct parity, baud, etc, set.
 func makeSerConf(addr string) *serial.Config {
 	return &serial.Config{
@@ -145,7 +237,7 @@ func makeSerConf(addr string) *serial.Config {
 		ReadTimeout: 1 * time.Second}
 }
 
-// ESP301 represents an ESP301 motion controller
+// ESP301 represents an ESP301 motion controller.
 type ESP301 struct {
 	*comm.RemoteDevice
 	server.Server
@@ -167,6 +259,7 @@ func NewESP301(addr, urlStem string, serial bool) *ESP301 {
 	srv.RouteTable["multi-cmd"] = esp.HTTPJSONArray
 	srv.RouteTable["cmd-list"] = esp.HTTPCmdList
 	srv.RouteTable["simple-pos-abs"] = esp.HTTPPosAbs
+	srv.RouteTable["errors"] = esp.HTTPErrors
 	esp.Server = srv
 	return &esp
 }
@@ -183,6 +276,78 @@ func (esp *ESP301) RawCommand(cmd string) (string, error) {
 		return "", err
 	}
 	return string(r), nil
+
+}
+
+// ReadErrors reads all error from the controller and returns a slice of the
+// error messages, which may be empty if there are no errors.  The slice may be
+// partially filled if a communication error is encountered while reading the
+// sequence of errors.
+func (esp *ESP301) ReadErrors() ([]string, error) {
+	errors := []string{}
+	incomplete := true
+	cmd := "TB?"
+	for incomplete {
+		resp, err := esp.RawCommand(cmd)
+		if err != nil {
+			return errors, err
+		}
+		if resp[0] == '0' {
+			break
+		}
+		pieces := strings.Split(resp, ",")
+		axis := -1
+		if l := len(pieces); l >= 1 {
+			lcode := len(pieces[0])
+			var (
+				mapV  map[int]string
+				icode int
+				err   error
+			)
+			if lcode > 2 {
+				mapV = ErrorCodesWithAxes
+				icode, err = strconv.Atoi(pieces[0][lcode-2:]) // pop the axis off
+				axis, err = strconv.Atoi(pieces[0][:lcode-2])
+			} else {
+				mapV = ErrorCodesWithoutAxes
+				icode, err = strconv.Atoi(pieces[0])
+			}
+			if err != nil {
+				return errors, err
+			}
+			// at this stage, we have a map of icode=> error message and an axis
+			// number, which may be the special value of -1, indicating no axis
+			// now we concatenate the axis number and the error string and push
+			// onto the error stack
+			errS := mapV[icode]
+			if axis != -1 {
+				errS = fmt.Sprintf("AXIS %d ", axis) + errS
+			}
+			errors = append(errors, errS)
+
+		} else {
+			return errors, fmt.Errorf("expected CSV from motion controller with at least 1 element, got %d", l)
+		}
+	}
+	return errors, nil
+}
+
+// HTTPErrors reads the errors and returns them as a json [string] over HTTP
+func (esp *ESP301) HTTPErrors(w http.ResponseWriter, r *http.Request) {
+	errors, err := esp.ReadErrors()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	err = json.NewEncoder(w).Encode(errors)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	log.Printf("%s queried errors ESP %s, %v", r.RemoteAddr, esp.Addr, errors)
+	return
 
 }
 
@@ -332,26 +497,4 @@ func (esp *ESP301) HTTPCmdList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	return
-}
-
-func makeTelegram(c Command, axis int, write bool, data float64) string {
-	pieces := []string{}
-	if c.UsesAxis {
-		pieces = append(pieces, strconv.Itoa(axis))
-	}
-	pieces = append(pieces, c.Cmd)
-	if c.IsReadOnly || !write {
-		pieces = append(pieces, "?")
-	} else {
-		pieces = append(pieces, strconv.FormatFloat(data, 'g', -1, 64))
-	}
-	return strings.Join(pieces, "")
-}
-
-func makeTelegramPlural(c []Command, axes []int, write []bool, data []float64) string {
-	telegrams := make([]string, 0, len(c))
-	for idx, c := range c {
-		telegrams = append(telegrams, makeTelegram(c, axes[idx], write[idx], data[idx]))
-	}
-	return strings.Join(telegrams, ";")
 }
