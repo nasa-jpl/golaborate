@@ -98,7 +98,7 @@ func (sk *SuperKExtreme) HTTPEmissionGet(w http.ResponseWriter, r *http.Request)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	b := server.BoolT{Bool: mp.Data[0] == byte(1)}
+	b := server.BoolT{Bool: mp.Data[0] > byte(0)}
 	err = json.NewEncoder(w).Encode(b)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
