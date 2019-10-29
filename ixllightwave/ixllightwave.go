@@ -60,7 +60,8 @@ type LDC3916 struct {
 
 // NewLDC3916 creates a new LDC3916 instance, which embeds both comm.RemoteDevice and server.Server
 func NewLDC3916(addr, urlStem string) *LDC3916 {
-	rd := comm.NewRemoteDevice(addr, false, nil, nil)
+	term := &comm.Terminators{Rx: '\n', Tx: '\n'}
+	rd := comm.NewRemoteDevice(addr, false, term, nil)
 	srv := server.NewServer(urlStem)
 	ldc := LDC3916{RemoteDevice: &rd}
 	srv.RouteTable["chan"] = ldc.ChanDispatch
@@ -70,16 +71,6 @@ func NewLDC3916(addr, urlStem string) *LDC3916 {
 	srv.RouteTable["raw"] = ldc.RawDispatch
 	ldc.Server = srv
 	return &ldc
-}
-
-// TxTermination overloads the value from RemoteDevice
-func (ldc *LDC3916) TxTermination() byte {
-	return termination
-}
-
-// RxTermination overloads the value from RemoteDevice
-func (ldc *LDC3916) RxTermination() byte {
-	return termination
 }
 
 // ChanDispatch handles (Get/Post) requests on /chan
@@ -94,16 +85,19 @@ func (ldc *LDC3916) ChanDispatch(w http.ResponseWriter, r *http.Request) {
 		// response is going to look like 7 or 1,2,3
 		httpResponder(resp, typ, err)(w, r)
 	case http.MethodPost:
-		obj := struct{ ints []int }{}
-		err := json.NewDecoder(r.Body).Decode(obj)
+		obj := struct {
+			Ints []int `json:"ints"`
+		}{}
+		err := json.NewDecoder(r.Body).Decode(&obj)
 		defer r.Body.Close()
 		if err != nil {
 			fstr := fmt.Sprintf("unable to decode int array from query.  Query must be a JSON request with \"ints\" field.  For a single channel, use a length-1 array.  %q", err)
 			log.Println(fstr)
 			http.Error(w, fstr, http.StatusBadRequest)
+			return
 		}
 		// we got the channel from the request, now set it on the device
-		resp, err := ldc.processCommand(cmd, false, util.IntSliceToCSV(obj.ints))
+		resp, err := ldc.processCommand(cmd, false, util.IntSliceToCSV(obj.Ints))
 		httpResponder(resp, typ, err)(w, r)
 	default:
 		server.BadMethod(w, r)
@@ -127,6 +121,7 @@ func (ldc *LDC3916) TempControlDispatch(w http.ResponseWriter, r *http.Request) 
 			fstr := fmt.Sprintf("unable to decode boolean from query.  Query must be a JSON request with \"bool\" field.  %q", err)
 			log.Println(fstr)
 			http.Error(w, fstr, http.StatusBadRequest)
+			return
 		}
 		resp, err := ldc.processCommand(cmd, false, boolToString(boo.Bool))
 		httpResponder(resp, typ, err)(w, r)
@@ -219,7 +214,9 @@ func (ldc *LDC3916) processCommand(cmd string, read bool, data string) (string, 
 	if err != nil {
 		return "", err
 	}
-	defer ldc.Close()
+	defer ldc.CloseEventually()
+	ldc.Lock()
+	defer ldc.Unlock()
 	err = ldc.Send([]byte(cmd))
 	if err != nil {
 		return "", err
@@ -229,26 +226,15 @@ func (ldc *LDC3916) processCommand(cmd string, read bool, data string) (string, 
 		if err != nil {
 			return "", err
 		}
-		resp := string(r)
-		return resp, nil
+		return string(r), nil
 	}
-	buf := make([]byte, 80)
-	n, err := ldc.RemoteDevice.Conn.Read(buf)
-	if err != nil {
-		return "", err
-	}
-	return string(buf[:n]), nil
+	return "", nil
 }
 
 func httpResponder(data string, typ string, err error) http.HandlerFunc {
 	// this function is fragile because we encode the type in a string instead
 	// of using, say, types.BasicKind.  We do so because we need chan []int
 	// and int slices are not a basic type
-	if err != nil {
-		return func(w http.ResponseWriter, r *http.Request) {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-	}
 	if data == "" {
 		return func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
@@ -257,7 +243,7 @@ func httpResponder(data string, typ string, err error) http.HandlerFunc {
 	var ret interface{}
 	switch typ {
 	case "[]int":
-		s := strings.Split(string(data), ",")
+		s := strings.Split(data, ",")
 		ints := make([]int, len(s))
 		for idx, str := range s {
 			v, err := strconv.Atoi(str)
@@ -268,13 +254,19 @@ func httpResponder(data string, typ string, err error) http.HandlerFunc {
 		}
 		if len(ints) == 1 {
 			intt := ints[0]
-			ret = struct{ int int }{intt}
+			ret = struct {
+				Int int `json:"int"`
+			}{intt}
 		} else {
-			ret = struct{ int []int }{ints}
+			ret = struct {
+				Int []int `json:"int"`
+			}{ints}
 		}
 	case "bool":
 		b := stringToBool(data)
-		ret = struct{ bool bool }{b}
+		ret = struct {
+			Bool bool `json:"bool"`
+		}{b}
 	case "float":
 		f, err := strconv.ParseFloat(data, 64)
 		if err != nil {
@@ -282,13 +274,18 @@ func httpResponder(data string, typ string, err error) http.HandlerFunc {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 			}
 		}
-		ret = struct{ f64 float64 }{f}
+		ret = struct {
+			F64 float64 `json:"f64"`
+		}{f}
 	default:
-		ret = struct{ str string }{data}
+		ret = struct {
+			Str string `json:"str"`
+		}{data}
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
+		fmt.Printf("%+v\n", ret)
 		err := json.NewEncoder(w).Encode(ret)
 		if err != nil {
 			fstr := fmt.Sprintf("error encoding data to json state %q", err)
