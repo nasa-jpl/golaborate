@@ -151,10 +151,10 @@ func (mp MessagePrimitive) EncodeTelegram() ([]byte, error) {
 	}
 	typ := MessageTypesSB[mp.Type]
 	buf := append([]byte{mp.Dest, mp.Src, typ, mp.Register}, mp.Data...)
-	buf = sanitize(buf)
 
 	// compute its CRC, and ensure that CRC is sanitized
 	crcBytes := sanitize(crcHelper(buf))
+	buf = sanitize(buf)
 
 	// assemble the telegram
 	out := append([]byte{telStart}, buf...)
