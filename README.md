@@ -1,45 +1,32 @@
 # go-hcit
-golang servers/services for S383's high contrast imaging testbeds.  This is set up as a monorepo and contains several packages.  Below is a somewhat infrequently maintained index of the packages and what they enable.  Each type of sensor has a `ReadAndReplyWithJSON` method which implements `http.Handler`
 
-### commonpressure
+This monorepo contains a number of packages written predominantly in the Go programming language for interacting with various pieces of lab hardware -- sensors, motion controllers, cameras, and deformable mirrors.  The HTTP server extensions to these packages add less than 1 ms of latency to the communication and enable a more pleasant API and thinner client libraries in any language.  The Andor server uses CGo and is less portable for that reason.  See README in the andor directory for special compilation instructions.
 
-refactored, common logic for working with pressure sensors.
+It also includes some lower level libraries for allowing transparent use of serial or TCP connections to these devices and connection keep-alive behavior on either connection type, as well as graceful backoff in the event of devices rejecting connection thrashing.
 
-### fluke
+The following hardware is supported:
 
-Reading from Fluke 1620a "DewK" temp/humidity sensors over TCP/IP or serial.
+DMs:
+- JPL Gen 5 DM controllers
+- BMC commercial DM controllers
 
-### granville-phillips
+Motion:
+- Newport ESP 300 and 301 motion controllers
+- Newport XPS motion controllers
+- Aerotech Epaq and Ensemble motion controllers
 
-Reading from GP375 pressure meters over serial.
+Light sources:
+- NKT SuperK supercontinuum lasers
+- IXL Lightwave laser diodes
 
-### lakeshore
+Environmental Sensors and controllers:
+- Granville-Phillips GP375 Convectron pressure sensors
+- Lesker KJC 300 pressure sensors
+- Fluke DewK 1620a temperature and humidity sensors
+- Lakeshore 322 thermometers and temperature controllers
 
-Reading from a 332 sensor/heater controller.
-
-### lesker
-
-Reading from KJC300 pressure meters.
-
-### nkt
-
-Operation (read state, command) of superK Extreme and VARIA lasers.
-
-### thermocube
-
-Reading from Thermocube 200~400 series chillers.
-
-### Binaries
-
-In /cmd, there is the source for several executables:
-
-#### envsrv
-
-This server has routes for each sensor on OMC/GPCT/DST and allows them to be queried via HTTP.
-
-#### zygo
-
-This service enables remote measurement with Zygo interferometers via HTTP.
+Instruments:
+- Zygo interferometers
 
 
 ## Setup
@@ -65,7 +52,7 @@ go get github.com/tarm/serial  # talking to serial devices
 go get github.com/spf13/viper  # configuration
 go get gopkg.in/yaml.v2        # YAML file support for configs
 go get github.com/snksoft/crc  # Cyclic Redundancy Check library for NKT devices
-go get golang.org/x/time/rate  # rate limiting
+go get github.com/cenkalti/backoff  # graceful backoff when connections rejected by hardware
 ```
 
 There are no external dependencies aside from these .
@@ -80,18 +67,6 @@ env GOOS=linux GOARCH=386 go build main.go
 
 Note that go supports cross compilation, so compiling for linux or windows from a mac is a nonissue.
 
-
-## Writing a new device "driver"
-
-Most pieces of lab equipment communicate with a computer over RS232, aka a Serial interface.  In Golang, a profitable way to communicate with them is to connect with `tarm/serial`, an excellent library for raw serial functions, and use `bufio.Reader.ReadBytes` to scan the reply, even if it comes in multiple replies, up to a termination byte(s).  To make a "driver" for any new hardware, you can simply consult its manual for the following information:
-
-- baudrate
-- number of data bits
-- number of stop bits
-- parity
-- message terminations
-
-Then copy paste one of the existing modules, replace this information, and update the gofuncs as appropriate for the hardware controls or queries you want to implement.
 
 ## development status
 
