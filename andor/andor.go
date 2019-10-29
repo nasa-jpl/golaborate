@@ -186,6 +186,24 @@ const (
 	VerticalClockPlusFour
 )
 
+// EMGainMode represents one of the electron multiplying gain modes
+// supported by Andor EMCCD cameras
+type EMGainMode uint
+
+const (
+	// EMGainDefault has EM gain controlled by DAC settings in the range of 0-255
+	EMGainDefault EMGainMode = iota
+
+	// EMGainExtended has EM gain controlled by DAC settings in the range of 0-4095
+	EMGainExtended
+
+	// EMGainLinear has EM gain TODO: finish this docstring
+	EMGainLinear
+
+	// EMGainReal has EM gain TODO: finish this docstring
+	EMGainReal
+)
+
 // Camera represents an Andor camera
 type Camera struct{}
 
@@ -505,6 +523,35 @@ func (c *Camera) WaitForAcquisition(t time.Duration) error {
 	return Error(errCode)
 }
 
+// GetBitDepth gets the number of bits of dynamic range for a given AD channel
+func (c *Camera) GetBitDepth(ch uint) (uint, error) {
+	return 0, nil
+}
+
+// GetNumberADChannels returns the number of discrete A/D channels available
+func (c *Camera) GetNumberADChannels() (uint, error) {
+	return 0, nil
+}
+
+// SetADChannel sets the AD channel to use until it is changed again or the
+// camera is powered off
+func (c *Camera) SetADChannel(ch uint) error {
+	return nil
+}
+
+// GetMaximumExposure gets the maximum exposure time supported in the current
+// configuration
+func (c *Camera) GetMaximumExposure() (float64, error) {
+	return 0., nil
+}
+
+// GetMaximumBinning returns the maximum binning factor usable.
+// if horizontal is true, the returned value is for the horizontal dimension.
+// if horizontal is false, the returned value is for the vertical dimension.
+func (c *Camera) GetMaximumBinning(rm ReadoutMode, horizontal bool) (uint, error) {
+	return 0, nil
+}
+
 /* the previous section deals with acquisition, the below deals with processing.
 
  */
@@ -528,8 +575,26 @@ func (c *Camera) GetEMCCDGain() error { // need another return type
 	return nil
 }
 
+// SetEMCCDGain sets the EMCCD gain.  The precise behavior depends on the current
+// gain mode, see SetEMGainMode, GetEMGainMode
+func (c *Camera) SetEMCCDGain(fctr uint) error {
+	return nil
+}
+
 // GetEMGainRange gets the min and max EMCCD gain settings for the current gain
 // mode and temperature of the sensor
 func (c *Camera) GetEMGainRange() (int, int, error) {
 	return 0, 0, error
+}
+
+// SetEMGainMode sets the current EMCCD gain mode
+func (c *Camera) SetEMGainMode(gm EMGainMode) error {
+	return nil
+}
+
+// SetEMAdvanced allows setting of the EM gain setting to values higher than
+// 300x.  Using this setting with more than 10s of photons per pixel per readout
+// will lead to advanced ageing of the sensor.
+func (c *Camera) SetEMAdvanced(b bool) error {
+	return nil // 0 => disabled, 1 => enabled
 }
