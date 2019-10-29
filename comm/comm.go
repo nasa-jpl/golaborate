@@ -64,8 +64,8 @@ var (
 	// ErrTerminatorNotFound is generated when the termination byte is not found in a response
 	ErrTerminatorNotFound = errors.New("termination byte not found")
 
-	// ErrCloseTooSoon is generated when one attempts to close a connection too soon after communicating
-	ErrCloseTooSoon = errors.New("attempt to close a connection sooner than closeDelay after the last communication")
+	// errCloseTooSoon is generated when one attempts to close a connection too soon after communicating
+	errCloseTooSoon = errors.New("attempt to close a connection sooner than closeDelay after the last communication")
 )
 
 const (
@@ -254,7 +254,7 @@ func (rd *RemoteDevice) Close() error {
 func (rd *RemoteDevice) closeMaybe() error {
 	now := time.Now()
 	if now.Sub(rd.lastComm) < closeDelay {
-		return ErrCloseTooSoon
+		return errCloseTooSoon
 	}
 	return rd.Close()
 }
