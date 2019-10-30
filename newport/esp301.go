@@ -67,9 +67,9 @@ var (
 		// - master-slave mode definition
 	}
 
-	// ErrorCodesWithoutAxes maps error codes to error strings when the errors
+	// ESPErrorCodesWithoutAxes maps error codes to error strings when the errors
 	// are not axis specific
-	ErrorCodesWithoutAxes = map[int]string{
+	ESPErrorCodesWithoutAxes = map[int]string{
 		0:  "NO ERROR DETECTED",
 		4:  "EMERGENCY STOP ACTIVATED",
 		6:  "COMMAND DOES NOT EXIST",
@@ -104,9 +104,9 @@ var (
 		41: "MAX NUMBER OF LABELS PER PROGRAM EXCEEDED",
 	}
 
-	// ErrorCodesWithAxes maps the final two digits of an axis-specific
+	// ESPErrorCodesWithAxes maps the final two digits of an axis-specific
 	// error code to a string.  The axis number is excluded from the key.
-	ErrorCodesWithAxes = map[int]string{
+	ESPErrorCodesWithAxes = map[int]string{
 		0:  "MOTOR TYPE NOT DEFINED",
 		1:  "PARAMETER OUT OF RANGE",
 		2:  "AMPLIFIER FAULT DETECTED",
@@ -305,11 +305,11 @@ func (esp *ESP301) ReadErrors() ([]string, error) {
 				err   error
 			)
 			if lcode > 2 {
-				mapV = ErrorCodesWithAxes
+				mapV = ESPErrorCodesWithAxes
 				icode, err = strconv.Atoi(pieces[0][lcode-2:]) // pop the axis off
 				axis, err = strconv.Atoi(pieces[0][:lcode-2])
 			} else {
-				mapV = ErrorCodesWithoutAxes
+				mapV = ESPErrorCodesWithoutAxes
 				icode, err = strconv.Atoi(pieces[0])
 			}
 			if err != nil {
