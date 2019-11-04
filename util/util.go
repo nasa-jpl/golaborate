@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// IntSliceToCSV convets a slice of ints to CSV formatted data.
+// IntSliceToCSV converts a slice of ints to CSV formatted data.
 // e.g., []int{1,2,3,4,5} => "1,2,3,4,5"
 func IntSliceToCSV(is []int) string {
 	s := make([]string, len(is))
@@ -14,6 +14,17 @@ func IntSliceToCSV(is []int) string {
 		s[i] = strconv.Itoa(v)
 	}
 
+	return strings.Join(s, ",")
+}
+
+// Float64SliceToCSV converts a slice of f64s to CSV formatted data
+// sensible default values for fmt and prec are 'G' and 3 to print with
+// 3 decimal places, and 'ordinary' notation
+func Float64SliceToCSV(fs []float64, fmt byte, prec int) string {
+	s := make([]string, len(fs))
+	for i, v := range fs {
+		s[i] = strconv.FormatFloat(v, fmt, prec, 64)
+	}
 	return strings.Join(s, ",")
 }
 
