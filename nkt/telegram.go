@@ -210,8 +210,8 @@ func DecodeTelegram(tele []byte) (MessagePrimitive, error) {
 	return mp, ErrRemoteCRCMismatch
 }
 
-// WriteThenRead writes a telegram to a connection and then reads a response from it, returning an error if there is one
-func WriteThenRead(conn net.Conn, telegram []byte) ([]byte, error) {
+// writeThenRead writes a telegram to a connection and then reads a response from it, returning an error if there is one
+func writeThenRead(conn net.Conn, telegram []byte) ([]byte, error) {
 	_, err := conn.Write(telegram)
 	if err != nil {
 		return []byte{}, err

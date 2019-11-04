@@ -146,7 +146,7 @@ func AddressScan(addr string) (map[byte]string, error) {
 		deadline := time.Now().Add(75 * time.Millisecond) // the manual advises 50-100 ms here
 		conn.SetReadDeadline(deadline)
 		conn.SetWriteDeadline(deadline)
-		resp, err := WriteThenRead(conn, tele)
+		resp, err := writeThenRead(conn, tele)
 		if err == nil {
 			if len(resp) > 0 {
 				mpr, err := DecodeTelegram(resp)
