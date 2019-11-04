@@ -11,6 +11,13 @@ import (
 	"path/filepath"
 )
 
+// HandleFuncer is an interface that either the http module, or an HTTP ServeMux
+// or equivalent (Gin, Goji, many others) satisfy
+type HandleFuncer interface {
+	// HandleFunc as defined in stdlib/http
+	HandleFunc(string, func(http.ResponseWriter, *http.Request))
+}
+
 // ReplyWithFile replies to the client request by serving the given file name
 func ReplyWithFile(w http.ResponseWriter, r *http.Request, fn string, fldr string) {
 
@@ -133,7 +140,7 @@ func (m *Mainframe) graphHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // BindRoutes binds the routes for each member service
-func (m *Mainframe) BindRoutes() {
+func (m *Mainframe) BindRoutes(h HandleFuncer) {
 	listRouteMap := make(map[string][]string)
 	for _, s := range m.nodes {
 		s.BindRoutes()
@@ -146,7 +153,7 @@ func (m *Mainframe) BindRoutes() {
 	}
 
 	for stem, listOfRoutes := range listRouteMap {
-		http.HandleFunc(stem+"/route-graph", func(w http.ResponseWriter, r *http.Request) {
+		h.HandleFunc(stem+"/route-graph", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			err := json.NewEncoder(w).Encode(listOfRoutes)
@@ -158,7 +165,7 @@ func (m *Mainframe) BindRoutes() {
 		})
 	}
 
-	http.HandleFunc("/route-graph", m.graphHandler)
+	h.HandleFunc("/route-graph", m.graphHandler)
 
 	return
 }
