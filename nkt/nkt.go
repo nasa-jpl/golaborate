@@ -1,4 +1,4 @@
-// Package nkt enables working with NKT SuperK VARIA supercontinuum laser sources.
+// Package nkt enables working with NKT SuperK supercontinuum lasers.
 package nkt
 
 import (
@@ -49,15 +49,6 @@ var (
 		"Serial":           0x65,
 		"Status":           0x66,
 		"ErrorCode":        0x67,
-	}
-
-	// StandardTypes maps the types of addresses present for all modules
-	StandardTypes = map[string]types.BasicKind{
-		"TypeCode":         types.Byte,
-		"Firmware Version": types.Byte,
-		"Serial":           types.Byte,
-		"Status":           types.Byte,
-		"ErrorCode":        types.Byte,
 	}
 
 	// ModuleTypeMap maps bytes to human-readable strings for module types
