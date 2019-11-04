@@ -1,7 +1,9 @@
 package newport
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
 	"github.jpl.nasa.gov/HCIT/go-hcit/server"
@@ -138,7 +140,20 @@ func popError(resp string) (int, string) {
 	return 0, ""
 }
 
+// JSONGroupCommand is a primitive describing a command sent as JSON.
+// CMD may either be a command (Command.Cmd) or an alias (Command.Alias)
+// if Write is true, the data (F64) will be used.  If false, it will be ignored.
+type JSONGroupCommand struct {
+	Group string    `json:"group"`
+	F64   []float64 `json:"f64"`
+	Write bool      `json:"write"`
+}
+
 /*XPS represents an XPS series motion controller.
+
+Note that the programming manual has a lot of socket numbers sprinkled around.
+We do not see any here because those concern connection pools held by the
+clients.  We only use a single connection, provided by comm.RemoteDevice.
 
 While newport markets the XPS as a more versatile and consistent
 (vis-a-vis communication) product than the older ESP line, this is not really
@@ -160,6 +175,8 @@ func NewXPS(addr, urlStem string) *XPS {
 	rd := comm.NewRemoteDevice(addr, false, nil, makeSerConf(addr))
 	srv := server.NewServer(urlStem)
 	xps := XPS{RemoteDevice: &rd}
+	srv.RouteTable["simple-pos-abs"] = xps.HTTPPos
+	srv.RouteTable["simple-home"] = xps.HTTPHome
 	xps.Server = srv
 	return &xps
 }
@@ -180,4 +197,70 @@ func (xps *XPS) GroupPositionCurrentGet(gid string) ([]float64, error) {
 	cmd := fmt.Sprintf("GroupPositionCurrentGet(%s, double *)", gid)
 	fmt.Println(cmd)
 	return []float64{0}, nil
+}
+
+// GroupHomeSearch homes each of the axes in a given group
+func (xps *XPS) GroupHomeSearch(gid string) error {
+	cmd := fmt.Sprintf("GroupHomeSearch(%s)", gid)
+	fmt.Println(cmd)
+	return XPSError(0)
+}
+
+// HTTPPos triggers GroupMoveAbsolute from an HTTP POST request with "group"
+// (str) and "f64" ([]float) fields
+// or GroupPositionCurrentGet from an HTTP GET request with "group" (str) field
+func (xps *XPS) HTTPPos(w http.ResponseWriter, r *http.Request) {
+	jcmd := JSONGroupCommand{}
+	err := json.NewDecoder(r.Body).Decode(&jcmd)
+	defer r.Body.Close()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		pos, err := xps.GroupPositionCurrentGet(jcmd.Group)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		s := struct {
+			F64 []float64 `json:"f64"`
+		}{pos}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		err = json.NewEncoder(w).Encode(s)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+
+	case http.MethodPost:
+		err := xps.GroupMoveAbsolute(jcmd.Group, jcmd.F64)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+
+	}
+}
+
+// HTTPHome triggers GroupHomeSearch on the given group
+func (xps *XPS) HTTPHome(w http.ResponseWriter, r *http.Request) {
+	jcmd := JSONGroupCommand{}
+	err := json.NewDecoder(r.Body).Decode(&jcmd)
+	defer r.Body.Close()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	err = xps.GroupHomeSearch(jcmd.Group)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	return
 }

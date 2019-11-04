@@ -254,6 +254,8 @@ func NewESP301(addr, urlStem string, serial bool) *ESP301 {
 	srv.RouteTable["multi-cmd"] = esp.HTTPJSONArray
 	srv.RouteTable["cmd-list"] = esp.HTTPCmdList
 	srv.RouteTable["simple-pos-abs"] = esp.HTTPPosAbs
+	srv.RouteTable["simple-home"] = esp.HTTPHome
+	srv.RouteTable["simple-wait"] = esp.HTTPWait
 	srv.RouteTable["errors"] = esp.HTTPErrors
 	esp.Server = srv
 	return &esp
@@ -445,6 +447,25 @@ func (esp *ESP301) HTTPHome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
+}
+
+// HTTPWait waits for motion to cease
+func (esp *ESP301) HTTPWait(w http.ResponseWriter, r *http.Request) {
+	// this is a copy paste of wait instead of home
+	jcmd := JSONCommand{}
+	err := json.NewDecoder(r.Body).Decode(&jcmd)
+	defer r.Body.Close()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	err = esp.Wait(jcmd.Axis)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+
 }
 
 // HTTPRaw handles requests with raw string payloads
