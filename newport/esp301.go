@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go/types"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -243,12 +244,6 @@ type ESP301 struct {
 	server.Server
 }
 
-// SerialConf returns a serial config and satisfies SerialConfigurator
-func (esp *ESP301) SerialConf() serial.Config {
-	return *makeSerConf(esp.Addr)
-
-}
-
 // NewESP301 makes a new ESP301 motion controller instance
 func NewESP301(addr, urlStem string, serial bool) *ESP301 {
 	rd := comm.NewRemoteDevice(addr, serial, nil, makeSerConf(addr))
@@ -277,6 +272,52 @@ func (esp *ESP301) RawCommand(cmd string) (string, error) {
 	}
 	return string(r), nil
 
+}
+
+// GetPos gets the absolute position of an axis in controller units (usually mm)
+func (esp *ESP301) GetPos(axis int) (float64, error) {
+	c, _ := commandFromAlias("get-position")
+	tele := makeTelegram(c, axis, false, 0)
+	resp, err := esp.RawCommand(tele)
+	if err != nil {
+		return 0, err
+	}
+	fmt.Println(resp)
+	return 0, nil
+}
+
+// SetPosAbs sets the absolute position of an axis in controller units (usually mm)
+func (esp *ESP301) SetPosAbs(axis int, pos float64) error {
+	c, _ := commandFromAlias("move-abs")
+	tele := makeTelegram(c, axis, true, pos)
+	resp, err := esp.RawCommand(tele)
+	fmt.Println(resp)
+	return err
+}
+
+// Home homes an axis.
+// We use a mode 1 home forcibly, which does "Find Home and Index Signal."  This
+// This 'fully' homes either linear or rotary axes. Use RawCommand if you want
+// to do a different kind of homing
+func (esp *ESP301) Home(axis int) error {
+	cmd, _ := commandFromAlias("origin-search")
+	tele := makeTelegram(cmd, axis, true, 1)
+	resp, err := esp.RawCommand(tele)
+	fmt.Println(resp)
+	return err
+}
+
+// Wait waits for motion to cease and then returns nil
+func (esp *ESP301) Wait(axis int) error {
+	cmd, _ := commandFromAlias("wait")
+	tele := makeTelegram(cmd, axis, true, 0)
+	fmt.Println(tele)
+	return nil
+}
+
+// SetFollowingErrorConfiguration sets the "following error" configuration
+func (esp *ESP301) SetFollowingErrorConfiguration(enableChecking, disableMotorPowerOnError, abortMotionOnError bool) error {
+	return nil
 }
 
 // ReadErrors reads all error from the controller and returns a slice of the
@@ -353,7 +394,57 @@ func (esp *ESP301) HTTPErrors(w http.ResponseWriter, r *http.Request) {
 
 // HTTPPosAbs gets the absolute position of an axis on GET or sets it on POST
 func (esp *ESP301) HTTPPosAbs(w http.ResponseWriter, r *http.Request) {
-	return
+	switch r.Method {
+	case http.MethodGet:
+		jcmd := JSONCommand{}
+		err := json.NewDecoder(r.Body).Decode(&jcmd)
+		defer r.Body.Close()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		f, err := esp.GetPos(jcmd.Axis)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		resp := server.HumanPayload{Float: f, T: types.Float64}
+		resp.EncodeAndRespond(w, r)
+		return
+
+	case http.MethodPost:
+		jcmd := JSONCommand{}
+		err := json.NewDecoder(r.Body).Decode(&jcmd)
+		defer r.Body.Close()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		err = esp.SetPosAbs(jcmd.Axis, jcmd.F64)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+}
+
+// HTTPHome homes an axis
+func (esp *ESP301) HTTPHome(w http.ResponseWriter, r *http.Request) {
+	jcmd := JSONCommand{}
+	err := json.NewDecoder(r.Body).Decode(&jcmd)
+	defer r.Body.Close()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	err = esp.Home(jcmd.Axis)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 // HTTPRaw handles requests with raw string payloads
