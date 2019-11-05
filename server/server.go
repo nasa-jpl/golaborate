@@ -2,6 +2,7 @@
 package server
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"go/types"
@@ -227,13 +228,8 @@ type HumanPayload struct {
 	T types.BasicKind
 }
 
-// EndianInterface is safisfied by both encoding/binary.BigEndian and LittleEndian
-type EndianInterface interface {
-	Uint16([]byte) uint16
-}
-
 // UnpackBinary converts the raw data from a register into a HumanPayload
-func UnpackBinary(b []byte, typ types.BasicKind, endian EndianInterface) HumanPayload {
+func UnpackBinary(b []byte, typ types.BasicKind, endian binary.ByteOrder) HumanPayload {
 	var hp HumanPayload
 	if len(b) == 0 {
 		return HumanPayload{}
