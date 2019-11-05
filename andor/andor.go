@@ -132,6 +132,7 @@ const (
 	_
 	_
 	_
+
 	// TriggerExternalStart uses rising edges from an external trigger and falling edges from an internal one
 	TriggerExternalStart
 
@@ -224,6 +225,7 @@ const (
 type HardwareVersion struct {
 	// PCB version
 	PCB uint
+
 	// Decode Flex 10K file version
 	Decode uint
 
