@@ -65,14 +65,16 @@ library.
 package andor
 
 /*
-#cgo CFLAGS: -I../DyLib
-#cgo LDFLAGS: -L. -lkeyboard
-#include <ATMCD32D.H>
+#cgo CFLAGS: -I/usr/local
+#cgo LDFLAGS: -L/usr/local/lib -landor
+#include <stdlib.h>
+#include <atmcdLXd.h>
 */
 import "C"
 import (
 	"fmt"
 	"time"
+	"unsafe"
 )
 
 // AcquisitionMode represents a mode of acquisition to the camera.
@@ -204,12 +206,50 @@ const (
 	EMGainReal
 )
 
+// HardwareVersion is a struct holding hardware versions
+type HardwareVersion struct {
+	// PCB version
+	PCB uint
+	// Decode Flex 10K file version
+	Decode uint
+
+	dummy1 uint
+	dummy2 uint
+
+	// CameraFirmwareVersion Version # of camera firmware
+	CameraFirmwareVersion uint
+
+	// CameraFirmwareBuild
+	CameraFirmwareBuild uint
+}
+
+// SoftwareVersion is a struct holding software versions
+type SoftwareVersion struct {
+	// EPROM version
+	EPROM uint
+
+	// COF version
+	COF uint
+
+	// DriverRevision
+	DriverRevision uint
+
+	// DriverVersion
+	DriverVersion uint
+
+	// DLLRevision
+	DLLRevision uint
+
+	// DLLVersion
+	DLLVersion uint
+}
+
 // Camera represents an Andor camera
 type Camera struct{}
 
 var (
 	//ErrCodes is a map of error codes to their string values
-	ErrCodes = map[uint]string{
+	ErrCodes = map[DRVError]string{
 		20001: "DRV_ERROR_CODES",
 		20002: "DRV_SUCCESS",
 		20003: "DRV_VXD_NOT_INSTALLED",
@@ -345,70 +385,139 @@ func Error(code uint) error {
  */
 
 // Initialize initializes the camera connection with the driver library
-func (c *Camera) Initialize() error {
-	return nil
+func (c *Camera) Initialize(iniPath string) error {
+	cstr := C.CString(iniPath)
+	defer C.free(unsafe.Pointer(cstr))
+	errCode := uint(C.Initialize(cstr))
+	return Error(errCode)
 }
 
 // ShutDown shuts down the camera
-func (c *Camera) ShutDown() error {
-	return nil
+// this doesn't mimic the SDK 1:1, but the error can only be DRV_SUCCESS
+// so we spare the user dealing with errors
+func (c *Camera) ShutDown() {
+	C.ShutDown()
 }
 
 // GetDetector gets the detector
-func (c *Camera) GetDetector() error { // need another return type
-	return nil
+func (c *Camera) GetDetector() (int, int, error) { // need another return type
+	var x, y C.int
+	errCode := uint(C.GetDetector(&x, &y))
+	return int(x), int(y), Error(errCode)
 }
 
 // GetHardwareVersion gets the hardware version string from the camera
-func (c *Camera) GetHardwareVersion() error { // need another return type
-	return nil
+func (c *Camera) GetHardwareVersion() (HardwareVersion, error) { // need another return type
+	var pcb, decode, dummy1, dummy2, camfw, cambuild C.uint
+	errCode := uint(C.GetHardwareVersion(&pcb, &decode, &dummy1, &dummy2, &camfw, &cambuild))
+	s := HardwareVersion{
+		PCB:                   uint(pcb),
+		Decode:                uint(decode),
+		dummy1:                uint(dummy1),
+		dummy2:                uint(dummy2),
+		CameraFirmwareVersion: uint(camfw),
+		CameraFirmwareBuild:   uint(cambuild)}
+	return s, Error(errCode)
 }
 
 // GetSoftwareVersion gets the software version from the caemra
-func (c *Camera) GetSoftwareVersion() error {
-	return nil
+func (c *Camera) GetSoftwareVersion() (SoftwareVersion, error) {
+	var eprom, coffile, vxdrev, vxdver, dllrev, dllver C.uint
+	errCode := uint(C.GetSoftwareVersion(&eprom, &coffile, &vxdrev, &vxdver, &dllrev, &dllver))
+	s := SoftwareVersion{
+		EPROM:          uint(eprom),
+		COF:            uint(coffile),
+		DriverRevision: uint(vxdrev),
+		DriverVersion:  uint(vxdver),
+		DLLRevision:    uint(dllrev),
+		DLLVersion:     uint(dllver),
+	}
+	return s, Error(errCode)
 }
 
 // GetNumberVSSpeeds gets the number of vertical shift register speeds available
-func (c *Camera) GetNumberVSSpeeds() error { // need another return type
-	return nil
+func (c *Camera) GetNumberVSSpeeds() (int, error) { // need another return type
+	var speeds C.int
+	errCode := uint(C.GetNumberVSSpeeds(&speeds))
+	return int(speeds), Error(errCode)
 }
 
 // GetVSSpeed gets the vertical shift register speed
-func (c *Camera) GetVSSpeed() error { // need another return type
-	return nil
+func (c *Camera) GetVSSpeed(idx int) (float64, error) { // need another return type
+	var f C.float
+	errCode := uint(C.GetVSSpeed(C.int(idx), &f))
+	return float64(f), Error(errCode)
 }
 
 // GetFastestRecommendedVSSpeed gets the fastest vertical shift register speed
 // that does not require changing the vertical clock voltage.  It returns
 // the fastest vertical clock speed's intcode and the actual speed in microseconds
 func (c *Camera) GetFastestRecommendedVSSpeed() (int, float64, error) {
-	return 0, 0., nil
+	var idx C.int
+	var speed C.float
+	errCode := uint(C.GetFastestRecommendedVSSpeed(&idx, &speed))
+	return int(idx), float64(speed), Error(errCode)
 }
 
 // SetVSSpeed sets the vertical shift register speed
-func (c *Camera) SetVSSpeed() error { // need another argument type
-	return nil
+func (c *Camera) SetVSSpeed(idx int) error { // need another argument type
+	errCode := uint(C.SetVSSpeed(C.int(idx)))
+	return Error(errCode)
 }
 
 // SetVSAmplitude sets the vertical shift register voltage
 func (c *Camera) SetVSAmplitude(vcv VerticalClockVoltage) error {
-	return nil
+	cint := C.int(vcv)
+	errCode := uint(C.SetVSAmplitude(cint))
+	return Error(errCode)
 }
 
 // GetNumberHSSpeeds gets the number of horizontal shift register speeds available
-func (c *Camera) GetNumberHSSpeeds() error { // need another return type
-	return nil
+func (c *Camera) GetNumberHSSpeeds(ch int, emMode bool) (int, error) { // need another return type
+	var emint int
+	if emMode {
+		emint = 0
+	} else {
+		emint = 1
+	}
+	cch := C.int(ch)
+	ctyp := C.int(emint)
+	var ret C.int
+
+	errCode := uint(C.GetNumberHSSpeeds(cch, ctyp, &ret))
+	return int(ret), Error(errCode)
 }
 
 // GetHSSpeed gets the horizontal shift speed
-func (c *Camera) GetHSSpeed() error { // need another return type
-	return nil
+func (c *Camera) GetHSSpeed(ch int, emMode bool, idx int) (float64, error) { // need another return type
+	var emint int
+	if emMode {
+		emint = 0
+	} else {
+		emint = 1
+	}
+	cch := C.int(ch)
+	ctyp := C.int(emint)
+	cidx := C.int(idx)
+	var ret C.float
+
+	errCode := uint(C.GetHSSpeed(cch, ctyp, cidx, &ret))
+	return float64(ret), Error(errCode)
 }
 
 // SetHSSpeed sets the horizontal shift speed
-func (c *Camera) SetHSSpeed() error { // need another argument type
-	return nil
+func (c *Camera) SetHSSpeed(emMode bool, idx int) error { // need another argument type
+	var emint int
+	if emMode {
+		emint = 0
+	} else {
+		emint = 1
+	}
+	ctyp := C.int(emint)
+	cidx := C.int(idx)
+
+	errCode := uint(C.SetHSSpeed(ctyp, cidx))
+	return Error(errCode)
 }
 
 /* the above deals with camera initialization, the below deals with temperature regulation.
@@ -416,29 +525,51 @@ func (c *Camera) SetHSSpeed() error { // need another argument type
  */
 
 // SetCoolerActive toggles the cooler on (true) or off (false)
+// NOTE:
+// 1. When the temperature control is switched off, the temperature of the
+//    sensor is gradually raised to 0C to ensure no thermal stresses are
+//    set up in the sensor.  Classic & ICCD only.
+// 2. When closing down the program via ShutDown, you must ensure that the
+//    temperature of the detector is above -20C, otherwise calling ShutDown
+//    while the detector is still cooled will cause the temperature to rise
+//    faster than certified.
 func (c *Camera) SetCoolerActive(b bool) error {
-	// call CoolerON or CoolerOFF as needed
-	return nil
+	var cerr C.uint
+	if b {
+		cerr = C.CoolerON()
+	} else {
+		cerr = C.CoolerOFF()
+	}
+	return Error(uint(cerr))
 }
 
 // GetCoolerActive gets if the cooler is currently engaged
 func (c *Camera) GetCoolerActive() (bool, error) {
-	return true, nil
+	var ret C.int
+	errCode := uint(C.IsCoolerOn(&ret))
+	return int(ret) == 1, Error(errCode)
 }
 
-// GetTemperatureRange gets ...
-func (c *Camera) GetTemperatureRange() error { // need another return type
-	return nil
+// GetTemperatureRange gets the valid range of temperatures
+// in which the detector can be cooled
+// returns (min, max, error)
+func (c *Camera) GetTemperatureRange() (int, int, error) { // need another return type
+	var min, max C.int
+	errCode := uint(C.GetTemperatureRange(&min, &max))
+	return int(min), int(max), Error(errCode)
 }
 
 // GetTemperature gets the current temperature in degrees celcius
-func (c *Camera) GetTemperature() (float64, error) {
-	return 0, nil
+func (c *Camera) GetTemperature() (int, error) {
+	var temp C.int
+	errCode := uint(C.GetTemperature(&temp))
+	return int(temp), Error(errCode)
 }
 
 // SetTemperature sets the temperature setpoint in degrees celcius
-func (c *Camera) SetTemperature(t float64) error {
-	return nil
+func (c *Camera) SetTemperature(t int) error {
+	errCode := uint(C.SetTemperature(C.int(t)))
+	return Error(errCode)
 }
 
 /* the above deals with thermal management, the below deals with acquisition programming
@@ -447,7 +578,7 @@ func (c *Camera) SetTemperature(t float64) error {
 
 // SetAcquisitionMode sets the acquisition mode of the camera
 func (c *Camera) SetAcquisitionMode(am AcquisitionMode) error {
-	return nil
+
 }
 
 // SetReadoutMode sets the readout mode of the camera
@@ -512,20 +643,23 @@ func (c *Camera) GetAcquiredData() error {
 
 // AbortAcquisition aborts the current acquisition if one is active
 func (c *Camera) AbortAcquisition() error {
-	return nil
+	errCode := uint(C.AbortAcquisition())
+	return Error(errCode)
 }
 
 // WaitForAcquisition sleeps while waiting for the acquisition completed signal
 // from the SDK
 func (c *Camera) WaitForAcquisition(t time.Duration) error {
-	i64 := t.Milliseconds()
-	errCode := C.WaitForAcquisitionTimeOut(i64)
+	i64 := t.Nanoseconds() * 1e6 // .Milliseconds added in 1.13, Nanoseconds * 1e6 to convert
+	errCode := uint(C.WaitForAcquisitionTimeOut(C.int(i64)))
 	return Error(errCode)
 }
 
 // GetBitDepth gets the number of bits of dynamic range for a given AD channel
 func (c *Camera) GetBitDepth(ch uint) (uint, error) {
-	return 0, nil
+	var depth C.int
+	errCode := uint(C.GetBitDepth(C.int(ch), &depth))
+	return uint(depth), Error(errCode)
 }
 
 // GetNumberADChannels returns the number of discrete A/D channels available
@@ -584,7 +718,7 @@ func (c *Camera) SetEMCCDGain(fctr uint) error {
 // GetEMGainRange gets the min and max EMCCD gain settings for the current gain
 // mode and temperature of the sensor
 func (c *Camera) GetEMGainRange() (int, int, error) {
-	return 0, 0, error
+	return 0, 0, nil
 }
 
 // SetEMGainMode sets the current EMCCD gain mode
