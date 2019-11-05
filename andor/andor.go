@@ -78,7 +78,7 @@ import (
 )
 
 // AcquisitionMode represents a mode of acquisition to the camera.
-type AcquisitionMode uint
+type AcquisitionMode int
 
 const (
 	// AcquisitionSingleScan is the single-scan acq. mode
@@ -98,7 +98,7 @@ const (
 )
 
 // ReadoutMode represents a readout mode of the camera.
-type ReadoutMode uint
+type ReadoutMode int
 
 const (
 	// ReadoutFullVerticalBinning reads out as if the sensor were a line array
@@ -165,6 +165,20 @@ const (
 
 	// FilterNoiseThreshold uses a filter referenced to the noise level
 	FilterNoiseThreshold
+)
+
+// ShutterMode represents a mode of operating the shutter
+type ShutterMode int
+
+const (
+	// ShutterAuto operates the shutter as a regular camera would
+	ShutterAuto ShutterMode = iota
+
+	// ShutterOpen locks the shutter open
+	ShutterOpen
+
+	// ShutterClosed locks the shutter closed
+	ShutterClosed
 )
 
 // VerticalClockVoltage represents the a discrete voltage level determined by
@@ -244,8 +258,53 @@ type SoftwareVersion struct {
 	DLLVersion uint
 }
 
+// AcquisitionTimings holds various acquisition timing parameters
+type AcquisitionTimings struct {
+	// Exposure is the exposure time in seconds
+	Exposure float64
+
+	// Accumulation is the charge accumulation cycle time in seconds
+	Accumulation float64
+
+	// Kinetic is the kinetic cycle time in seconds
+	Kinetic float64
+}
+
+// Status is a camera status.  They are also error codes
+type Status uint
+
+const (
+	// StatusIdle is IDLE waiting on instructions
+	StatusIdle Status = 20073
+
+	// StatusTempCycle executing temperature cycle
+	StatusTempCycle Status = 20074
+
+	// StatusAcquiring Acquisition in progress
+	StatusAcquiring Status = 20072
+
+	// StatusAccumTimeNotMet unable to meet accumulate cycle time
+	StatusAccumTimeNotMet Status = 20023
+
+	// StatusKineticTimeNotMet unable to meet kinetic cycle time
+	StatusKineticTimeNotMet Status = 20022
+
+	// StatusDriverError unable to communicate with card
+	StatusDriverError Status = 20013
+
+	// StatusAcqBufferOverflow buffer overflow at ISA slot
+	StatusAcqBufferOverflow Status = 20018
+
+	// StatusSpoolError buffer overflow at spool buffer
+	StatusSpoolError Status = 20026
+)
+
 // Camera represents an Andor camera
-type Camera struct{}
+type Camera struct {
+	// Resolution is the (HxW) of the camera in pixels
+	// following numpy/C array ordering convention
+	Resolution [2]int
+}
 
 var (
 	//ErrCodes is a map of error codes to their string values
@@ -346,7 +405,8 @@ var (
 	// BeneignErrorCodes is sequence of error codes which mean
 	// the status is normal
 	BeneignErrorCodes = []uint{
-		20002,
+		20002, // success
+		20073, // idle
 	}
 )
 
@@ -578,67 +638,98 @@ func (c *Camera) SetTemperature(t int) error {
 
 // SetAcquisitionMode sets the acquisition mode of the camera
 func (c *Camera) SetAcquisitionMode(am AcquisitionMode) error {
-
+	errCode := uint(C.SetAcquisitionMode(C.int(am)))
+	return Error(errCode)
 }
 
-// SetReadoutMode sets the readout mode of the camera
+// SetReadoutMode sets the readout mode of the camera.  We rename this from SetReadMode in the actual driver
 func (c *Camera) SetReadoutMode(rm ReadoutMode) error {
-	return nil
+	errCode := uint(C.SetReadMode(C.int(rm)))
+	return Error(errCode)
 }
 
-// SetShutter sets the shutter mode of the camera TODO: check this
-func (c *Camera) SetShutter() error {
-	return nil
+// SetShutter sets the shutter parameters of the camera.
+// ttlHi sends output TTL high signal to open shutter, else sends TTL low signal
+func (c *Camera) SetShutter(ttlHi bool, mode ShutterMode, opening, closing time.Duration) error {
+	ot := opening.Nanoseconds() / 1e6 // do this ourselves, really wish we could use go 1.13 to do it with .Milliseconds()
+	ct := closing.Nanoseconds() / 1e6
+	ttl := 0
+	if ttlHi {
+		ttl = 1
+	}
+	errCode := uint(C.SetShutter(C.int(ttl), C.int(mode), C.int(ot), C.int(ct)))
+	return Error(errCode)
 }
 
 // SetExposureTime sets the exposure time of the camera in seconds
 func (c *Camera) SetExposureTime(t float64) error {
-	return nil
+	errCode := uint(C.SetExposureTime(C.float(t)))
+	return Error(errCode)
 }
 
 // SetTriggerMode sets the trigger mode of the camera
 func (c *Camera) SetTriggerMode(tm TriggerMode) error {
-	return nil
+	errCode := uint(C.SetTriggerMode(C.int(tm)))
+	return Error(errCode)
 }
 
 // SetAccumulationCycleTime sets the accumulation cycle time of the camera in seconds
 func (c *Camera) SetAccumulationCycleTime(t float64) error {
-	return nil
+	errCode := uint(C.SetAccumulationCycleTime(C.float(t)))
+	return Error(errCode)
 }
 
 // SetNumberAccumulations sets the number of accumulaions
 func (c *Camera) SetNumberAccumulations(i uint) error {
-	return nil
+	errCode := uint(C.SetNumberAccumulations(C.int(i)))
+	return Error(errCode)
 }
 
 // SetNumberKinetics sets the number of kinetics
 func (c *Camera) SetNumberKinetics(i uint) error {
-	return nil
+	errCode := uint(C.SetNumberKinetics(C.int(i)))
+	return Error(errCode)
 }
 
 // SetKineticCycleTime sets the kinetic cycle time
 func (c *Camera) SetKineticCycleTime(t float64) error {
-	return nil
+	errCode := uint(C.SetKineticCycleTime(C.float(t)))
+	return Error(errCode)
 }
 
 // GetAcquisitionTimings gets the acquisition timings
-func (c *Camera) GetAcquisitionTimings() error {
-	return nil
+func (c *Camera) GetAcquisitionTimings() (AcquisitionTimings, error) {
+	var exp, acc, kin C.float
+	errCode := uint(C.GetAcquisitionTimings(&exp, &acc, &kin))
+	at := AcquisitionTimings{}
+	at.Exposure = float64(exp)
+	at.Accumulation = float64(acc)
+	at.Kinetic = float64(kin)
+	return at, Error(errCode)
 }
 
 // StartAcquisition starts the camera acquiring charge for an image
 func (c *Camera) StartAcquisition() error {
-	return nil
+	errCode := uint(C.StartAcquisition())
+	return Error(errCode)
 }
 
 // GetStatus gets the status while the camera is acquiring data
-func (c *Camera) GetStatus() error {
-	return nil
+func (c *Camera) GetStatus() (Status, error) {
+	var stat C.int
+	errCode := uint(C.GetStatus(&stat))
+	return Status(uint(stat)), Error(errCode)
 }
 
 // GetAcquiredData gets the acquired data / frame
-func (c *Camera) GetAcquiredData() error {
-	return nil
+//
+// Implementing a 32-bit function is left for the future
+func (c *Camera) GetAcquiredData(pixels uint32) ([]int32, error) {
+	elements := c.Resolution[0] * c.Resolution[1]
+	buf := make([]int32, elements)
+	ptr := (*C.int)(unsafe.Pointer(&buf[0]))
+	errCode := uint(C.GetAcquiredData(ptr, C.uint(pixels)))
+	return buf, Error(errCode)
 }
 
 // AbortAcquisition aborts the current acquisition if one is active
@@ -663,27 +754,38 @@ func (c *Camera) GetBitDepth(ch uint) (uint, error) {
 }
 
 // GetNumberADChannels returns the number of discrete A/D channels available
-func (c *Camera) GetNumberADChannels() (uint, error) {
-	return 0, nil
+func (c *Camera) GetNumberADChannels() (int, error) {
+	var chans C.int
+	errCode := uint(C.GetNumberADChannels(&chans))
+	return int(chans), Error(errCode)
 }
 
 // SetADChannel sets the AD channel to use until it is changed again or the
 // camera is powered off
-func (c *Camera) SetADChannel(ch uint) error {
-	return nil
+func (c *Camera) SetADChannel(ch int) error {
+	errCode := uint(C.SetADChannel(C.int(ch)))
+	return Error(errCode)
 }
 
 // GetMaximumExposure gets the maximum exposure time supported in the current
-// configuration
+// configuration in seconds
 func (c *Camera) GetMaximumExposure() (float64, error) {
-	return 0., nil
+	var f C.float
+	errCode := uint(C.GetMaximumExposure(&f))
+	return float64(f), Error(errCode)
 }
 
 // GetMaximumBinning returns the maximum binning factor usable.
 // if horizontal is true, the returned value is for the horizontal dimension.
 // if horizontal is false, the returned value is for the vertical dimension.
-func (c *Camera) GetMaximumBinning(rm ReadoutMode, horizontal bool) (uint, error) {
-	return 0, nil
+func (c *Camera) GetMaximumBinning(rm ReadoutMode, horizontal bool) (int, error) {
+	var maxbin C.int
+	horz := 1
+	if horizontal {
+		horz = 0
+	}
+	errCode := uint(C.GetMaximumBinning(C.int(rm), C.int(horz), &maxbin))
+	return int(maxbin), Error(errCode)
 }
 
 /* the previous section deals with acquisition, the below deals with processing.
@@ -692,12 +794,18 @@ func (c *Camera) GetMaximumBinning(rm ReadoutMode, horizontal bool) (uint, error
 
 // FilterSetMode sets the filtering mode of the camera
 func (c *Camera) FilterSetMode(fm FilterMode) error {
-	return nil
+	errCode := uint(C.Filter_SetMode(C.uint(fm)))
+	return Error(errCode)
 }
 
 // SetBaselineClamp toggles the baseline clamp feature of the camera on (true) or off (false)
 func (c *Camera) SetBaselineClamp(b bool) error {
-	return nil
+	on := 0
+	if b {
+		on = 1
+	}
+	errCode := uint(C.SetBaselineClamp(C.int(on)))
+	return Error(errCode)
 }
 
 /* the previous section deals with processing, the below deals with EMCCD features.
@@ -705,30 +813,41 @@ func (c *Camera) SetBaselineClamp(b bool) error {
  */
 
 // GetEMCCDGain gets the current EMCCD gain
-func (c *Camera) GetEMCCDGain() error { // need another return type
-	return nil
+func (c *Camera) GetEMCCDGain() (int, error) { // need another return type
+	var mult C.int
+	errCode := uint(C.GetEMCCDGain(&mult))
+	return int(mult), Error(errCode)
 }
 
 // SetEMCCDGain sets the EMCCD gain.  The precise behavior depends on the current
 // gain mode, see SetEMGainMode, GetEMGainMode
-func (c *Camera) SetEMCCDGain(fctr uint) error {
-	return nil
+func (c *Camera) SetEMCCDGain(fctr int) error {
+	errCode := uint(C.SetEMCCDGain(C.int(fctr)))
+	return Error(errCode)
 }
 
 // GetEMGainRange gets the min and max EMCCD gain settings for the current gain
 // mode and temperature of the sensor
 func (c *Camera) GetEMGainRange() (int, int, error) {
-	return 0, 0, nil
+	var low, high C.int
+	errCode := uint(C.GetEMGainRange(&low, &high))
+	return int(low), int(high), Error(errCode)
 }
 
 // SetEMGainMode sets the current EMCCD gain mode
 func (c *Camera) SetEMGainMode(gm EMGainMode) error {
-	return nil
+	errCode := uint(C.SetEMGainMode(C.int(gm)))
+	return Error(errCode)
 }
 
 // SetEMAdvanced allows setting of the EM gain setting to values higher than
 // 300x.  Using this setting with more than 10s of photons per pixel per readout
 // will lead to advanced ageing of the sensor.
 func (c *Camera) SetEMAdvanced(b bool) error {
-	return nil // 0 => disabled, 1 => enabled
+	enabled := 0
+	if b {
+		enabled = 1
+	}
+	errCode := uint(C.SetEMAdvanced(C.int(enabled)))
+	return Error(errCode)
 }
