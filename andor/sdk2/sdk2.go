@@ -1,4 +1,4 @@
-/*Package andor exposes control of Andor cameras in Go
+/*Package sdk2 exposes control of Andor cameras in Go via their SDK, v2
 
 This package provides much of the total C/C++ API for working with Andor cameras
 but it is not totally exhaustive.  It was created to enable use of the NEO sCMOS
@@ -62,7 +62,7 @@ This is obviously long and granular and may motivate your writing an extension
 library.
 
 */
-package andor
+package sdk2
 
 /*
 #cgo CFLAGS: -I/usr/local
