@@ -199,39 +199,39 @@ func FinalizeLibrary() {
 // DeviceCount returns the number of devices (cameras) found by the SDK
 // InitializeLibrary must be called first
 func DeviceCount() (int, error) {
-	return GetInt(C.AT_HANDLE_SYSTEM, "DeviceCount")
+	return GetInt(int(C.AT_HANDLE_SYSTEM), "DeviceCount")
 }
 
 // SoftwareVersion returns the software (SDK) version
 // InitializeLibrary must be called first
 func SoftwareVersion() (string, error) {
-	return GetString(C.AT_HANDLE_SYSTEM, "SoftwareVersion")
+	return GetString(int(C.AT_HANDLE_SYSTEM), "SoftwareVersion")
 }
 
 // SetInt sets an integer
-func SetInt(handle C.AT_H, feature string, val int64) error {
+func SetInt(handle int, feature string, val int64) error {
 	cstr, err := cwch.FromGoString(feature)
 	if err != nil {
 		return err
 	}
 	str := (*C.AT_WC)(cstr.Pointer())
-	return Error(int(C.AT_SetInt(handle, str, C.AT_64(val))))
+	return Error(int(C.AT_SetInt(C.AT_H(handle), str, C.AT_64(val))))
 }
 
 // GetInt gets an integer
-func GetInt(handle C.AT_H, feature string) (int, error) {
+func GetInt(handle int, feature string) (int, error) {
 	cstr, err := cwch.FromGoString(feature)
 	if err != nil {
 		return 0, err
 	}
 	str := (*C.AT_WC)(cstr.Pointer())
 	var out C.AT_64
-	errCode := int(C.AT_GetInt(handle, str, &out))
+	errCode := int(C.AT_GetInt(C.AT_H(handle), str, &out))
 	return int(out), Error(errCode)
 }
 
 // GetIntMax gets the max value an integer can be set to
-func GetIntMax(handle C.AT_H, feature string) (int, error) {
+func GetIntMax(handle int, feature string) (int, error) {
 	// this code is identical to GetInt except for the C call
 	cstr, err := cwch.FromGoString(feature)
 	if err != nil {
@@ -240,12 +240,12 @@ func GetIntMax(handle C.AT_H, feature string) (int, error) {
 	str := (*C.AT_WC)(cstr.Pointer())
 
 	var out C.AT_64
-	errCode := int(C.AT_GetIntMax(handle, str, &out))
+	errCode := int(C.AT_GetIntMax(C.AT_H(handle), str, &out))
 	return int(out), Error(errCode)
 }
 
 // GetIntMin gets the min value an integer can be set to
-func GetIntMin(handle C.AT_H, feature string) (int, error) {
+func GetIntMin(handle int, feature string) (int, error) {
 	// this code is identical to GetInt except for the C call
 	cstr, err := cwch.FromGoString(feature)
 	if err != nil {
@@ -254,23 +254,23 @@ func GetIntMin(handle C.AT_H, feature string) (int, error) {
 	str := (*C.AT_WC)(cstr.Pointer())
 
 	var out C.AT_64
-	errCode := int(C.AT_GetIntMin(handle, str, &out))
+	errCode := int(C.AT_GetIntMin(C.AT_H(handle), str, &out))
 	return int(out), Error(errCode)
 }
 
 // SetFloat sets a floating point value
-func SetFloat(handle C.AT_H, feature string, value float64) error {
+func SetFloat(handle int, feature string, value float64) error {
 	cstr, err := cwch.FromGoString(feature)
 	if err != nil {
 		return err
 	}
 	str := (*C.AT_WC)(cstr.Pointer())
 
-	return Error(int(C.AT_SetFloat(handle, str, C.double(value))))
+	return Error(int(C.AT_SetFloat(C.AT_H(handle), str, C.double(value))))
 }
 
 // GetFloat gets a floating point value
-func GetFloat(handle C.AT_H, feature string) (float64, error) {
+func GetFloat(handle int, feature string) (float64, error) {
 	cstr, err := cwch.FromGoString(feature)
 	if err != nil {
 		return 0, err
@@ -278,12 +278,12 @@ func GetFloat(handle C.AT_H, feature string) (float64, error) {
 	str := (*C.AT_WC)(cstr.Pointer())
 
 	var out C.double
-	errCode := int(C.AT_GetFloat(handle, str, &out))
+	errCode := int(C.AT_GetFloat(C.AT_H(handle), str, &out))
 	return float64(out), Error(errCode)
 }
 
 // GetFloatMax gets the maximum of a floating point value
-func GetFloatMax(handle C.AT_H, feature string) (float64, error) {
+func GetFloatMax(handle int, feature string) (float64, error) {
 	// this code is identical to GetFloat except for the C call
 	cstr, err := cwch.FromGoString(feature)
 	if err != nil {
@@ -292,12 +292,12 @@ func GetFloatMax(handle C.AT_H, feature string) (float64, error) {
 	str := (*C.AT_WC)(cstr.Pointer())
 
 	var out C.double
-	errCode := int(C.AT_GetFloatMax(handle, str, &out))
+	errCode := int(C.AT_GetFloatMax(C.AT_H(handle), str, &out))
 	return float64(out), Error(errCode)
 }
 
 // GetFloatMin gets the minimum of a floating point value
-func GetFloatMin(handle C.AT_H, feature string) (float64, error) {
+func GetFloatMin(handle int, feature string) (float64, error) {
 	// this code is identical to GetFloat except for the C call
 	cstr, err := cwch.FromGoString(feature)
 	if err != nil {
@@ -306,23 +306,23 @@ func GetFloatMin(handle C.AT_H, feature string) (float64, error) {
 	str := (*C.AT_WC)(cstr.Pointer())
 
 	var out C.double
-	errCode := int(C.AT_GetFloatMin(handle, str, &out))
+	errCode := int(C.AT_GetFloatMin(C.AT_H(handle), str, &out))
 	return float64(out), Error(errCode)
 }
 
 // SetBool sets a boolean feature
-func SetBool(handle C.AT_H, feature string, tru bool) error {
+func SetBool(handle int, feature string, tru bool) error {
 	// this code is identical to GetFloat except for the C call
 	cstr, err := cwch.FromGoString(feature)
 	if err != nil {
 		return err
 	}
 	str := (*C.AT_WC)(cstr.Pointer())
-	return Error(int(C.AT_SetBool(handle, str, boolToAT(tru))))
+	return Error(int(C.AT_SetBool(C.AT_H(handle), str, boolToAT(tru))))
 }
 
 // GetBool gets the value of a boolean feature
-func GetBool(handle C.AT_H, feature string) (bool, error) {
+func GetBool(handle int, feature string) (bool, error) {
 	// this code is identical to GetFloat except for the C call
 	cstr, err := cwch.FromGoString(feature)
 	if err != nil {
@@ -330,12 +330,12 @@ func GetBool(handle C.AT_H, feature string) (bool, error) {
 	}
 	str := (*C.AT_WC)(cstr.Pointer())
 	var b C.AT_BOOL
-	errCode := int(C.AT_GetBool(handle, str, &b))
+	errCode := int(C.AT_GetBool(C.AT_H(handle), str, &b))
 	return atToBool(b), Error(errCode)
 }
 
 // SetString sets the value of a string
-func SetString(handle C.AT_H, feature, value string) error {
+func SetString(handle int, feature, value string) error {
 	cstr, err := cwch.FromGoString(feature)
 	if err != nil {
 		return err
@@ -348,12 +348,12 @@ func SetString(handle C.AT_H, feature, value string) error {
 	}
 	valstr := (*C.AT_WC)(cstr.Pointer())
 
-	return Error(int(C.AT_SetString(handle, featstr, valstr)))
+	return Error(int(C.AT_SetString(C.AT_H(handle), featstr, valstr)))
 }
 
 // GetStringMaxLength returns the length of a string, use this to determine how big
 // of a cgo.widechar string to allocate
-func GetStringMaxLength(handle C.AT_H, feature string) (int, error) {
+func GetStringMaxLength(handle int, feature string) (int, error) {
 	cstr, err := cwch.FromGoString(feature)
 	if err != nil {
 		return 0, err
@@ -361,14 +361,14 @@ func GetStringMaxLength(handle C.AT_H, feature string) (int, error) {
 	str := (*C.AT_WC)(cstr.Pointer())
 
 	var len C.int
-	errCode := int(C.AT_GetStringMaxLength(handle, str, &len))
+	errCode := int(C.AT_GetStringMaxLength(C.AT_H(handle), str, &len))
 	return int(len), Error(errCode)
 }
 
 // GetString returns the string value of a feature
 // we deviate from SDK3 API by using GetStringMaxLength internally
 // and avoid users having to deal with allocating C.wchar_t buffers
-func GetString(handle C.AT_H, feature string) (string, error) {
+func GetString(handle int, feature string) (string, error) {
 	cstr, err := cwch.FromGoString(feature)
 	if err != nil {
 		return "", err
@@ -382,7 +382,7 @@ func GetString(handle C.AT_H, feature string) (string, error) {
 	// this line may be a source of bugs
 	stro := cwch.NewWcharString(size)
 	outp := (*C.AT_WC)(stro.Pointer())
-	errCode := int(C.AT_GetString(handle, strc, outp, C.int(size)))
+	errCode := int(C.AT_GetString(C.AT_H(handle), strc, outp, C.int(size)))
 
 	str, err := stro.GoString()
 	if err != nil {
@@ -392,19 +392,19 @@ func GetString(handle C.AT_H, feature string) (string, error) {
 }
 
 // GetEnumIndex gets the currently selected index into the enum behind feature
-func GetEnumIndex(handle C.AT_H, feature string) (int, error) {
+func GetEnumIndex(handle int, feature string) (int, error) {
 	cstr, err := cwch.FromGoString(feature)
 	if err != nil {
 		return 0, err
 	}
 	strc := (*C.AT_WC)(cstr.Pointer())
 	var out C.int
-	errCode := int(C.AT_GetEnumIndex(handle, strc, &out))
+	errCode := int(C.AT_GetEnumIndex(C.AT_H(handle), strc, &out))
 	return int(out), Error(errCode)
 }
 
 // GetEnumCount gets the number of items in the enum behind a feature
-func GetEnumCount(handle C.AT_H, feature string) (int, error) {
+func GetEnumCount(handle int, feature string) (int, error) {
 	// this function is identical to GetEnumIndex except for the C call
 	cstr, err := cwch.FromGoString(feature)
 	if err != nil {
@@ -412,12 +412,12 @@ func GetEnumCount(handle C.AT_H, feature string) (int, error) {
 	}
 	strc := (*C.AT_WC)(cstr.Pointer())
 	var out C.int
-	errCode := int(C.AT_GetEnumCount(handle, strc, &out))
+	errCode := int(C.AT_GetEnumCount(C.AT_H(handle), strc, &out))
 	return int(out), Error(errCode)
 }
 
 // GetEnumStringByIndex gets the string value of an enum at a given index
-func GetEnumStringByIndex(handle C.AT_H, feature string, idx int) (string, error) {
+func GetEnumStringByIndex(handle int, feature string, idx int) (string, error) {
 	cstr, err := cwch.FromGoString(feature)
 	if err != nil {
 		return "", err
@@ -430,7 +430,7 @@ func GetEnumStringByIndex(handle C.AT_H, feature string, idx int) (string, error
 	// we'll start with 64 bytes
 	buf := cwch.NewWcharString(LengthOfUndefinedBuffers)
 	strb := (*C.AT_WC)(buf.Pointer())
-	errCode := int(C.AT_GetEnumStringByIndex(handle, strc, C.int(idx), strb, C.int(LengthOfUndefinedBuffers)))
+	errCode := int(C.AT_GetEnumStringByIndex(C.AT_H(handle), strc, C.int(idx), strb, C.int(LengthOfUndefinedBuffers)))
 	gostr, err := buf.GoString()
 	if err != nil {
 		return "", err
@@ -439,19 +439,19 @@ func GetEnumStringByIndex(handle C.AT_H, feature string, idx int) (string, error
 }
 
 // SetEnumIndex sets the value of a feature to an index in the backing enum
-func SetEnumIndex(handle C.AT_H, feature string, idx int) error {
+func SetEnumIndex(handle int, feature string, idx int) error {
 	cstr, err := cwch.FromGoString(feature)
 	if err != nil {
 		return err
 	}
 	strc := (*C.AT_WC)(cstr.Pointer())
-	errCode := int(C.AT_SetEnumIndex(handle, strc, C.int(idx)))
+	errCode := int(C.AT_SetEnumIndex(C.AT_H(handle), strc, C.int(idx)))
 	return Error(errCode)
 }
 
 // SetEnumString sets the value of a feature to a string that is a valid member
 // of the backing enum
-func SetEnumString(handle C.AT_H, feature, value string) error {
+func SetEnumString(handle int, feature, value string) error {
 	cstr, err := cwch.FromGoString(feature)
 	if err != nil {
 		return err
@@ -463,7 +463,7 @@ func SetEnumString(handle C.AT_H, feature, value string) error {
 		return err
 	}
 	strb := (*C.AT_WC)(cstr2.Pointer())
-	errCode := int(C.AT_SetEnumString(handle, strc, strb))
+	errCode := int(C.AT_SetEnumString(C.AT_H(handle), strc, strb))
 	return Error(errCode)
 }
 
@@ -489,8 +489,8 @@ type Camera struct {
 	// Resolution holds the sensor resolution (H, W)
 	Resolution [2]int
 
-	// Handle holds the C int that points to a specific camera
-	Handle C.AT_H
+	// Handle holds the int that points to a specific camera
+	Handle int
 }
 
 // npx is shorthand for c.Resolution[0] * c.Resolution[1]
@@ -520,13 +520,13 @@ func Open(camIdx int) (*Camera, error) {
 	c := Camera{}
 	var hndle C.AT_H
 	err := Error(int(C.AT_Open(C.int(camIdx), &hndle)))
-	c.Handle = hndle
+	c.Handle = int(hndle)
 	return &c, err
 }
 
 // Close closes a connection to the camera
 func (c *Camera) Close() error {
-	return Error(int(C.AT_Close(c.Handle)))
+	return Error(int(C.AT_Close(C.AT_H(c.Handle))))
 }
 
 // Queue puts the Camera's internal buffer into the write queue for the SDK
@@ -550,7 +550,7 @@ func (c *Camera) Queue() error {
 	ptrSize = C.int(npx)
 	c.bufferOnQueue = true
 
-	return Error(int(C.AT_QueueBuffer(c.Handle, ptr, ptrSize)))
+	return Error(int(C.AT_QueueBuffer(C.AT_H(c.Handle), ptr, ptrSize)))
 }
 
 // WaitBuffer waits for the camera to push a frame into the buffer
@@ -561,7 +561,7 @@ func (c *Camera) WaitBuffer(timeout time.Duration) error {
 	}
 	tout := C.uint(timeout.Nanoseconds() / 1e6)
 	var ptrSize C.int
-	return Error(int(C.AT_WaitBuffer(c.Handle, &c.cptr, &ptrSize, tout)))
+	return Error(int(C.AT_WaitBuffer(C.AT_H(c.Handle), &c.cptr, &ptrSize, tout)))
 }
 
 // ShutDown shuts down the camera and 'finalizes' the SDK.
