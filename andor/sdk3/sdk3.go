@@ -25,7 +25,7 @@ const (
 	// LengthOfUndefinedBuffers is how large a buffer to allocate for a Wchar
 	// string when we have no way of knowing ahead of time how big it is
 	// it is measured in Wchars
-	LengthOfUndefinedBuffers = 64
+	LengthOfUndefinedBuffers = 255
 )
 
 var (
