@@ -53,6 +53,8 @@ go get github.com/spf13/viper  # configuration
 go get gopkg.in/yaml.v2        # YAML file support for configs
 go get github.com/snksoft/crc  # Cyclic Redundancy Check library for NKT devices
 go get github.com/cenkalti/backoff  # graceful backoff when connections rejected by hardware
+
+go get github.com/lordadmson/cgo.wget  # if you intend to build the Andor/sdk3 pkg
 ```
 
 There are no external dependencies aside from these .

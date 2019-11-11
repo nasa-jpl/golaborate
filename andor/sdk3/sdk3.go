@@ -21,6 +21,13 @@ import (
 	cwch "github.com/lordadamson/cgo.wchar"
 )
 
+const (
+	// LengthOfUndefinedBuffers is how large a buffer to allocate for a Wchar
+	// string when we have no way of knowing ahead of time how big it is
+	// it is measured in Wchars
+	LengthOfUndefinedBuffers = 64
+)
+
 var (
 	// ErrBufferNotOnQueue is generated before a catastrophic side effect is triggered
 	ErrBufferNotOnQueue = errors.New("no buffer placed on queue, this error saves you from memory corruption")
@@ -384,6 +391,82 @@ func GetString(handle C.AT_H, feature string) (string, error) {
 	return str, Error(errCode)
 }
 
+// GetEnumIndex gets the currently selected index into the enum behind feature
+func GetEnumIndex(handle C.AT_H, feature string) (int, error) {
+	cstr, err := cwch.FromGoString(feature)
+	if err != nil {
+		return 0, err
+	}
+	strc := (*C.AT_WC)(cstr.Pointer())
+	var out C.int
+	errCode := int(C.AT_GetEnumIndex(handle, strc, &out))
+	return int(out), Error(errCode)
+}
+
+// GetEnumCount gets the number of items in the enum behind a feature
+func GetEnumCount(handle C.AT_H, feature string) (int, error) {
+	// this function is identical to GetEnumIndex except for the C call
+	cstr, err := cwch.FromGoString(feature)
+	if err != nil {
+		return 0, err
+	}
+	strc := (*C.AT_WC)(cstr.Pointer())
+	var out C.int
+	errCode := int(C.AT_GetEnumCount(handle, strc, &out))
+	return int(out), Error(errCode)
+}
+
+// GetEnumStringByIndex gets the string value of an enum at a given index
+func GetEnumStringByIndex(handle C.AT_H, feature string, idx int) (string, error) {
+	cstr, err := cwch.FromGoString(feature)
+	if err != nil {
+		return "", err
+	}
+	strc := (*C.AT_WC)(cstr.Pointer())
+
+	// we don't know how long the strings will be, so allocate a reasonable
+	// length buffer.  This opens us to segfaults in the future if the buffer
+	// is too small, or performance hits if it is too big.
+	// we'll start with 64 bytes
+	buf := cwch.NewWcharString(LengthOfUndefinedBuffers)
+	strb := (*C.AT_WC)(buf.Pointer())
+	errCode := int(C.AT_GetEnumStringByIndex(handle, strc, C.int(idx), strb, C.int(LengthOfUndefinedBuffers)))
+	gostr, err := buf.GoString()
+	if err != nil {
+		return "", err
+	}
+	return gostr, Error(errCode)
+}
+
+// SetEnumIndex sets the value of a feature to an index in the backing enum
+func SetEnumIndex(handle C.AT_H, feature string, idx int) error {
+	cstr, err := cwch.FromGoString(feature)
+	if err != nil {
+		return err
+	}
+	strc := (*C.AT_WC)(cstr.Pointer())
+	errCode := int(C.AT_SetEnumIndex(handle, strc, C.int(idx)))
+	return Error(errCode)
+}
+
+// SetEnumString sets the value of a feature to a string that is a valid member
+// of the backing enum
+func SetEnumString(handle C.AT_H, feature, value string) error {
+	cstr, err := cwch.FromGoString(feature)
+	if err != nil {
+		return err
+	}
+	strc := (*C.AT_WC)(cstr.Pointer())
+
+	cstr2, err := cwch.FromGoString(value)
+	if err != nil {
+		return err
+	}
+	strb := (*C.AT_WC)(cstr2.Pointer())
+	errCode := int(C.AT_SetEnumString(handle, strc, strb))
+	return Error(errCode)
+}
+
 // Camera represents a camera from SDK3
 type Camera struct {
 	// buffer is written to by the SDK.
@@ -393,17 +476,21 @@ type Camera struct {
 	// cptr is a C pointer to the first byte in buffer
 	cptr *C.AT_U8
 
+	// cptrsize is the 'size' of the c pointer
+	cptrsize C.int
+
 	// gptr is a Go pointer to the first byte in buffer
 	gptr unsafe.Pointer
 
-	// bufferOnQueue is a flag indicating if
+	// bufferOnQueue is a flag indicating if we have put a buffer onto the SDK's
+	// queue yet
 	bufferOnQueue bool
 
 	// Resolution holds the sensor resolution (H, W)
 	Resolution [2]int
 
-	// handle holds the C int that points to a specific camera
-	handle C.AT_H
+	// Handle holds the C int that points to a specific camera
+	Handle C.AT_H
 }
 
 // npx is shorthand for c.Resolution[0] * c.Resolution[1]
@@ -411,14 +498,35 @@ func (c *Camera) npx() int {
 	return c.Resolution[0] * c.Resolution[1]
 }
 
-// Open opens a connection to the camera
-func (c *Camera) Open(camIdx int) error {
-	return Error(int(C.AT_Open(C.int(camIdx), &c.handle)))
+// updateRes updates the resolution to the current pixel dimensions
+
+// Allocate creates the buffer that will be populated by the SDK
+// it should be called at init, and whenever the AOI or encoding changes
+func (c *Camera) Allocate() error {
+	sze, err := GetInt(c.Handle, "ImageSizeBytes")
+	if err != nil {
+		return err
+	}
+	c.buffer = make([]uint64, sze/8) // uint64 forces byte alignment, 8 bytes per uint64
+	c.gptr = unsafe.Pointer(&c.buffer[0])
+	c.cptr = (*C.AT_U8)(c.gptr)
+	c.cptrsize = C.int(sze)
+	return nil
+}
+
+// Open opens a connection to the camera.  camIdx 1 is the system handle,
+// start at 2 for the first camera, 3 for the second, and so forth
+func Open(camIdx int) (*Camera, error) {
+	c := Camera{}
+	var hndle C.AT_H
+	err := Error(int(C.AT_Open(C.int(camIdx), &hndle)))
+	c.Handle = hndle
+	return &c, err
 }
 
 // Close closes a connection to the camera
 func (c *Camera) Close() error {
-	return Error(int(C.AT_Close(c.handle)))
+	return Error(int(C.AT_Close(c.Handle)))
 }
 
 // Queue puts the Camera's internal buffer into the write queue for the SDK
@@ -439,11 +547,10 @@ func (c *Camera) Queue() error {
 	// c.buffer[0] <- this is a Go byte
 	// unsafe.Pointer(...) <- this is a Go pointer
 	// (*C.AT_U8) <- this casts to a C pointer to a C byte
-	c.cptr = (*C.AT_U8)(unsafe.Pointer(&c.buffer[0]))
 	ptrSize = C.int(npx)
 	c.bufferOnQueue = true
 
-	return Error(int(C.AT_QueueBuffer(c.handle, ptr, ptrSize)))
+	return Error(int(C.AT_QueueBuffer(c.Handle, ptr, ptrSize)))
 }
 
 // WaitBuffer waits for the camera to push a frame into the buffer
@@ -454,7 +561,7 @@ func (c *Camera) WaitBuffer(timeout time.Duration) error {
 	}
 	tout := C.uint(timeout.Nanoseconds() / 1e6)
 	var ptrSize C.int
-	return Error(int(C.AT_WaitBuffer(c.handle, &c.cptr, &ptrSize, tout)))
+	return Error(int(C.AT_WaitBuffer(c.Handle, &c.cptr, &ptrSize, tout)))
 }
 
 // ShutDown shuts down the camera and 'finalizes' the SDK.
@@ -487,4 +594,47 @@ func (c *ExtCamera) LastFrame() (*[]int32, error) {
 	hdr.Len = npx
 	hdr.Cap = npx
 	return &aryint32, nil
+}
+
+// JPLNeoBootup runs the standard bootup sequence used for Andor Neo cameras in HCIT
+// this should be called after Initialize
+func JPLNeoBootup(c *Camera) error {
+	err := SetEnumString(c.Handle, "ElectronicShutteringMode", "Rolling")
+	if err != nil {
+		return err
+	}
+	err = SetEnumString(c.Handle, "SimplePreAmpGainControl", "16-bit (low noise & high well capacity)")
+	if err != nil {
+		return err
+	}
+	err = SetEnumString(c.Handle, "FanSpeed", "Off")
+	if err != nil {
+		return err
+	}
+	err = SetEnumString(c.Handle, "PixelReadoutRate", "280 MHz")
+	if err != nil {
+		return err
+	}
+	err = SetEnumString(c.Handle, "TriggerMode", "Internal")
+	if err != nil {
+		return err
+	}
+
+	err = SetBool(c.Handle, "MetadataEnable", true)
+	if err != nil {
+		return err
+	}
+	err = SetBool(c.Handle, "MetadataTimestamp", true)
+	if err != nil {
+		return err
+	}
+	err = SetBool(c.Handle, "SensorCooling", false)
+	if err != nil {
+		return err
+	}
+	err = SetBool(c.Handle, "SpuriousNoiseFilter", false)
+	if err != nil {
+		return err
+	}
+	return nil
 }
