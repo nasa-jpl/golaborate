@@ -417,7 +417,7 @@ type DRVError uint
 
 func (e DRVError) Error() string {
 	if s, ok := ErrCodes[e]; ok {
-		return fmt.Sprintf("%v - %s", e, s)
+		return fmt.Sprintf("%d - %s", e, s)
 	}
 	return fmt.Sprintf("%v - UNKNOWN_ERROR_CODE", e)
 }
