@@ -24,6 +24,7 @@ Environmental Sensors and controllers:
 - Lesker KJC 300 pressure sensors
 - Fluke DewK 1620a temperature and humidity sensors
 - Lakeshore 322 thermometers and temperature controllers
+- Cryo-Con temperature monitors
 
 Instruments:
 - Zygo interferometers
@@ -93,16 +94,17 @@ To view the documentation for the HTTP endpoints, the current best approach is t
 | :---              | :----: |  ---:  |
 | JPL DM Controller |        |        |
 | BMC commercial    | X      |  X     |
-| Andor cameras     |        |        |
+| Andor cameras     | ~X     |        |
 | other cameras (?) |        |        |
 | Newport EPS       |  X     |  X     |
 | Newport XPS       |        |        |
 | Aerotech Ensemble |        |        |
-| PI motion(?)      |        |        |
+| PI motion         |        |        |
 | Lakeshore temp    |  X     |        |
 | Fluke temp/RH     |  X     |  X     |
 | Lesker pressure   |  X     |  X     |
 | GP pressure       |  X     |  X     |
+| Cryo-Con thermal  |  X     |  X     |
 | Omega flowmeter   |        |        |
 | Omega temp        |        |        |
 | APC UPS           |        |        |
