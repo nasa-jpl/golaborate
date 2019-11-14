@@ -327,6 +327,28 @@ func (rd *RemoteDevice) SendRecv(b []byte) ([]byte, error) {
 	return rd.Recv()
 }
 
+// OpenSendRecvClose calls Open(), defer CloseEventually(), SendRecv()
+// this reduces a usage from:
+//
+//  err := rd.Open()
+//  // error handling
+//  defer rd.CloseEventually()
+//  return rd.SendRecv([]byte)
+//
+// to:
+// rd.OpenSendRecvClose([]byte)
+//
+// This relies on Open being a no-op for an existing connection,
+// and the mutex inside RemoteDevice making this concurrent safe
+func (rd *RemoteDevice) OpenSendRecvClose(b []byte) ([]byte, error) {
+	err := rd.Open()
+	if err != nil {
+		return []byte{}, err
+	}
+	defer rd.CloseEventually()
+	return rd.SendRecv(b)
+}
+
 // TCPSetup opens a new TCP connection and sets a timeout on connect, read, and write
 func TCPSetup(addr string, timeout time.Duration) (net.Conn, error) {
 	conn, err := net.DialTimeout("tcp", addr, timeout)
