@@ -1,3 +1,6 @@
+/*Package lakeshore provides tools for working with Lakeshore 332 temperature controllers.
+
+ */
 package lakeshore
 
 import (

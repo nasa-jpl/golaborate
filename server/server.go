@@ -140,7 +140,7 @@ func (m *Mainframe) graphHandler(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-// BindRoutes binds the routes for each member service
+// Routes
 func (m *Mainframe) BindRoutes(h HandleFuncer) {
 	listRouteMap := make(map[string][]string)
 	for _, s := range m.nodes {

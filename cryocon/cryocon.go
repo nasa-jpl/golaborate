@@ -4,6 +4,7 @@ package cryocon
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -16,11 +17,12 @@ const (
 )
 
 // parseTempToC converts a response string looking like "250.123124;K" into
-// the same temperature in C, or errors on malformed input
+// the same temperature in C, or errors on malformed input.
+// Unpopulated channel responses ("--", "..") return NaN
 func parseTempToC(resp string) (float64, error) {
 	// -- on an unused channel, or ".."
 	if strings.Contains(resp, "--") || strings.Contains(resp, "..") {
-		return 0, nil
+		return math.NaN(), nil
 	}
 	pieces := strings.Split(string(resp), ";")
 	unit := pieces[1]
@@ -48,7 +50,7 @@ type TemperatureMonitor struct {
 }
 
 // NewTemperatureMonitor creates a new temperature monitor instance
-func NewTemperatureMonitor(addr string) *TemperatureMonitor {
+func NewTemperatureMonitor(addr, urlStem string) *TemperatureMonitor {
 	term := comm.Terminators{Rx: '\n', Tx: '\n'}
 	rd := comm.NewRemoteDevice(addr, false, &term, nil)
 	return &TemperatureMonitor{RemoteDevice: &rd}
@@ -57,7 +59,7 @@ func NewTemperatureMonitor(addr string) *TemperatureMonitor {
 // Identification returns the identifying information from the monitor.
 // it looks something like:
 //
-// Cryocon Model 12/14 Rev <fimware rev code><hardware rev code
+// Cryocon Model 12/14 Rev <fimware rev code><hardware rev code>
 func (tm *TemperatureMonitor) Identification() (string, error) {
 	cmd := []byte("*IDN?")
 	err := tm.Open()
@@ -94,27 +96,40 @@ func (tm *TemperatureMonitor) ReadChannelLetter(ch string) (float64, error) {
 	return parseTempToC(string(resp))
 }
 
-// ReadAllChannels reads all of the temperature channels of the sensor in C
+// ReadAllChannels reads all of the temperature channels of the sensor in C.
+// any unpopulated channels are NaN.
 func (tm *TemperatureMonitor) ReadAllChannels() ([]float64, error) {
-	// make the output sequence
-	out := make([]float64, 0)
-
-	var err error = nil
-	err = tm.Open()
+	err := tm.Open()
 	if err != nil {
-		return out, err
+		return []float64{}, err
 	}
 	defer tm.CloseEventually()
-	ch := 0
-	for {
+
+	// the behavior of the sensor for too large a channel index
+	// depends on firmware, JPL has FW 1~3, so we need a different solution
+	// here, we look for the model number in the identification, and if not found
+	// use a max of 8
+	id, err := tm.Identification()
+	if err != nil {
+		return []float64{}, err
+	}
+	maxCh := 8
+	if strings.Contains(id, "Model 18") {
+		maxCh = 8
+	} else if strings.Contains(id, "Model 12") {
+		maxCh = 2
+	} else if strings.Contains(id, "Model 14") {
+		maxCh = 4
+	}
+
+	out := make([]float64, maxCh)
+	for ch := 0; ch < maxCh; ch++ {
 		cmd := []byte(fmt.Sprintf("INP %d:TEMP?;UNIT?", ch))
 		resp, err := tm.SendRecv(cmd)
-		fmt.Println(err)
 		if err != nil {
 			break
 		}
 		rs := string(resp)
-		fmt.Println(rs, err)
 		if rs == "NAK" {
 			break // past the last channel
 		}
@@ -122,9 +137,7 @@ func (tm *TemperatureMonitor) ReadAllChannels() ([]float64, error) {
 		if err != nil {
 			break
 		}
-		out = append(out, t)
-		ch++
-		fmt.Println(ch, t)
+		out[ch] = t
 	}
 	return out, err
 }
