@@ -1,19 +1,13 @@
 package newport
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"go/types"
-	"io/ioutil"
-	"log"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
-	"github.jpl.nasa.gov/HCIT/go-hcit/server"
 
 	"github.com/tarm/serial"
 )
@@ -241,24 +235,12 @@ func makeSerConf(addr string) *serial.Config {
 // ESP301 represents an ESP301 motion controller.
 type ESP301 struct {
 	*comm.RemoteDevice
-	server.Server
 }
 
 // NewESP301 makes a new ESP301 motion controller instance
-func NewESP301(addr, urlStem string, serial bool) *ESP301 {
+func NewESP301(addr string, serial bool) *ESP301 {
 	rd := comm.NewRemoteDevice(addr, serial, nil, makeSerConf(addr))
-	srv := server.NewServer(urlStem)
-	esp := ESP301{RemoteDevice: &rd}
-	srv.RouteTable["raw"] = esp.HTTPRaw
-	srv.RouteTable["single-cmd"] = esp.HTTPJSONSingle
-	srv.RouteTable["multi-cmd"] = esp.HTTPJSONArray
-	srv.RouteTable["cmd-list"] = esp.HTTPCmdList
-	srv.RouteTable["simple-pos-abs"] = esp.HTTPPosAbs
-	srv.RouteTable["simple-home"] = esp.HTTPHome
-	srv.RouteTable["simple-wait"] = esp.HTTPWait
-	srv.RouteTable["errors"] = esp.HTTPErrors
-	esp.Server = srv
-	return &esp
+	return &ESP301{RemoteDevice: &rd}
 }
 
 // RawCommand sends a command directly to the motion controller (with EOT appended) and returns the response as-is
@@ -318,8 +300,19 @@ func (esp *ESP301) Wait(axis int) error {
 }
 
 // SetFollowingErrorConfiguration sets the "following error" configuration
-func (esp *ESP301) SetFollowingErrorConfiguration(enableChecking, disableMotorPowerOnError, abortMotionOnError bool) error {
-	return nil
+func (esp *ESP301) SetFollowingErrorConfiguration(axis int, enableChecking, disableMotorPowerOnError, abortMotionOnError bool) error {
+	// this could be cleaner, but it is rare we need to pack bits into bytes
+	bits := [8]bool{enableChecking, disableMotorPowerOnError, abortMotionOnError, false, false, false, false, false}
+	b := byte(0)
+	for idx := uint(0); idx < 8; idx++ {
+		if bits[idx] {
+			b |= 1 << idx
+		}
+	}
+	msg := fmt.Sprintf("%dZF0%XH", axis, b)
+	resp, err := esp.RawCommand(msg)
+	fmt.Println(resp)
+	return err
 }
 
 // ReadErrors reads all error from the controller and returns a slice of the
@@ -373,240 +366,4 @@ func (esp *ESP301) ReadErrors() ([]string, error) {
 		}
 	}
 	return errors, nil
-}
-
-// HTTPErrors reads the errors and returns them as a json [string] over HTTP
-func (esp *ESP301) HTTPErrors(w http.ResponseWriter, r *http.Request) {
-	errors, err := esp.ReadErrors()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	err = json.NewEncoder(w).Encode(errors)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	log.Printf("%s queried errors ESP %s, %v", r.RemoteAddr, esp.Addr, errors)
-	return
-
-}
-
-// HTTPPosAbs gets the absolute position of an axis on GET or sets it on POST
-func (esp *ESP301) HTTPPosAbs(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		jcmd := JSONCommand{}
-		err := json.NewDecoder(r.Body).Decode(&jcmd)
-		defer r.Body.Close()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		f, err := esp.GetPos(jcmd.Axis)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		resp := server.HumanPayload{Float: f, T: types.Float64}
-		resp.EncodeAndRespond(w, r)
-		return
-
-	case http.MethodPost:
-		jcmd := JSONCommand{}
-		err := json.NewDecoder(r.Body).Decode(&jcmd)
-		defer r.Body.Close()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		err = esp.SetPosAbs(jcmd.Axis, jcmd.F64)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-}
-
-// HTTPHome homes an axis
-func (esp *ESP301) HTTPHome(w http.ResponseWriter, r *http.Request) {
-	jcmd := JSONCommand{}
-	err := json.NewDecoder(r.Body).Decode(&jcmd)
-	defer r.Body.Close()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	err = esp.Home(jcmd.Axis)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-}
-
-// HTTPWait waits for motion to cease
-func (esp *ESP301) HTTPWait(w http.ResponseWriter, r *http.Request) {
-	// this is a copy paste of wait instead of home
-	jcmd := JSONCommand{}
-	err := json.NewDecoder(r.Body).Decode(&jcmd)
-	defer r.Body.Close()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	err = esp.Wait(jcmd.Axis)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-
-}
-
-// HTTPRaw handles requests with raw string payloads
-func (esp *ESP301) HTTPRaw(w http.ResponseWriter, r *http.Request) {
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		fstr := fmt.Sprintf("unable to decode string from query.  Query must be a JSON request with \"str\" field. %q", err)
-		log.Println(fstr)
-		http.Error(w, fstr, http.StatusBadRequest)
-		return
-	}
-	defer r.Body.Close()
-	resp, err := esp.RawCommand(string(b))
-	if err != nil {
-		log.Println(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	b = append([]byte(resp), '\n')
-	w.WriteHeader(http.StatusOK)
-	w.Header().Set("Content-Type", "text/plain")
-	w.Header().Set("Content-Length", string(len(b)))
-	w.Write(b)
-}
-
-// HTTPJSONSingle handles singular commands over HTTP of JSONCommand type
-func (esp *ESP301) HTTPJSONSingle(w http.ResponseWriter, r *http.Request) {
-	jcmd := &JSONCommand{}
-	err := json.NewDecoder(r.Body).Decode(jcmd)
-	defer r.Body.Close()
-	if err != nil {
-		fstr := fmt.Sprintf("error decoding JSON, request should have 3 fields; \"axis\", \"cmd\", \"f64\".  axis and f64 may be left blank.  %q", err)
-		log.Println(err)
-		http.Error(w, fstr, http.StatusBadRequest)
-		return
-	}
-	cmd, err := commandFromCmdOrAlias(jcmd.Cmd)
-	if err != nil {
-		log.Println(err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	tele := makeTelegram(cmd, jcmd.Axis, jcmd.Write, jcmd.F64)
-	err = esp.Open()
-	if err != nil {
-		fstr := fmt.Sprintf("error opening connection to motion controller %q", err)
-		log.Println(err)
-		http.Error(w, fstr, http.StatusInternalServerError)
-		return
-	}
-	defer esp.CloseEventually()
-	resp, err := esp.SendRecv([]byte(tele))
-	if err != nil {
-		fstr := fmt.Sprintf("error communicating with motion controller %q.  Received response %q", err, resp)
-		log.Println(err)
-		http.Error(w, fstr, http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-	w.Header().Set("Content-Type", "text/plain")
-	w.Header().Set("Content-Length", string(len(resp)))
-	w.Write(append(resp, byte('\n')))
-}
-
-// HTTPJSONArray handles arrays of commands over HTTP of JSONCommand type
-func (esp *ESP301) HTTPJSONArray(w http.ResponseWriter, r *http.Request) {
-	jcmds := []JSONCommand{}
-	err := json.NewDecoder(r.Body).Decode(&jcmds)
-	defer r.Body.Close()
-	if err != nil {
-		fstr := fmt.Sprintf("error decoding JSON, request should have 3 fields; \"axis\", \"cmd\", \"f64\".  axis and f64 may be left blank.  %q", err)
-		log.Println(err)
-		http.Error(w, fstr, http.StatusBadRequest)
-	}
-	l := len(jcmds)
-	cmds := make([]Command, 0, l)
-	axes := make([]int, 0, l)
-	writes := make([]bool, 0, l)
-	datas := make([]float64, 0, l)
-
-	for _, c := range jcmds {
-		cmd, err := commandFromCmdOrAlias(c.Cmd)
-		if err != nil {
-			log.Println(err)
-			http.Error(w, err.Error(), http.StatusBadRequest)
-		}
-		cmds = append(cmds, cmd)
-		axes = append(axes, c.Axis)
-		writes = append(writes, c.Write)
-		datas = append(datas, c.F64)
-	}
-
-	tele := makeTelegramPlural(cmds, axes, writes, datas)
-	if l := len(tele); l > ESP301RemoteBufferSize {
-		err = ErrBufferWouldOverflow
-	}
-	if err != nil {
-		fstr := fmt.Sprintf("command sequence would result in buffer overflow on the motion controller, len>80 %s", tele)
-		log.Println(err)
-		http.Error(w, fstr, http.StatusInternalServerError)
-		return
-	}
-
-	err = esp.Open()
-	if err != nil {
-		fstr := fmt.Sprintf("error opening connection to motion controller %q", err)
-		log.Println(err)
-		http.Error(w, fstr, http.StatusInternalServerError)
-		return
-	}
-	defer esp.CloseEventually()
-	resp, err := esp.SendRecv([]byte(tele))
-	if err != nil {
-		fstr := fmt.Sprintf("error communicating with motion controller %q", err)
-		log.Println(err)
-		http.Error(w, fstr, http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-	w.Header().Set("Content-Type", "text/plain")
-	w.Header().Set("Content-Length", string(len(resp)))
-	w.Write(append(resp, '\n'))
-}
-
-// HTTPCmdList returns a list of command objects which include:
-// cmd (what Newport sees),
-// alias (a friendier name you may use)
-// description (a brief description)
-// isReadOnly (whether the command is read-only or not)
-// usesAxis (whether the command uses an axis or not)
-func (esp *ESP301) HTTPCmdList(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	err := json.NewEncoder(w).Encode(commands)
-	if err != nil {
-		fstr := fmt.Sprintf("json encoding error %q", err)
-		log.Println(fstr)
-		http.Error(w, fstr, http.StatusInternalServerError)
-		return
-	}
-	return
 }
