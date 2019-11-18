@@ -1,12 +1,7 @@
 package nkt
 
 import (
-	"encoding/json"
-	"log"
-	"net/http"
-
 	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
-	"github.jpl.nasa.gov/HCIT/go-hcit/server"
 )
 
 // this file contains values relevant to the SuperK Extreme modules
@@ -89,67 +84,11 @@ type SuperKExtreme struct {
 	Module
 }
 
-// HTTPEmissionGet gets the emission state and pipes it back as a bool json
-func (sk *SuperKExtreme) HTTPEmissionGet(w http.ResponseWriter, r *http.Request) {
-	mp, err := sk.GetValue("Emission")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	b := server.BoolT{Bool: mp.Data[0] > byte(0)}
-	err = json.NewEncoder(w).Encode(b)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	log.Printf("%s got emission state NKT %s, %t\n", r.RemoteAddr, sk.Addr, b.Bool)
-	return
-}
-
-// HTTPEmissionOn responds to an HTTP request by turning on the laser
-func (sk *SuperKExtreme) HTTPEmissionOn(w http.ResponseWriter, r *http.Request) {
-	_, err := sk.SetValue("Emission", []byte{3}) // 3 turns the laser on, not 1 or 2
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-	log.Printf("%s set emission state NKT %s, true\n", r.RemoteAddr, sk.Addr)
-	return
-}
-
-// HTTPEmissionOff responds to an HTTP request by turning off the laser
-func (sk *SuperKExtreme) HTTPEmissionOff(w http.ResponseWriter, r *http.Request) {
-	_, err := sk.SetValue("Emission", []byte{0})
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-	log.Printf("%s set emission state NKT %s, false\n", r.RemoteAddr, sk.Addr)
-	return
-}
-
-// HTTPPower responds to HTTP requests by getting or setting the power level in percent
-func (sk *SuperKExtreme) HTTPPower(w http.ResponseWriter, r *http.Request) {
-	sk.httpFloatValue(w, r, "Power Level")
-}
-
 // NewSuperKExtreme create a new Module representing a SuperKExtreme's main module
-func NewSuperKExtreme(addr, urlStem string, serial bool) *SuperKExtreme {
+func NewSuperKExtreme(addr string, serial bool) *SuperKExtreme {
 	rd := comm.NewRemoteDevice(addr, serial, &comm.Terminators{Rx: telEnd, Tx: telEnd}, nil)
-	srv := server.NewServer(urlStem)
-	sk := SuperKExtreme{Module{
+	return &SuperKExtreme{Module{
 		RemoteDevice: &rd,
 		AddrDev:      extremeDefaultAddr,
 		Info:         SuperKExtremeMain}}
-	srv.RouteTable["emission"] = sk.HTTPEmissionGet
-	srv.RouteTable["emission/on"] = sk.HTTPEmissionOn
-	srv.RouteTable["emission/off"] = sk.HTTPEmissionOff
-	srv.RouteTable["power"] = sk.HTTPPower
-	srv.RouteTable["main-module-status"] = sk.HTTPStatus
-	sk.Module.Server = srv
-	return &sk
 }

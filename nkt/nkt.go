@@ -1,19 +1,17 @@
 // Package nkt enables working with NKT SuperK supercontinuum lasers.
+//
+// The wrapping of the individual submodules could
+// be made more ergonomic in Go, but no one
 package nkt
 
 import (
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"go/types"
-	"log"
-	"net/http"
 	"time"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
-	"github.jpl.nasa.gov/HCIT/go-hcit/mathx"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/server"
 	"github.jpl.nasa.gov/HCIT/go-hcit/util"
@@ -169,7 +167,6 @@ type Module struct {
 	// Info contains mapping data for a given module, see ModuleInformation for more docs.
 	Info *ModuleInformation
 
-	server.Server
 	*comm.RemoteDevice
 }
 
@@ -273,7 +270,7 @@ func (m *Module) SetValue(addrName string, data []byte) (MessagePrimitive, error
 	if err != nil {
 		return MessagePrimitive{}, err
 	}
-	defer m.Close()
+	defer m.CloseEventually()
 
 	return m.SendRecvMP(mpSend)
 }
@@ -285,7 +282,7 @@ func (m *Module) GetValueMulti(addrNames []string) ([]MessagePrimitive, error) {
 	if err != nil {
 		return []MessagePrimitive{}, err
 	}
-	defer m.Close()
+	defer m.CloseEventually()
 
 	l := len(addrNames)
 	messages := make([]MessagePrimitive, l, l)
@@ -316,7 +313,7 @@ func (m *Module) SetValueMulti(addrNames []string, data [][]byte) ([]MessagePrim
 	if err != nil {
 		return []MessagePrimitive{}, err
 	}
-	defer m.Close()
+	defer m.CloseEventually()
 
 	l := len(addrNames)
 	messages := make([]MessagePrimitive, l, l)
@@ -373,61 +370,4 @@ func (m *Module) GetStatus() (map[string]bool, error) {
 	}
 	delete(resp, "-")
 	return resp, nil
-}
-
-// HTTPStatus returns a JSON map of the status bitfield over HTTP
-func (m *Module) HTTPStatus(w http.ResponseWriter, r *http.Request) {
-	bitmap, err := m.GetStatus()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	err = json.NewEncoder(w).Encode(bitmap)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-	return
-}
-func (m *Module) httpFloatValue(w http.ResponseWriter, r *http.Request, value string) {
-	switch r.Method {
-	case http.MethodGet:
-		mp, err := m.GetValue(value)
-		if err != nil {
-			fstr := fmt.Sprintf("Error getting %s, %q", value, err)
-			log.Println(err)
-			http.Error(w, fstr, http.StatusInternalServerError)
-			return
-		}
-		// if there is not an error, the message is well-formed and we have a Datagram
-		wvl := float64(dataOrder.Uint16(mp.Data)) / 10
-		hp := server.HumanPayload{Float: wvl, T: types.Float64}
-		hp.EncodeAndRespond(w, r)
-		log.Printf("%s got %s NKT %s, %f", r.RemoteAddr, value, m.Addr, wvl)
-	case http.MethodPost:
-		vT := server.FloatT{}
-		err := json.NewDecoder(r.Body).Decode(&vT)
-		defer r.Body.Close()
-		if err != nil {
-			fstr := fmt.Sprintf("error decoding json, should have field \"f64\", %q", err)
-			log.Println(fstr)
-			http.Error(w, fstr, http.StatusBadRequest)
-			return
-		}
-		intt := uint16(mathx.Round(vT.F64*10, 1))
-		buf := make([]byte, 2, 2)
-		dataOrder.PutUint16(buf, intt)
-		_, err = m.SetValue(value, buf)
-		if err != nil {
-			fstr := fmt.Sprintf("Erorr getting %s, %q", value, err)
-			log.Println(fstr)
-			http.Error(w, fstr, http.StatusInternalServerError)
-			return
-		}
-		log.Printf("%s set %s NKT %s, %f", r.RemoteAddr, value, m.Addr, vT.F64)
-	default:
-		server.BadMethod(w, r)
-	}
-	return
 }
