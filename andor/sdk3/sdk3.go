@@ -5,7 +5,7 @@ package sdk3
 
 /*
 #cgo CFLAGS: -I/usr/local
-#cgo LDFLAGS: -L/usr/local/lib -latcore
+#cgo LDFLAGS: -L/usr/local/lib -latcore -latutility
 #include <stdlib.h>
 #include <atcore.h>
 
@@ -95,20 +95,11 @@ func (c *Camera) QueueBuffer() error {
 	if len(c.buffer) == 0 || cap(c.buffer) < npx {
 		return fmt.Errorf("Go buffer cannot hold entire frame, likely uninitialized, len=%d, cap=%d, npx=%d", len(c.buffer), cap(c.buffer), npx)
 	}
-
-	// with help from Bryan C. Mills on slack@gophers
-	var (
-		ptr     *C.AT_U8
-		ptrSize C.int
-	)
-	// birth of c.cptr:
-	// c.buffer[0] <- this is a Go byte
-	// unsafe.Pointer(...) <- this is a Go pointer
-	// (*C.AT_U8) <- this casts to a C pointer to a C byte
-	ptrSize = C.int(npx)
-	c.bufferOnQueue = true
-
-	return Error(int(C.AT_QueueBuffer(C.AT_H(c.Handle), ptr, ptrSize)))
+	err := Error(int(C.AT_QueueBuffer(C.AT_H(c.Handle), c.cptr, c.cptrsize)))
+	if err == nil {
+		c.bufferOnQueue = true
+	}
+	return err
 }
 
 // WaitBuffer waits for the camera to push a frame into the buffer
@@ -119,10 +110,11 @@ func (c *Camera) WaitBuffer(timeout time.Duration) error {
 	}
 	tout := C.uint(timeout.Nanoseconds() / 1e6)
 	var (
-		ptrSize *C.int
-		ptr     **C.AT_U8
+		size C.int
+		ptr  *C.AT_U8
 	)
-	return Error(int(C.AT_WaitBuffer(C.AT_H(c.Handle), ptr, ptrSize, tout)))
+	err := Error(int(C.AT_WaitBuffer(C.AT_H(c.Handle), &ptr, &size, tout)))
+	return err
 }
 
 // ShutDown shuts down the camera and 'finalizes' the SDK.
@@ -243,4 +235,36 @@ func JPLNeoBootup(c *Camera) error {
 	// }
 
 	return nil
+}
+
+// UnpadBuffer strips padding bytes from a buffer
+func (c *Camera) UnpadBuffer(buf []byte) ([]byte, error) {
+	// TODO: this allocates something bigger than needed
+	// can improve performance a little bit by changing this
+	out := make([]byte, 0, len(buf))
+	stride, err := GetInt(c.Handle, "AOIStride")
+	if err != nil {
+		return out, err
+	}
+	width, err := GetInt(c.Handle, "AOIWidth")
+	if err != nil {
+		return out, err
+	}
+	height, err := GetInt(c.Handle, "AOIHeight")
+	if err != nil {
+		return out, err
+	}
+
+	// TODO: generalize this to other modes besides 16-bit
+	bidx := 0                    // byte index
+	bpp := 2                     // bytes per pixel
+	rowWidthBytes := bpp * width // width (stride) or a row in bytes
+	// implicitly row major order, but seems to be from the SDK
+	for row := 0; row < height; row++ {
+		bytes := buf[bidx : bidx+rowWidthBytes]
+		out = append(out, bytes...)
+		// finally, move
+		bidx += stride // stride is the padded stride
+	}
+	return out, nil
 }
