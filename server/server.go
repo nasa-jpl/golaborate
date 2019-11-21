@@ -2,173 +2,121 @@
 package server
 
 import (
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"go/types"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
-)
+	"strings"
 
-// HandleFuncer is an interface that either the http module, or an HTTP ServeMux
-// or equivalent (Gin, Goji, many others) satisfy
-type HandleFuncer interface {
-	// HandleFunc as defined in stdlib/http
-	HandleFunc(string, func(http.ResponseWriter, *http.Request))
-}
+	"github.jpl.nasa.gov/HCIT/go-hcit/util"
+	"goji.io"
+	"goji.io/pat"
+)
 
 // ReplyWithFile replies to the client request by serving the given file name
 func ReplyWithFile(w http.ResponseWriter, r *http.Request, fn string, fldr string) {
-
 	filePath, err := filepath.Abs(filepath.Join(fldr, fn))
 	if err != nil {
 		fstr := fmt.Sprintf("unable to compute abspath of file %s %s %s", fldr, fn, err)
-		log.Println(fstr)
 		http.Error(w, fstr, http.StatusInternalServerError)
+		return
 	}
 
 	f, err := os.Open(filePath)
 	defer f.Close()
 	if err != nil {
 		fstr := fmt.Sprintf("source file missing %s", filePath)
-		log.Println(fstr)
 		http.Error(w, fstr, http.StatusNotFound)
+		return
 	}
 
 	stat, err := f.Stat()
 	if err != nil {
 		fstr := fmt.Sprintf("error retrieving source file stats %s", err)
-		log.Println(fstr)
 		http.Error(w, fstr, http.StatusNotFound)
+		return
 	}
 	// read some stuff to set the headers appropriately
 	http.ServeContent(w, r, fn, stat.ModTime(), f)
 	return
 }
 
-// HTTPBinder is an object which knows how to bind methods to HTTP routes and can list them
-type HTTPBinder interface {
-	BindRoutes()
-	ListRoutes() []string
-	URLStem() string
+// HTTPer is an interface which allows types to yield their route tables
+// for processing
+type HTTPer interface {
+	RT() RouteTable
 }
 
-// RouteTable maps URL endpoints to
-type RouteTable map[string]http.HandlerFunc
+// RouteTable maps goji patterns to handler funcs
+type RouteTable map[*pat.Pattern]http.HandlerFunc
 
-// ListEndpoints lists the endpoints in a RouteTable (the keys)
-func (rt RouteTable) ListEndpoints() []string {
+// Endpoints returns the endpoints in the route table
+func (rt RouteTable) Endpoints() []string {
 	routes := make([]string, 0, len(rt))
 	for k := range rt {
-		routes = append(routes, k)
+		routes = append(routes, k.String())
 	}
 	return routes
 }
 
-// A Server holds a RouteTable and implements HTTPBinder
-type Server struct {
-	//RouteTable is an instance of type RouteTable
-	RouteTable RouteTable
-
-	// stem is the string returned by URLStem to satisfy HTTPBinder
-	Stem string
-}
-
-// NewServer returns a new Server instance
-func NewServer(stem string) Server {
-	return Server{RouteTable: make(RouteTable), Stem: stem}
-}
-
-// URLStem returns the head of all URLs returned in ListRoutes
-func (s *Server) URLStem() string {
-	return s.Stem
-}
-
-// BindRoutes binds routes on the default http server at stem+str
-// for str in ListRoutes
-func (s *Server) BindRoutes() {
-	stem := s.URLStem()
-	for str, meth := range s.RouteTable {
-		http.HandleFunc(stem+"/"+str, meth)
+// Bind calls HandleFunc for each route in the table on the given mux
+func (rt RouteTable) Bind(mux *goji.Mux) {
+	for ptrn, meth := range rt {
+		mux.HandleFunc(ptrn, meth)
 	}
-	return
 }
 
-// ListRoutes returns a slice of strings that includes all of the routes bound
-// by this server
-func (s *Server) ListRoutes() []string {
-	return s.RouteTable.ListEndpoints()
-}
+// BuildMux takes equal length slices of HTTPers and strings ("stems")
+// and uses them to construct a goji mux with populated handlers.
+// The mux serves a special route, route-list, which returns an
+// array of strings containing all routes as JSON.
+func BuildMux(https []HTTPer, strs []string) *goji.Mux {
+	root := goji.NewMux()
+	protomuxes := make([]string, 0, len(strs))
+	leaves := make([]string, 0, len(strs))
 
-// Mainframe is the top-level struct for an actual HTTP server with many
-// Server objects that map to hardware and represent "services" to the end user
-type Mainframe struct {
-	nodes []HTTPBinder
-}
+	// pop the potential muxes off the paths
+	for _, str := range strs {
+		pieces := strings.Split(str, "/")
+		proto := strings.Join(pieces[:len(pieces)-1], "/")
+		leaf := pieces[len(pieces)-1]
 
-// Add adds a new server to the mainframe
-func (m *Mainframe) Add(s HTTPBinder) {
-	m.nodes = append(m.nodes, s)
-}
+		leaves = append(leaves, leaf)
+		protomuxes = append(protomuxes, proto)
+	}
+	uniq := util.UniqueString(protomuxes)
 
-// RouteGraph returns a non-recursive, depth-1 map of URL stems and their endpoints
-func (m *Mainframe) RouteGraph() map[string][]string {
-	routes := make(map[string][]string)
-	for _, s := range m.nodes {
-		stem := s.URLStem()
-		if _, ok := routes[stem]; ok {
-			routes[stem] = append(routes[stem], s.ListRoutes()...)
+	// now build a map of muxes and protos
+	muxes := make(map[string]*goji.Mux, len(uniq))
+	for _, str := range uniq {
+		mux := goji.SubMux()
+		root.Handle(pat.New(str+"/*"), mux)
+		muxes[str] = mux
+	}
+
+	// collect all the endpoints and binx the muxes
+	AllEndpoints := []string{}
+	for idx := 0; idx < len(https); idx++ {
+		// dump the endpoints
+		h := https[idx]
+		rt := h.RT()
+		AllEndpoints = append(AllEndpoints, rt.Endpoints()...)
+
+		// now bind the routes to the mux
+		mux := muxes[protomuxes[idx]]
+		leaf := leaves[idx]
+		if leaf != "" {
+			// if the leaf isn't blank, it means we need yet another mux
+			newMux := goji.SubMux()
+			mux.Handle(pat.New(leaf+"/*"), newMux)
+			rt.Bind(newMux)
 		} else {
-			routes[stem] = s.ListRoutes()
+			rt.Bind(mux)
 		}
 	}
-	return routes
-}
-
-func (m *Mainframe) graphHandler(w http.ResponseWriter, r *http.Request) {
-	graph := m.RouteGraph()
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	err := json.NewEncoder(w).Encode(graph)
-	if err != nil {
-		fstr := fmt.Sprintf("error encoding route graph to json state %q", err)
-		log.Println(fstr)
-		http.Error(w, fstr, http.StatusInternalServerError)
-	}
-	return
-}
-
-// Routes
-func (m *Mainframe) BindRoutes(h HandleFuncer) {
-	listRouteMap := make(map[string][]string)
-	for _, s := range m.nodes {
-		s.BindRoutes()
-		stem := s.URLStem()
-		if value, ok := listRouteMap[stem]; ok { // ok, key exists, concat the lists
-			listRouteMap[stem] = append(value, s.ListRoutes()...)
-		} else {
-			listRouteMap[stem] = s.ListRoutes()
-		}
-	}
-
-	for stem, listOfRoutes := range listRouteMap {
-		h.HandleFunc(stem+"/route-graph", func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			err := json.NewEncoder(w).Encode(listOfRoutes)
-			if err != nil {
-				fstr := fmt.Sprintf("error encoding list of routes data to json %q", err)
-				log.Println(fstr)
-				http.Error(w, fstr, http.StatusInternalServerError)
-			}
-		})
-	}
-
-	h.HandleFunc("/route-graph", m.graphHandler)
-
-	return
+	return root
 }
 
 // all of the following types are followed with a capital T for homogenaeity and
@@ -228,34 +176,6 @@ type HumanPayload struct {
 	T types.BasicKind
 }
 
-// UnpackBinary converts the raw data from a register into a HumanPayload
-func UnpackBinary(b []byte, typ types.BasicKind, endian binary.ByteOrder) HumanPayload {
-	var hp HumanPayload
-	if len(b) == 0 {
-		return HumanPayload{}
-	}
-	switch typ {
-	case types.Uint16:
-		v := endian.Uint16(b)
-		hp = HumanPayload{Uint16: v}
-	case types.Bool:
-		v := uint8(b[0]) == 1
-		hp = HumanPayload{Bool: v}
-	case types.String:
-		v := string(b)
-		hp = HumanPayload{String: v}
-	case types.Byte:
-		v := b[0]
-		hp = HumanPayload{Byte: v}
-	default: // default is 10x superres floating point value
-		v := endian.Uint16(b)
-		hp = HumanPayload{Float: float64(v) / 10.0}
-	}
-
-	hp.T = typ
-	return hp
-}
-
 // EncodeAndRespond converts the humanpayload to a smaller struct with only one
 // field and writes it to w as JSON.
 func (hp *HumanPayload) EncodeAndRespond(w http.ResponseWriter, r *http.Request) {
@@ -270,7 +190,6 @@ func (hp *HumanPayload) EncodeAndRespond(w http.ResponseWriter, r *http.Request)
 		err := json.NewEncoder(w).Encode(obj)
 		if err != nil {
 			fstr := fmt.Sprintf("error encoding %+v hp to JSON, %q", hp, err)
-			log.Println(fstr)
 			http.Error(w, fstr, http.StatusInternalServerError)
 		}
 	// skip bytes case, unhandled in Unpack
@@ -280,7 +199,6 @@ func (hp *HumanPayload) EncodeAndRespond(w http.ResponseWriter, r *http.Request)
 		err := json.NewEncoder(w).Encode(obj)
 		if err != nil {
 			fstr := fmt.Sprintf("error encoding %+v hp to JSON, %q", hp, err)
-			log.Println(fstr)
 			http.Error(w, fstr, http.StatusInternalServerError)
 		}
 	case types.Float64:
@@ -289,7 +207,6 @@ func (hp *HumanPayload) EncodeAndRespond(w http.ResponseWriter, r *http.Request)
 		err := json.NewEncoder(w).Encode(obj)
 		if err != nil {
 			fstr := fmt.Sprintf("error encoding %+v hp to JSON, %q", hp, err)
-			log.Println(fstr)
 			http.Error(w, fstr, http.StatusInternalServerError)
 		}
 	case types.String:
@@ -298,7 +215,6 @@ func (hp *HumanPayload) EncodeAndRespond(w http.ResponseWriter, r *http.Request)
 		err := json.NewEncoder(w).Encode(obj)
 		if err != nil {
 			fstr := fmt.Sprintf("error encoding %+v hp to JSON, %q", hp, err)
-			log.Println(fstr)
 			http.Error(w, fstr, http.StatusInternalServerError)
 		}
 	case types.Uint16:
@@ -306,16 +222,8 @@ func (hp *HumanPayload) EncodeAndRespond(w http.ResponseWriter, r *http.Request)
 		err := json.NewEncoder(w).Encode(obj)
 		if err != nil {
 			fstr := fmt.Sprintf("error encoding %+v hp to JSON, %q", hp, err)
-			log.Println(fstr)
 			http.Error(w, fstr, http.StatusInternalServerError)
 		}
 
 	}
-}
-
-// BadMethod returns an error if the request method is not GET or POST
-func BadMethod(w http.ResponseWriter, r *http.Request) {
-	fstr := fmt.Sprintf("%s queried %s with bad method %s, must be either GET or POST", r.RemoteAddr, r.URL, r.Method)
-	log.Println(fstr)
-	http.Error(w, fstr, http.StatusMethodNotAllowed)
 }
