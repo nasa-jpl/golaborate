@@ -68,3 +68,34 @@ func ArangeByte(startEnd byte, endStep ...byte) []byte {
 	}
 	return s
 }
+
+// UniqueString reduces a slice of strings to the unique values
+func UniqueString(slice []string) []string {
+	seen := make(map[string]struct{}, len(slice))
+	j := 0
+	for _, v := range slice {
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		slice[j] = v
+		j++
+	}
+	return slice[:j]
+}
+
+// UintSliceContains returns true if value is in slice, otherwise false
+func UintSliceContains(slice []uint, value uint) bool {
+	ret := false
+	for _, cmpV := range slice {
+		if value == cmpV {
+			ret = true
+		}
+	}
+	return ret
+}
+
+// AllElementsNumbers tests if all elements of a string are numbers
+func AllElementsNumbers(s string) bool {
+	return !strings.ContainsAny(s, "0123456789.")
+}
