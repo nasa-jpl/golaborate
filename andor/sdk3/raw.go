@@ -455,6 +455,16 @@ func SetEnumIndex(handle int, feature string, idx int) error {
 	return Error(errCode)
 }
 
+// GetEnumString gets the string value of an enum.
+// this function is just a convenience wrapper around GetEnumIndex and GetEnumStringByIndex
+func GetEnumString(handle int, feature string) (string, error) {
+	idx, err := GetEnumIndex(handle, feature)
+	if err != nil {
+		return "", err
+	}
+	return GetEnumStringByIndex(handle, feature, idx)
+}
+
 // SetEnumString sets the value of a feature to a string that is a valid member
 // of the backing enum
 func SetEnumString(handle int, feature, value string) error {
