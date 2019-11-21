@@ -16,6 +16,8 @@ import (
 	"reflect"
 	"time"
 	"unsafe"
+
+	"github.jpl.nasa.gov/HCIT/go-hcit/mathx"
 )
 
 const (
@@ -44,19 +46,12 @@ type Camera struct {
 	// queue yet
 	bufferOnQueue bool
 
-	// Resolution holds the image resolution (H, W)
-	Resolution [2]int
-
 	// Handle holds the int that points to a specific camera
 	Handle int
-}
 
-// npx is shorthand for c.Resolution[0] * c.Resolution[1]
-func (c *Camera) npx() int {
-	return c.Resolution[0] * c.Resolution[1]
+	// ExposureTime is the currently programmed exposure time.
+	ExposureTime time.Duration
 }
-
-// updateRes updates the resolution to the current pixel dimensions
 
 // Allocate creates the buffer that will be populated by the SDK
 // it should be called at init, and whenever the AOI or encoding changes
@@ -91,9 +86,8 @@ func (c *Camera) Close() error {
 // only one buffer is supported in this wrapper, though the SDK supports
 // multiple buffers
 func (c *Camera) QueueBuffer() error {
-	npx := c.npx()
-	if len(c.buffer) == 0 || cap(c.buffer) < npx {
-		return fmt.Errorf("Go buffer cannot hold entire frame, likely uninitialized, len=%d, cap=%d, npx=%d", len(c.buffer), cap(c.buffer), npx)
+	if len(c.buffer) == 0 {
+		return fmt.Errorf("Go buffer cannot hold entire frame, likely uninitialized, len=%d, cap=%d", len(c.buffer), cap(c.buffer))
 	}
 	err := Error(int(C.AT_QueueBuffer(C.AT_H(c.Handle), c.cptr, c.cptrsize)))
 	if err == nil {
@@ -117,47 +111,139 @@ func (c *Camera) WaitBuffer(timeout time.Duration) error {
 	return err
 }
 
-// ShutDown shuts down the camera and 'finalizes' the SDK.
-// This maintains API compatibility with SDK2
-// and is not an exact match of
-func (c *Camera) ShutDown() {
-	return
-}
-
-// ExtCamera is an extension of the Camera type with some helper and 'macro'
-// functions
-type ExtCamera struct {
-	*Camera
-}
-
-// LastFrame returns the current state of the buffer cast to int32
-// This is not in the SDK3, but is something we provide to build
-// better interfaces.
-//
-// This function does not copy and uses unsafe mechanisms internally,
-// buyer beware.
-func (c *ExtCamera) LastFrame() (*[]uint16, error) {
+// GetFrame triggers an exposure and returns the frame as a strided slice of bytes
+func (c *Camera) GetFrame() ([]uint16, error) {
 	if !c.bufferOnQueue {
 		return nil, ErrBufferNotOnQueue
 	}
-	nbytes, err := GetInt(c.Handle, "ImageSizeBytes")
-	nbytes = nbytes / 2
-	aryuint16 := []uint16{}
+	// if we have to query hardware for exposure time, there may be an error
+	expT, err := c.GetExposureTime()
 	if err != nil {
-		return &aryuint16, err
+		return []uint16{}, err
 	}
-	hdr := (*reflect.SliceHeader)(unsafe.Pointer(&aryuint16))
-	hdr.Data = uintptr(unsafe.Pointer(&c.buffer[0]))
-	hdr.Len = nbytes
-	hdr.Cap = nbytes
-	return &aryuint16, nil
+
+	// do the big acquisition loop
+	err = c.QueueBuffer()
+	if err != nil {
+		return []uint16{}, err
+	}
+	err = IssueCommand(c.Handle, "AcquisitionStart")
+	if err != nil {
+		return []uint16{}, err
+	}
+	// wait a multiple of the shutter time, or a fixed time if that is too short for the SDK to be stable
+	minWait := 100 * time.Millisecond
+	Wait := minWait
+
+	calcWait := expT * 3
+	if calcWait > Wait {
+		Wait = calcWait
+	}
+	err = c.WaitBuffer(Wait)
+	if err != nil {
+		return []uint16{}, err
+	}
+	err = IssueCommand(c.Handle, "AcquisitionStop")
+	if err != nil {
+		return []uint16{}, err
+	}
+	buf, err := c.BufferCopy()
+	if err != nil {
+		return []uint16{}, err
+	}
+	buf, err = c.UnpadBuffer(buf)
+	if err != nil {
+		return []uint16{}, err
+	}
+	ary := bytesToUint(buf)
+	return ary, nil
+}
+
+// GetExposureTime gets the current exposure time as a duration
+func (c *Camera) GetExposureTime() (time.Duration, error) {
+	var err error
+	if c.ExposureTime == time.Duration(0) { // zero value, uninitialized
+		tS, err := GetFloat(c.Handle, "ExposureTime")
+		// convert to ns then round to int and make a duration
+		tNs := tS * 1e9
+		tNsI := int(mathx.Round(tNs, 0))
+		dur := time.Duration(tNsI) * time.Nanosecond
+		if err == nil {
+			c.ExposureTime = dur
+		}
+	}
+	return c.ExposureTime, err
+}
+
+// SetExposureTime sets the exposure time as a duration
+func (c *Camera) SetExposureTime(d time.Duration) error {
+	ts := d.Seconds()
+	err := SetFloat(c.Handle, "ExposureTime", ts)
+	if err == nil {
+		c.ExposureTime = d
+	}
+	return err
+}
+
+// GetCooling gets if temperature control is currently active or not
+func (c *Camera) GetCooling() (bool, error) {
+	return GetBool(c.Handle, "SensorCooling")
+}
+
+// SetCooling sets if temperature control is currently active or not
+func (c *Camera) SetCooling(b bool) error {
+	return SetBool(c.Handle, "SensorCooling", b)
+}
+
+// GetTemperature gets the current temperature of the sensor in Celcius
+func (c *Camera) GetTemperature() (float64, error) {
+	return GetFloat(c.Handle, "SensorTemperature")
+}
+
+// GetTemperatureSetpoints gets a list of strings representing the
+// temperatures the detector can currently be cooled to
+func (c *Camera) GetTemperatureSetpoints() ([]string, error) {
+	return GetEnumStrings(c.Handle, "TemperatureControl")
+}
+
+// GetTemperatureSetpoint gets the temp control setpoint as a string
+func (c *Camera) GetTemperatureSetpoint() (string, error) {
+	return GetEnumString(c.Handle, "TemperatureControl")
+}
+
+// SetTemperatureSetpoint sets the temp control point to a value that is returned by
+// GetTemperatureSetpoints
+func (c *Camera) SetTemperatureSetpoint(s string) error {
+	return SetEnumString(c.Handle, "TemperatureControl", s)
+}
+
+// GetTemperatureStatus gets the current status of sensor cooling.  One of:
+// - Cooler Off
+// - Stabilised
+// - Cooling
+// - Drift
+// - Not Stabilised
+// - Fault
+func (c *Camera) GetTemperatureStatus() (string, error) {
+	return GetEnumString(c.Handle, "TemperatureStatus")
+}
+
+// GetFanOn gets if the fan is currently on
+func (c *Camera) GetFanOn() (bool, error) {
+	speed, err := GetEnumString(c.Handle, "FanSpeed")
+	return speed == "Off", err
+}
+
+// SetFanOn sets the fan on or off
+func (c *Camera) SetFanOn(b bool) error {
+	return SetEnumString(c.Handle, "FanSpeed", "On")
 }
 
 // BufferCopy returns a copy of the current buffer at this moment in time
 // may have undefined behavior if camera is writing while you read
 //
 // This is a copy, so do not do this inside of a a hot loop (e.g. running at 100fps)
-func (c *ExtCamera) BufferCopy() ([]byte, error) {
+func (c *Camera) BufferCopy() ([]byte, error) {
 	buf := []byte{}
 	nbytes, err := GetInt(c.Handle, "ImageSizeBytes")
 	if err != nil {
@@ -170,6 +256,13 @@ func (c *ExtCamera) BufferCopy() ([]byte, error) {
 	return buf, nil
 }
 
+// ShutDown shuts down the camera and 'finalizes' the SDK.
+// This maintains API compatibility with SDK2
+// and is not an exact match of
+func (c *Camera) ShutDown() {
+	return
+}
+
 // JPLNeoBootup runs the standard bootup sequence used for Andor Neo cameras in HCIT
 // this should be called after Initialize
 func JPLNeoBootup(c *Camera) error {
@@ -179,27 +272,27 @@ func JPLNeoBootup(c *Camera) error {
 		return err
 	}
 	fmt.Println("preampgain skipped - notimplemented on simcam")
-	// err = SetEnumString(c.Handle, "SimplePreAmpGainControl", "16-bit (low noise & high well capacity)")
-	// if err != nil {
-	// 	return err
-	// }
+	err = SetEnumString(c.Handle, "SimplePreAmpGainControl", "16-bit (low noise & high well capacity)")
+	if err != nil {
+		return err
+	}
 	fmt.Println("fan speed")
 	err = SetEnumString(c.Handle, "FanSpeed", "Off")
 	if err != nil {
 		return err
 	}
 	fmt.Println("pixel readout rate")
-	// err = SetEnumString(c.Handle, "PixelReadoutRate", "280 MHz")
-	err = SetEnumIndex(c.Handle, "PixelReadoutRate", 0)
+	err = SetEnumString(c.Handle, "PixelReadoutRate", "280 MHz")
+	// err = SetEnumIndex(c.Handle, "PixelReadoutRate", 0)
 	if err != nil {
 		return err
 	}
 
 	fmt.Println("pixel encoding")
 	// err = SetEnumIndex(c.Handle, "PixelEncoding", 2)
-	err = SetEnumString(c.Handle, "PixelEncoding", "Mono12")
-	// strs, err := GetEnumStrings(c.Handle, "PixelEncoding")
-	// fmt.Println(strs, err)
+	err = SetEnumString(c.Handle, "PixelEncoding", "Mono16")
+	strs, err := GetEnumStrings(c.Handle, "PixelEncoding")
+	fmt.Println(strs)
 	if err != nil {
 		return err
 	}
@@ -211,10 +304,10 @@ func JPLNeoBootup(c *Camera) error {
 	}
 
 	fmt.Println("metadata - skipped simcam")
-	// err = SetBool(c.Handle, "MetadataEnable", true)
-	// if err != nil {
-	// 	return err
-	// }
+	err = SetBool(c.Handle, "MetadataEnable", false)
+	if err != nil {
+		return err
+	}
 
 	// fmt.Println("metadatats")
 	// err = SetBool(c.Handle, "MetadataTimestamp", true)
@@ -267,4 +360,13 @@ func (c *Camera) UnpadBuffer(buf []byte) ([]byte, error) {
 		bidx += stride // stride is the padded stride
 	}
 	return out, nil
+}
+
+func bytesToUint(b []byte) []uint16 {
+	ary := []uint16{}
+	hdr := (*reflect.SliceHeader)(unsafe.Pointer(&ary))
+	hdr.Data = uintptr(unsafe.Pointer(&b[0]))
+	hdr.Len = len(b) / 2
+	hdr.Cap = cap(b) / 2
+	return ary
 }
