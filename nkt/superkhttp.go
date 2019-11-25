@@ -15,35 +15,35 @@ import (
 // SuperKHTTPWrapper wraps SuperK lasers in an HTTP interface
 type SuperKHTTPWrapper struct {
 	// Extreme is the Extreme main module
-	Extreme *SuperKExtreme
+	SuperKExtreme
 
 	// Varia is the Varia variable filter module
-	Varia *SuperKVaria
+	SuperKVaria
 
 	// RouteTable holds the map of patterns and routes
 	RouteTable map[goji.Pattern]http.HandlerFunc
 }
 
 // NewHTTPWrapper creates a new HTTP wrapper and populates the route table
-func NewHTTPWrapper(urlStem string, extr *SuperKExtreme, varia *SuperKVaria) SuperKHTTPWrapper {
-	w := SuperKHTTPWrapper{Extreme: extr, Varia: varia}
+func NewHTTPWrapper(extr SuperKExtreme, varia SuperKVaria) SuperKHTTPWrapper {
+	w := SuperKHTTPWrapper{SuperKExtreme: extr, SuperKVaria: varia}
 	rt := map[goji.Pattern]http.HandlerFunc{
-		pat.Get(urlStem + "emission"):           w.GetEmission,
-		pat.Get(urlStem + "emission/on"):        w.EmissionOn,
-		pat.Get(urlStem + "emission/off"):       w.EmissionOff,
-		pat.Get(urlStem + "power"):              w.GetPower,
-		pat.Post(urlStem + "power"):             w.SetPower,
-		pat.Get(urlStem + "main-module-status"): w.StatusMain,
+		pat.Get("emission"):           w.GetEmission,
+		pat.Get("emission/on"):        w.EmissionOn,
+		pat.Get("emission/off"):       w.EmissionOff,
+		pat.Get("power"):              w.GetPower,
+		pat.Post("power"):             w.SetPower,
+		pat.Get("main-module-status"): w.StatusMain,
 
-		pat.Get(urlStem + "wl-short"):             w.GetShortWave,
-		pat.Post(urlStem + "wl-short"):            w.SetShortWave,
-		pat.Get(urlStem + "wl-long"):              w.GetLongWave,
-		pat.Post(urlStem + "wl-long"):             w.GetShortWave,
-		pat.Get(urlStem + "wl-center-bandwidth"):  w.GetCenterBandwidth,
-		pat.Post(urlStem + "wl-center-bandwidth"): w.SetCenterBandwidth,
-		pat.Get(urlStem + "nd"):                   w.GetND,
-		pat.Post(urlStem + "nd"):                  w.SetND,
-		pat.Get(urlStem + "varia-status"):         w.StatusVaria,
+		pat.Get("wl-short"):             w.GetShortWave,
+		pat.Post("wl-short"):            w.SetShortWave,
+		pat.Get("wl-long"):              w.GetLongWave,
+		pat.Post("wl-long"):             w.GetShortWave,
+		pat.Get("wl-center-bandwidth"):  w.GetCenterBandwidth,
+		pat.Post("wl-center-bandwidth"): w.SetCenterBandwidth,
+		pat.Get("nd"):                   w.GetND,
+		pat.Post("nd"):                  w.SetND,
+		pat.Get("varia-status"):         w.StatusVaria,
 	}
 	w.RouteTable = rt
 	return w
@@ -51,7 +51,7 @@ func NewHTTPWrapper(urlStem string, extr *SuperKExtreme, varia *SuperKVaria) Sup
 
 // GetEmission gets the emission state and pipes it back as a bool json
 func (h *SuperKHTTPWrapper) GetEmission(w http.ResponseWriter, r *http.Request) {
-	mp, err := h.Extreme.GetValue("Emission")
+	mp, err := h.SuperKExtreme.GetValue("Emission")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -69,7 +69,7 @@ func (h *SuperKHTTPWrapper) GetEmission(w http.ResponseWriter, r *http.Request) 
 
 // EmissionOn responds to an HTTP request by turning on the laser
 func (h *SuperKHTTPWrapper) EmissionOn(w http.ResponseWriter, r *http.Request) {
-	_, err := h.Extreme.SetValue("Emission", []byte{3}) // 3 turns the laser on, not 1 or 2
+	_, err := h.SuperKExtreme.SetValue("Emission", []byte{3}) // 3 turns the laser on, not 1 or 2
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -80,7 +80,7 @@ func (h *SuperKHTTPWrapper) EmissionOn(w http.ResponseWriter, r *http.Request) {
 
 // EmissionOff responds to an HTTP request by turning off the laser
 func (h *SuperKHTTPWrapper) EmissionOff(w http.ResponseWriter, r *http.Request) {
-	_, err := h.Extreme.SetValue("Emission", []byte{0})
+	_, err := h.SuperKExtreme.SetValue("Emission", []byte{0})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -91,37 +91,37 @@ func (h *SuperKHTTPWrapper) EmissionOff(w http.ResponseWriter, r *http.Request) 
 
 // GetPower returns the power level (in pct, [0,100]) over HTTP
 func (h *SuperKHTTPWrapper) GetPower(w http.ResponseWriter, r *http.Request) {
-	httpGetFloatValue(w, r, "Power Level", h.Extreme.Module)
+	httpGetFloatValue(w, r, "Power Level", h.SuperKExtreme.Module)
 }
 
 // SetPower sets the power level (in pct, [0,100]) over HTTP
 func (h *SuperKHTTPWrapper) SetPower(w http.ResponseWriter, r *http.Request) {
-	httpSetFloatValue(w, r, "Power Level", h.Extreme.Module)
+	httpSetFloatValue(w, r, "Power Level", h.SuperKExtreme.Module)
 }
 
 // GetShortWave gets the short wavelength over HTTP
 func (h *SuperKHTTPWrapper) GetShortWave(w http.ResponseWriter, r *http.Request) {
-	httpGetFloatValue(w, r, "Short Wave Setpoint", h.Varia.Module)
+	httpGetFloatValue(w, r, "Short Wave Setpoint", h.SuperKVaria.Module)
 }
 
 // SetShortWave sets the short wavelength over HTTP
 func (h *SuperKHTTPWrapper) SetShortWave(w http.ResponseWriter, r *http.Request) {
-	httpSetFloatValue(w, r, "Short Wave Setpoint", h.Varia.Module)
+	httpSetFloatValue(w, r, "Short Wave Setpoint", h.SuperKVaria.Module)
 }
 
 // GetLongWave gets the long wavelength over HTTP
 func (h *SuperKHTTPWrapper) GetLongWave(w http.ResponseWriter, r *http.Request) {
-	httpGetFloatValue(w, r, "Long Wave Setpoint", h.Varia.Module)
+	httpGetFloatValue(w, r, "Long Wave Setpoint", h.SuperKVaria.Module)
 }
 
 // SetLongWave sets the long wavelength over HTTP
 func (h *SuperKHTTPWrapper) SetLongWave(w http.ResponseWriter, r *http.Request) {
-	httpSetFloatValue(w, r, "Long Wave Setpoint", h.Varia.Module)
+	httpSetFloatValue(w, r, "Long Wave Setpoint", h.SuperKVaria.Module)
 }
 
 // GetCenterBandwidth gets the center wavelength and bandwidth over HTTP
 func (h *SuperKHTTPWrapper) GetCenterBandwidth(w http.ResponseWriter, r *http.Request) {
-	mps, err := h.Varia.GetValueMulti([]string{"Short Wave Setpoint", "Long Wave Setpoint"})
+	mps, err := h.SuperKVaria.GetValueMulti([]string{"Short Wave Setpoint", "Long Wave Setpoint"})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -159,7 +159,7 @@ func (h *SuperKHTTPWrapper) SetCenterBandwidth(w http.ResponseWriter, r *http.Re
 		dataOrder.PutUint16(buf, uint16(f))
 		datas[idx] = buf
 	}
-	_, err = h.Varia.SetValueMulti(addrs, datas)
+	_, err = h.SuperKVaria.SetValueMulti(addrs, datas)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -170,18 +170,18 @@ func (h *SuperKHTTPWrapper) SetCenterBandwidth(w http.ResponseWriter, r *http.Re
 // GetND gets the ND filter strength on GET
 // POST should be JSON with single f64 field which is the ND strength in pct (100 = full blockage).
 func (h *SuperKHTTPWrapper) GetND(w http.ResponseWriter, r *http.Request) {
-	httpGetFloatValue(w, r, "ND Setpoint", h.Varia.Module)
+	httpGetFloatValue(w, r, "ND Setpoint", h.SuperKVaria.Module)
 }
 
 // SetND sets the ND filter strength on POST.
 // post payload should be JSON with single f64 field which is the ND strength in pct (100 = full blockage).
 func (h *SuperKHTTPWrapper) SetND(w http.ResponseWriter, r *http.Request) {
-	httpSetFloatValue(w, r, "ND Setpoint", h.Varia.Module)
+	httpSetFloatValue(w, r, "ND Setpoint", h.SuperKVaria.Module)
 }
 
 // StatusMain gets the status bitfield of the main module over HTTP
 func (h *SuperKHTTPWrapper) StatusMain(w http.ResponseWriter, r *http.Request) {
-	bitmap, err := h.Extreme.Module.GetStatus()
+	bitmap, err := h.SuperKExtreme.Module.GetStatus()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -197,7 +197,7 @@ func (h *SuperKHTTPWrapper) StatusMain(w http.ResponseWriter, r *http.Request) {
 
 // StatusVaria gets the status bitfield of the Varia module over HTTP
 func (h *SuperKHTTPWrapper) StatusVaria(w http.ResponseWriter, r *http.Request) {
-	bitmap, err := h.Varia.Module.GetStatus()
+	bitmap, err := h.SuperKVaria.Module.GetStatus()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

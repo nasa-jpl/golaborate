@@ -16,24 +16,24 @@ import (
 // ESP301HTTPWrapper wraps ESP301 operation in an HTTP interface
 type ESP301HTTPWrapper struct {
 	// ESP is the underlying motion controller
-	ESP *ESP301
+	ESP301
 
 	// RouteTable is the map of Goji patterns to route handlers
 	RouteTable map[goji.Pattern]http.HandlerFunc
 }
 
 // NewESP301HTTPWrapper returns a new wrapper with the route table populated
-func NewESP301HTTPWrapper(urlStem string, esp *ESP301) ESP301HTTPWrapper {
-	w := ESP301HTTPWrapper{ESP: esp}
+func NewESP301HTTPWrapper(esp ESP301) ESP301HTTPWrapper {
+	w := ESP301HTTPWrapper{ESP301: esp}
 	rt := map[goji.Pattern]http.HandlerFunc{
-		pat.Post(urlStem + "raw"):            w.Raw,
-		pat.Post(urlStem + "single-cmd"):     w.JSONSingle,
-		pat.Post(urlStem + "multi-cmd"):      w.JSONArray,
-		pat.Get(urlStem + "cmd-list"):        w.CmdList,
-		pat.Get(urlStem + "simple-pos-abs"):  w.GetPosAbs,
-		pat.Post(urlStem + "simple-pos-abs"): w.SetPosAbs,
-		pat.Post(urlStem + "simple-home"):    w.Home,
-		pat.Get(urlStem + "errors"):          w.Errors,
+		pat.Post("raw"):            w.Raw,
+		pat.Post("single-cmd"):     w.JSONSingle,
+		pat.Post("multi-cmd"):      w.JSONArray,
+		pat.Get("cmd-list"):        w.CmdList,
+		pat.Get("simple-pos-abs"):  w.GetPosAbs,
+		pat.Post("simple-pos-abs"): w.SetPosAbs,
+		pat.Post("simple-home"):    w.Home,
+		pat.Get("errors"):          w.Errors,
 	}
 	w.RouteTable = rt
 	return w
@@ -48,7 +48,7 @@ func (h *ESP301HTTPWrapper) Raw(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	resp, err := h.ESP.RawCommand(s.Str)
+	resp, err := h.ESP301.RawCommand(s.Str)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -63,7 +63,7 @@ func (h *ESP301HTTPWrapper) Raw(w http.ResponseWriter, r *http.Request) {
 
 // Errors reads the errors and returns them as a json [string] over HTTP
 func (h *ESP301HTTPWrapper) Errors(w http.ResponseWriter, r *http.Request) {
-	errors, err := h.ESP.ReadErrors()
+	errors, err := h.ESP301.ReadErrors()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -87,7 +87,7 @@ func (h *ESP301HTTPWrapper) Home(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	err = h.ESP.Home(jcmd.Axis)
+	err = h.ESP301.Home(jcmd.Axis)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -105,7 +105,7 @@ func (h *ESP301HTTPWrapper) Wait(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	err = h.ESP.Wait(jcmd.Axis)
+	err = h.ESP301.Wait(jcmd.Axis)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -123,7 +123,7 @@ func (h *ESP301HTTPWrapper) GetPosAbs(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	f, err := h.ESP.GetPos(jcmd.Axis)
+	f, err := h.ESP301.GetPos(jcmd.Axis)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -142,7 +142,7 @@ func (h *ESP301HTTPWrapper) SetPosAbs(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	err = h.ESP.SetPosAbs(jcmd.Axis, jcmd.F64)
+	err = h.ESP301.SetPosAbs(jcmd.Axis, jcmd.F64)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -168,14 +168,14 @@ func (h *ESP301HTTPWrapper) JSONSingle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tele := makeTelegram(cmd, jcmd.Axis, jcmd.Write, jcmd.F64)
-	err = h.ESP.Open()
+	err = h.ESP301.Open()
 	if err != nil {
 		fstr := fmt.Sprintf("error opening connection to motion controller %q", err)
 		http.Error(w, fstr, http.StatusInternalServerError)
 		return
 	}
-	defer h.ESP.CloseEventually()
-	resp, err := h.ESP.SendRecv([]byte(tele))
+	defer h.ESP301.CloseEventually()
+	resp, err := h.ESP301.SendRecv([]byte(tele))
 	if err != nil {
 		fstr := fmt.Sprintf("error communicating with motion controller %q.  Received response %q", err, resp)
 		http.Error(w, fstr, http.StatusInternalServerError)
@@ -224,14 +224,14 @@ func (h *ESP301HTTPWrapper) JSONArray(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.ESP.Open()
+	err = h.ESP301.Open()
 	if err != nil {
 		fstr := fmt.Sprintf("error opening connection to motion controller %q", err)
 		http.Error(w, fstr, http.StatusInternalServerError)
 		return
 	}
-	defer h.ESP.CloseEventually()
-	resp, err := h.ESP.SendRecv([]byte(tele))
+	defer h.ESP301.CloseEventually()
+	resp, err := h.ESP301.SendRecv([]byte(tele))
 	if err != nil {
 		fstr := fmt.Sprintf("error communicating with motion controller %q", err)
 		http.Error(w, fstr, http.StatusInternalServerError)

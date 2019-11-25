@@ -34,22 +34,22 @@ func httpReturnString(f strErrFunc, w http.ResponseWriter, r *http.Request) {
 // BindRoutes must be called on it
 type HTTPWrapper struct {
 	// Sensor is the underlying sensor that is wrapped
-	Sensor *Sensor
+	Sensor
 
 	// RouteTable maps goji patterns to http handlers
 	RouteTable map[goji.Pattern]http.HandlerFunc
 }
 
 // NewHTTPWrapper returns a new HTTP wrapper with the route table pre-configured
-func NewHTTPWrapper(urlStem string, s *Sensor) HTTPWrapper {
+func NewHTTPWrapper(s Sensor) HTTPWrapper {
 	w := HTTPWrapper{Sensor: s}
 	rt := map[goji.Pattern]http.HandlerFunc{
-		pat.Get(urlStem + "pressure"):            w.Read,
-		pat.Delete(urlStem + "factory-reset"):    w.FactoryReset,
-		pat.Delete(urlStem + "void-calibration"): w.VoidCal,
-		pat.Post(urlStem + "set-span"):           w.SetSpan,
-		pat.Post(urlStem + "set-zero"):           w.SetZero,
-		pat.Get(urlStem + "version"):             w.Version,
+		pat.Get("pressure"):            w.Read,
+		pat.Delete("factory-reset"):    w.FactoryReset,
+		pat.Delete("void-calibration"): w.VoidCal,
+		pat.Post("set-span"):           w.SetSpan,
+		pat.Post("set-zero"):           w.SetZero,
+		pat.Get("version"):             w.Version,
 	}
 	w.RouteTable = rt
 	return w
