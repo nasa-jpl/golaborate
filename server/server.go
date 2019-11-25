@@ -142,6 +142,11 @@ type ByteT struct {
 	Int byte `json:"int"` // we won't distinguish between bytes and ints for users
 }
 
+// IntT is a struct with a single Int field
+type IntT struct {
+	Int int `json:"int"`
+}
+
 // BufferT is a struct with a single Int field
 type BufferT struct {
 	Int []byte `json:"int"`
@@ -162,6 +167,9 @@ type HumanPayload struct {
 
 	// Byte holds a single byte
 	Byte byte
+
+	// Int holds an int
+	Int int
 
 	// Float holds a float
 	Float float64
@@ -195,6 +203,14 @@ func (hp *HumanPayload) EncodeAndRespond(w http.ResponseWriter, r *http.Request)
 	// skip bytes case, unhandled in Unpack
 	case types.Byte:
 		obj := ByteT{Int: hp.Byte} // Byte -> int for consistency with uints
+
+		err := json.NewEncoder(w).Encode(obj)
+		if err != nil {
+			fstr := fmt.Sprintf("error encoding %+v hp to JSON, %q", hp, err)
+			http.Error(w, fstr, http.StatusInternalServerError)
+		}
+	case types.Int:
+		obj := IntT{Int: hp.Int} // Byte -> int for consistency with uints
 
 		err := json.NewEncoder(w).Encode(obj)
 		if err != nil {

@@ -27,6 +27,103 @@ const (
 	LengthOfUndefinedBuffers = 255
 )
 
+// ErrFeatureNotFound is generated when a feature is looked up in the Features
+// map but does not exist there
+type ErrFeatureNotFound struct {
+	// Feature is the specific feature not found
+	Feature string
+}
+
+// Error satisfies the error interface
+func (e ErrFeatureNotFound) Error() string {
+	return fmt.Sprintf("feature %s not found in Features map, see go-hcit/andor/sdk3#Features for known features", e.Feature)
+}
+
+var (
+	// Features maps features to "types" without using the types pkg, due to C enums
+	Features = map[string]string{
+		// ints
+		"AccumulatedCount":        "int",
+		"AOIHBin":                 "int",
+		"AOIVBin":                 "int",
+		"AOILeft":                 "int",
+		"AOITop":                  "int",
+		"AOIStride":               "int",
+		"AOIHeight":               "int",
+		"AOIWidth":                "int",
+		"BaselineLevel":           "int",
+		"BufferOverflowEvent":     "int",
+		"DeviceCount":             "int",
+		"DeviceVideoIndex":        "int",
+		"EventsMissedEvent":       "int",
+		"ExposureStartEvent":      "int",
+		"ExposureEndEvent":        "int",
+		"FrameCount":              "int",
+		"ImageSizeBytes":          "int",
+		"LUTIndex":                "int",
+		"LUTValue":                "int",
+		"RowNExposureEndEvent":    "int",
+		"RowNExposureStartEvent":  "int",
+		"SensorHeight":            "int",
+		"SensorWidth":             "int",
+		"TimestampClock":          "int",
+		"TimestampClockFrequency": "int",
+
+		// bools
+		"CameraAcquiring":       "bool",
+		"EventEnable":           "bool",
+		"FullAOIControl":        "bool",
+		"IOInvert":              "bool",
+		"MetadataEnable":        "bool",
+		"MetadataFrame":         "bool",
+		"MetadataTimestamp":     "bool",
+		"Overlap":               "bool", // TODO: see if enabling this fixes fast shutter problems
+		"SensorCooling":         "bool",
+		"SpuriousNoiseFilter":   "bool",
+		"SynchronousTriggering": "bool",
+
+		// commands
+		"AcquisitionStart":    "command",
+		"AcquisitionStop":     "command",
+		"CameraDump":          "command",
+		"SoftwareTrigger":     "command",
+		"TimestampClockReset": "command",
+
+		// floats
+		"BytesPerPixel":            "float",
+		"ExposureTime":             "float",
+		"FrameRate":                "float",
+		"MaxInterfaceTransferRate": "float",
+		"PixelHeight":              "float",
+		"PixelWidth":               "float",
+		"ReadoutTime":              "float",
+		"SensorTemperature":        "float",
+		// "TargetSensorTemperature":  "float", removed 2019-11-25, deprecated by Andorj
+
+		// enums
+		"AOIBinning":               "enum",
+		"AOILayout":                "enum",
+		"BitDepth":                 "enum",
+		"CycleMode":                "enum",
+		"ElectronicShutteringMode": "enum",
+		"FanSpeed":                 "enum",
+		"PixelEncoding":            "enum",
+		"PixelReadoutRate":         "enum",
+		"TemperatureControl":       "enum",
+		"TemperatureStatus":        "enum",
+		"TriggerMode":              "enum",
+
+		// strings
+		"CameraModel":     "string",
+		"CameraName":      "string",
+		"ControllerID":    "string",
+		"DriverVersion":   "string",
+		"FirmwareVersion": "string",
+		"InterfaceType":   "string",
+		"SerialNumber":    "string",
+	}
+)
+
 // Camera represents a camera from SDK3
 type Camera struct {
 	// buffer is written to by the SDK.

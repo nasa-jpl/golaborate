@@ -35,8 +35,8 @@ func NewHTTPWrapper(c *Camera) HTTPWrapper {
 		pat.Post("/exposure-time"): w.SetExposureTime,
 
 		// thermals
-		pat.Get("/fan-on"):                       w.GetFanOn,
-		pat.Post("/fan-on"):                      w.SetFanOn,
+		pat.Get("/fan"):                          w.GetFanOn,
+		pat.Post("/fan"):                         w.SetFanOn,
 		pat.Get("/sensor-cooling"):               w.GetCooling,
 		pat.Post("/sensor-cooling"):              w.SetCooling,
 		pat.Get("/temperature"):                  w.GetTemperature,
@@ -44,20 +44,25 @@ func NewHTTPWrapper(c *Camera) HTTPWrapper {
 		pat.Get("/temperature-setpoint"):         w.GetTemperatureSetpoint,
 		pat.Post("/temperature-setpoint"):        w.SetTemperatureSetpoint,
 		pat.Get("/temperature-status"):           w.GetTemperatureStatus,
+
+		// generic
+		pat.Get("/feature"):           w.GetFeatures,
+		pat.Get("/feature/:feature"):  w.GetFeature,
+		pat.Post("/feature/:feature"): w.SetFeature,
 	}
 	return w
 }
 
 // SetExposureTime sets the exposure time on a POST request
 func (h *HTTPWrapper) SetExposureTime(w http.ResponseWriter, r *http.Request) {
-	f := server.FloatT{}
-	err := json.NewDecoder(r.Body).Decode(&f)
+	q := r.URL.Query()
+	texp := q.Get("exposureTime")
+	d, err := time.ParseDuration(texp)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	defer r.Body.Close()
-	err = SetFloat(h.Camera.Handle, "ExposureTime", f.F64)
+	err = h.Camera.SetExposureTime(d)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -301,4 +306,153 @@ func (h *HTTPWrapper) SetFanOn(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 	return
+}
+
+// GetFeatures gets all of the possible features, mapped by their
+// type
+func (h *HTTPWrapper) GetFeatures(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
+	err := json.NewEncoder(w).Encode(Features)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+// GetFeature gets a feature, the type of which is determined by the server
+func (h *HTTPWrapper) GetFeature(w http.ResponseWriter, r *http.Request) {
+	feature := pat.Param(r, "feature")
+	typ, known := Features[feature]
+	if !known {
+		err := ErrFeatureNotFound{Feature: feature}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	switch typ {
+	case "command":
+		http.Error(w, "cannot get a command feature", http.StatusBadRequest)
+		return
+	case "int":
+		i, err := GetInt(h.Camera.Handle, feature)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		hp := server.HumanPayload{T: types.Int, Int: i}
+		hp.EncodeAndRespond(w, r)
+	case "float":
+		f, err := GetFloat(h.Camera.Handle, feature)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		hp := server.HumanPayload{T: types.Float64, Float: f}
+		hp.EncodeAndRespond(w, r)
+	case "bool":
+		b, err := GetBool(h.Camera.Handle, feature)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		hp := server.HumanPayload{T: types.Bool, Bool: b}
+		hp.EncodeAndRespond(w, r)
+	case "enum", "string":
+		var (
+			str string
+			err error
+		)
+		if typ == "enum" {
+			str, err = GetEnumString(h.Camera.Handle, feature)
+		} else {
+			str, err = GetString(h.Camera.Handle, feature)
+		}
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		hp := server.HumanPayload{T: types.String, String: str}
+		hp.EncodeAndRespond(w, r)
+	}
+}
+
+// SetFeature sets a feature, the type of which is determined by the setup
+func (h *HTTPWrapper) SetFeature(w http.ResponseWriter, r *http.Request) {
+	// the contents of this is basically identical to GetFeature
+	// but with json unmarshalling logic injected
+	feature := pat.Param(r, "feature")
+	typ, known := Features[feature]
+	if !known {
+		err := ErrFeatureNotFound{Feature: feature}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	switch typ {
+	case "command":
+		http.Error(w, "cannot set a command feature", http.StatusBadRequest)
+		return
+	case "int":
+		i := server.IntT{}
+		err := json.NewDecoder(r.Body).Decode(&i)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		defer r.Body.Close()
+		err = SetInt(h.Camera.Handle, feature, int64(i.Int))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	case "float":
+		f := server.FloatT{}
+		err := json.NewDecoder(r.Body).Decode(&f)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		defer r.Body.Close()
+		err = SetFloat(h.Camera.Handle, feature, f.F64)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	case "bool":
+		b := server.BoolT{}
+		err := json.NewDecoder(r.Body).Decode(&b)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		defer r.Body.Close()
+		err = SetBool(h.Camera.Handle, feature, b.Bool)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	case "enum", "string":
+		s := server.StrT{}
+		err := json.NewDecoder(r.Body).Decode(&s)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		defer r.Body.Close()
+		if typ == "enum" {
+			err = SetEnumString(h.Camera.Handle, feature, s.Str)
+		} else {
+			err = SetString(h.Camera.Handle, feature, s.Str)
+		}
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 }
