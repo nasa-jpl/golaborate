@@ -938,7 +938,7 @@ paths:
                   f64:
                     type: number
                     example: -25.0123
-  /ando/neo/temperature-setpoint:
+  /andor/neo/temperature-setpoint:
     get:
       description: get the current temperature setpoint of the TEC cooler
       responses:
