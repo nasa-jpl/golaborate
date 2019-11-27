@@ -124,6 +124,21 @@ var (
 	}
 )
 
+// AOI describes an area of interest on the camera
+type AOI struct {
+	// Left is the left pixel index.  1-based
+	Left int
+
+	// Top is the top pixel index.  1-based
+	Top int
+
+	// Width is the width in pixels
+	Width int
+
+	// Height is the height in pixels
+	Height int
+}
+
 // Camera represents a camera from SDK3
 type Camera struct {
 	// buffer is written to by the SDK.
@@ -146,26 +161,36 @@ type Camera struct {
 	// Handle holds the int that points to a specific camera
 	Handle int
 
-	// ExposureTime is the currently programmed exposure time.
-	ExposureTime time.Duration
+	// exposureTime is the currently programmed exposure time.
+	exposureTime time.Duration
+
+	// aoiStride is the stride of the padded data within the AOI
+	aoiStride int
+
+	// aoiWidth is the width of the AOI in pixels
+	aoiWidth int
+
+	// aoiHeight is the height of the AOI in pixels
+	aoiHeight int
+
+	// aoiLeft is the left pixel index (1-based) of the AoI
+	aoiLeft int
+
+	// aoiTop is the top pixel index (1-based) of the AOI
+	aoiTop int
+
+	// imageSizeBytes is the size of the image buffer in bytes
+	imageSizeBytes int
+
+	// sensorWidth holds the width of the sensor in pixels
+	sensorWidth int
+
+	// sensorHeight holds the height of the sensor in pixels
+	sensorHeight int
 }
 
-// Allocate creates the buffer that will be populated by the SDK
-// it should be called at init, and whenever the AOI or encoding changes
-func (c *Camera) Allocate() error {
-	sze, err := GetInt(c.Handle, "ImageSizeBytes")
-	if err != nil {
-		return err
-	}
-	c.buffer = make([]uint64, sze/8) // uint64 forces byte alignment, 8 bytes per uint64
-	c.gptr = unsafe.Pointer(&c.buffer[0])
-	c.cptr = (*C.AT_U8)(c.gptr)
-	c.cptrsize = C.int(sze)
-	return nil
-}
-
-// Open opens a connection to the camera.  camIdx 1 is the system handle,
-// start at 2 for the first camera, 3 for the second, and so forth
+// Open opens a connection to the camera.  Typically, a real camera
+// is index 0, and there are two simulator cameras at indices 1 and 2
 func Open(camIdx int) (*Camera, error) {
 	c := Camera{}
 	var hndle C.AT_H
@@ -177,6 +202,196 @@ func Open(camIdx int) (*Camera, error) {
 // Close closes a connection to the camera
 func (c *Camera) Close() error {
 	return Error(int(C.AT_Close(C.AT_H(c.Handle))))
+}
+
+// Allocate creates the buffer that will be populated by the SDK
+// it should be called at init, and whenever the AOI or encoding changes
+func (c *Camera) Allocate() error {
+	sze, err := c.ImageSizeBytes()
+	if err != nil {
+		return err
+	}
+	c.buffer = make([]uint64, sze/8) // uint64 forces byte alignment, 8 bytes per uint64
+	c.gptr = unsafe.Pointer(&c.buffer[0])
+	c.cptr = (*C.AT_U8)(c.gptr)
+	c.cptrsize = C.int(sze)
+	return nil
+}
+
+// ImageSizeBytes is the size of the image buffer in bytes.  This function
+// allows us to cache the value without going to the SDK for it.
+// Use GetInt directly if you want to guarantee there are no desync bugs.
+func (c *Camera) ImageSizeBytes() (int, error) {
+	var i int
+	var err error
+	if c.imageSizeBytes == 0 {
+		i, err = GetInt(c.Handle, "ImageSizeBytes")
+		c.imageSizeBytes = i
+	} else {
+		i = c.imageSizeBytes
+		err = nil
+	}
+	return i, err
+}
+
+// GetSensorWidth gets the width of the sensor in pixels
+func (c *Camera) GetSensorWidth() (int, error) {
+	var i int
+	var err error
+	if c.sensorWidth == 0 {
+		i, err = GetInt(c.Handle, "SensorWidth")
+		c.sensorWidth = i
+	} else {
+		i = c.sensorWidth
+		err = nil
+	}
+	return i, err
+}
+
+// GetSensorHeight gets the height of the sensor in pixels
+func (c *Camera) GetSensorHeight() (int, error) {
+	var i int
+	var err error
+	if c.sensorHeight == 0 {
+		i, err = GetInt(c.Handle, "SensorHeight")
+		c.sensorHeight = i
+	} else {
+		i = c.sensorHeight
+		err = nil
+	}
+	return i, err
+}
+// GetAOIStride is the stride of one row in the image buffer in bytes.  This
+// function allows us to cache the value without going to the SDK for it.
+// Use GetInt directly if you want to guarantee there are no desync bugs.
+func (c *Camera) GetAOIStride() (int, error) {
+	var i int
+	var err error
+	if c.aoiStride == 0 {
+		i, err = GetInt(c.Handle, "AOIStride")
+		c.aoiStride = i
+	} else {
+		i = c.aoiStride
+		err = nil
+	}
+	return i, err
+}
+
+// GetAOIWidth is the width of one row in the image buffer in pixels.  This
+// function allows us to cache the value without going to the SDK for it.
+// Use GetInt directly if you want to guarantee there are no desync bugs.
+func (c *Camera) GetAOIWidth() (int, error) {
+	var i int
+	var err error
+	if c.aoiWidth == 0 {
+		i, err = GetInt(c.Handle, "AOIWidth")
+		c.aoiWidth = i
+	} else {
+		i = c.aoiWidth
+		err = nil
+	}
+	return i, err
+}
+
+// GetAOIHeight is the height of one column in the image buffer in pixels.  This
+// function allows us to cache the value without going to the SDK for it.
+// Use GetInt directly if you want to guarantee there are no desync bugs.
+func (c *Camera) GetAOIHeight() (int, error) {
+	var i int
+	var err error
+	if c.aoiHeight == 0 {
+		i, err = GetInt(c.Handle, "AOIHeight")
+		c.aoiHeight = i
+	} else {
+		i = c.aoiHeight
+		err = nil
+	}
+	return i, err
+}
+
+func (c *Camera) GetAOILeft() (int, error) {
+	var i int
+	var err error
+	if c.aoiLeft == 0 {
+		i, err = GetInt(c.Handle, "AOILeft")
+		c.aoiLeft = i
+	} else {
+		i = c.aoiLeft
+		err = nil
+	}
+	return i, err
+}
+
+func (c *Camera) GetAOITop() (int, error) {
+	var i int
+	var err error
+	if c.aoiTop == 0 {
+		i, err = GetInt(c.Handle, "AOITop")
+		c.aoiTop = i
+	} else {
+		i = c.aoiTop
+		err = nil
+	}
+	return i, err
+}
+
+// SetAOI updates the AOI and re-allocates the buffer.  Width and height are
+// calculated from the difference of the sensor dimensions and top-left if they
+// are zero
+func (c *Camera) SetAOI(aoi AOI) (error) {
+	// top
+	err := SetInt(c.Handle, "AOITop", int64(aoi.Top))
+	if err != nil {
+		return err
+	}
+	c.aoiTop = aoi.Top
+
+	// left
+	err = SetInt(c.Handle, "AOILeft", int64(aoi.Left))
+	if err != nil {
+		return err
+	}
+	c.aoiLeft = aoi.Left
+
+	width := aoi.Width
+	if width == 0 { // if the width is zero, the width will span from left~end of chip
+		width, err := c.GetSensorWidth()
+		if err != nil {
+			return err
+		}
+		width -= c.aoiLeft
+	}
+	err = SetInt(c.Handle, "AOIWidth", int64(width))
+	if err != nil {
+		return err
+	}
+	c.aoiWidth = width
+
+	height := aoi.Height
+	if height == 0 { // if the height is zero, the height will span from top~end of chip
+		height, err := c.GetSensorHeight()
+		if err != nil {
+			return err
+		}
+		height -= c.aoiTop
+	}
+	err = SetInt(c.Handle, "AOIHeight", int64(height))
+	if err != nil {
+		return err
+	}
+	c.aoiHeight = height
+	return nil
+}
+
+// GetAOI gets the AOI
+func (c *Camera) GetAOI() (AOI, error) {
+	// no point bailing early since these will all throw the same error if
+	// they do at all
+	top, err := c.GetAOITop()
+	left, err := c.GetAOILeft()
+	width, err := c.GetAOIWidth()
+	height, err := c.GetAOIHeight()
+	return AOI{Top: top, Left: left, Width: width, Height: height}, err
 }
 
 // QueueBuffer puts the Camera's internal buffer into the write queue for the SDK
@@ -244,11 +459,23 @@ func (c *Camera) GetFrame() ([]uint16, error) {
 	if err != nil {
 		return []uint16{}, err
 	}
-	buf, err := c.BufferCopy()
+	buf, err := c.Buffer()
 	if err != nil {
 		return []uint16{}, err
 	}
-	buf, err = c.UnpadBuffer(buf)
+	stride, err := c.GetAOIStride()
+	if err != nil {
+		return []uint16{}, err
+	}
+	width, err := c.GetAOIWidth()
+	if err != nil {
+		return []uint16{}, err
+	}
+	height, err := c.GetAOIHeight()
+	if err != nil {
+		return []uint16{}, err
+	}
+	buf, err = UnpadBuffer(buf, stride, width, height)
 	if err != nil {
 		return []uint16{}, err
 	}
@@ -259,17 +486,17 @@ func (c *Camera) GetFrame() ([]uint16, error) {
 // GetExposureTime gets the current exposure time as a duration
 func (c *Camera) GetExposureTime() (time.Duration, error) {
 	var err error
-	if c.ExposureTime == time.Duration(0) { // zero value, uninitialized
+	if c.exposureTime == time.Duration(0) { // zero value, uninitialized
 		tS, err := GetFloat(c.Handle, "ExposureTime")
 		// convert to ns then round to int and make a duration
 		tNs := tS * 1e9
 		tNsI := int(mathx.Round(tNs, 0))
 		dur := time.Duration(tNsI) * time.Nanosecond
 		if err == nil {
-			c.ExposureTime = dur
+			c.exposureTime = dur
 		}
 	}
-	return c.ExposureTime, err
+	return c.exposureTime, err
 }
 
 // SetExposureTime sets the exposure time as a duration
@@ -277,7 +504,7 @@ func (c *Camera) SetExposureTime(d time.Duration) error {
 	ts := d.Seconds()
 	err := SetFloat(c.Handle, "ExposureTime", ts)
 	if err == nil {
-		c.ExposureTime = d
+		c.exposureTime = d
 	}
 	return err
 }
@@ -336,11 +563,14 @@ func (c *Camera) SetFanOn(b bool) error {
 	return SetEnumString(c.Handle, "FanSpeed", "On")
 }
 
-// BufferCopy returns a copy of the current buffer at this moment in time
-// may have undefined behavior if camera is writing while you read
+// Buffer the current buffer at this moment in time.  This is technically a copy
+// but go slices are allocated on the heap, so it only copies the header with
+// minimal performance impact.
 //
-// This is a copy, so do not do this inside of a a hot loop (e.g. running at 100fps)
-func (c *Camera) BufferCopy() ([]byte, error) {
+// may have undefined behavior if camera is writing while you read
+func (c *Camera) Buffer() ([]byte, error) {
+	// this function is needed because we use a buffer of uint64 to
+	// guarantee 8-byte alignment.  We want the underlying data
 	buf := []byte{}
 	nbytes, err := GetInt(c.Handle, "ImageSizeBytes")
 	if err != nil {
@@ -355,7 +585,7 @@ func (c *Camera) BufferCopy() ([]byte, error) {
 
 // ShutDown shuts down the camera and 'finalizes' the SDK.
 // This maintains API compatibility with SDK2
-// and is not an exact match of
+// and is not an exact match of SDK3
 func (c *Camera) ShutDown() {
 	return
 }
@@ -428,33 +658,21 @@ func JPLNeoBootup(c *Camera) error {
 }
 
 // UnpadBuffer strips padding bytes from a buffer
-func (c *Camera) UnpadBuffer(buf []byte) ([]byte, error) {
+func UnpadBuffer(buf []byte, aoistride, aoiwidth, aoiheight int) ([]byte, error) {
 	// TODO: this allocates something bigger than needed
 	// can improve performance a little bit by changing this
 	out := make([]byte, 0, len(buf))
-	stride, err := GetInt(c.Handle, "AOIStride")
-	if err != nil {
-		return out, err
-	}
-	width, err := GetInt(c.Handle, "AOIWidth")
-	if err != nil {
-		return out, err
-	}
-	height, err := GetInt(c.Handle, "AOIHeight")
-	if err != nil {
-		return out, err
-	}
 
 	// TODO: generalize this to other modes besides 16-bit
 	bidx := 0                    // byte index
 	bpp := 2                     // bytes per pixel
-	rowWidthBytes := bpp * width // width (stride) or a row in bytes
+	rowWidthBytes := bpp * aoiwidth // width (stride) or a row in bytes
 	// implicitly row major order, but seems to be from the SDK
-	for row := 0; row < height; row++ {
+	for row := 0; row < aoiheight; row++ {
 		bytes := buf[bidx : bidx+rowWidthBytes]
 		out = append(out, bytes...)
 		// finally, move
-		bidx += stride // stride is the padded stride
+		bidx += aoistride // stride is the padded stride
 	}
 	return out, nil
 }

@@ -49,6 +49,10 @@ func NewHTTPWrapper(c *Camera) HTTPWrapper {
 		pat.Get("/feature"):           w.GetFeatures,
 		pat.Get("/feature/:feature"):  w.GetFeature,
 		pat.Post("/feature/:feature"): w.SetFeature,
+
+		// AOI
+		pat.Get("/aoi"): w.GetAOI,
+		pat.Post("/aoi"): w.SetAOI,
 	}
 	return w
 }
@@ -311,8 +315,8 @@ func (h *HTTPWrapper) SetFanOn(w http.ResponseWriter, r *http.Request) {
 // GetFeatures gets all of the possible features, mapped by their
 // type
 func (h *HTTPWrapper) GetFeatures(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 	err := json.NewEncoder(w).Encode(Features)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -455,4 +459,37 @@ func (h *HTTPWrapper) SetFeature(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
+}
+
+// GetAOI gets the AOI and returns it as json over the wire
+func (h *HTTPWrapper) GetAOI(w http.ResponseWriter, r *http.Request) {
+	aoi, err := h.Camera.GetAOI()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	err = json.NewEncoder(w).Encode(aoi)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	return
+}
+
+// SetAOI sets the AOI over HTTP via json
+func (h *HTTPWrapper) SetAOI(w http.ResponseWriter, r *http.Request) {
+	aoi := AOI{}
+	err := json.NewDecoder(r.Body).Decode(&aoi)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	err = h.Camera.SetAOI(aoi)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	return
 }
