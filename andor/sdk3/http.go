@@ -2,6 +2,7 @@ package sdk3
 
 import (
 	"encoding/json"
+	"fmt"
 	"go/types"
 	"image"
 	"image/jpeg"
@@ -122,9 +123,9 @@ func (h *HTTPWrapper) GetFrame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt := q.Get("fmt")
-	if fmt == "" {
-		fmt = "jpg"
+	format := q.Get("fmt")
+	if format == "" {
+		format = "jpg"
 	}
 
 	aoi, err := h.Camera.GetAOI()
@@ -132,7 +133,7 @@ func (h *HTTPWrapper) GetFrame(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	switch fmt {
+	switch format {
 	case "jpg":
 		buf := make([]byte, len(img))
 		for idx := 0; idx < len(img); idx++ {
@@ -166,6 +167,15 @@ func (h *HTTPWrapper) GetFrame(w http.ResponseWriter, r *http.Request) {
 		temp, err := h.Camera.GetTemperature()
 
 		metaerr := fmt.Sprintf("%s", err)
+
+		now := time.Now()
+		ts := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d",
+			now.Year(),
+			now.Month(),
+			now.Day(),
+			now.Hour(),
+			now.Minute(),
+			now.Second())
 
 		fits, err := fitsio.Create(w)
 		if err != nil {
@@ -204,6 +214,9 @@ func (h *HTTPWrapper) GetFrame(w http.ResponseWriter, r *http.Request) {
 			fitsio.Card{Name: "CAMMODL", Value: cammodel, Comment: "camera model"},
 			fitsio.Card{Name: "CAMSN", Value: camsn, Comment: "camera serial number"},
 
+			// timestamp
+			fitsio.Card{Name: "DATE", Value: ts}, // timestamp is standard and does not require comment
+
 			// exposure parameters
 			fitsio.Card{Name: "EXPTIME", Value: texp.Seconds(), Comment: "exposure time, seconds"},
 
@@ -217,6 +230,8 @@ func (h *HTTPWrapper) GetFrame(w http.ResponseWriter, r *http.Request) {
 			fitsio.Card{Name: "AOITop", Value: aoi.Top, Comment: "1-based top pixel of the AOI"},
 			fitsio.Card{Name: "AOIWidth", Value: aoi.Width, Comment: "AOI width, px"},
 			fitsio.Card{Name: "AOIHeight", Value: aoi.Height, Comment: "AOI height, px"},
+
+			// needed for uint16 encoding
 			fitsio.Card{Name: "BZERO", Value: 32768},
 			fitsio.Card{Name: "BSCALE", Value: 1.0},
 		)
