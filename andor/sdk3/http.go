@@ -51,7 +51,7 @@ func NewHTTPWrapper(c *Camera) HTTPWrapper {
 		pat.Post("/feature/:feature"): w.SetFeature,
 
 		// AOI
-		pat.Get("/aoi"): w.GetAOI,
+		pat.Get("/aoi"):  w.GetAOI,
 		pat.Post("/aoi"): w.SetAOI,
 	}
 	return w
@@ -165,7 +165,7 @@ func (h *HTTPWrapper) GetFrame(w http.ResponseWriter, r *http.Request) {
 		tstat, err := h.Camera.GetTemperatureStatus()
 		temp, err := h.Camera.GetTemperature()
 
-
+		metaerr := fmt.Sprintf("%s", err)
 
 		fits, err := fitsio.Create(w)
 		if err != nil {
@@ -177,22 +177,22 @@ func (h *HTTPWrapper) GetFrame(w http.ResponseWriter, r *http.Request) {
 		defer im.Close()
 		err = im.Header().Append(
 			/* andor-http header format includes:
-				- header format tag
-				- go-hcit andor version
-				- sdk software version
-				- driver version
-				- camera firmware version
+			- header format tag
+			- go-hcit andor version
+			- sdk software version
+			- driver version
+			- camera firmware version
 
-				- camera model
-				- camera serial number
+			- camera model
+			- camera serial number
 
-				- aoi top, left, top, bottom
-				- binning
+			- aoi top, left, top, bottom
+			- binning
 
-				- fan on/off
-				- thermal setpoint
-				- thermal status
-				- fpa temperature
+			- fan on/off
+			- thermal setpoint
+			- thermal status
+			- fpa temperature
 			*/
 			// header to the header
 			fitsio.Card{Name: "HDRVER", Value: "2", Comment: "header version"},
@@ -200,8 +200,9 @@ func (h *HTTPWrapper) GetFrame(w http.ResponseWriter, r *http.Request) {
 			fitsio.Card{Name: "SDKVER", Value: sdkver, Comment: "sdk version"},
 			fitsio.Card{Name: "DRVVER", Value: drvver, Comment: "driver version"},
 			fitsio.Card{Name: "FIRMVER", Value: firmver, Comment: "camera firmware version"},
+			fitsio.Card{Name: "METAERR", Value: metaerr, Comment: "error encountered gathering metadata"},
 			fitsio.Card{Name: "CAMMODL", Value: cammodel, Comment: "camera model"},
-			fitsio.Card{Name: "CAMSN", Value: camsn, Comment:  "camera serial number"},
+			fitsio.Card{Name: "CAMSN", Value: camsn, Comment: "camera serial number"},
 
 			// exposure parameters
 			fitsio.Card{Name: "EXPTIME", Value: texp.Seconds(), Comment: "exposure time, seconds"},
@@ -346,7 +347,7 @@ func (h *HTTPWrapper) GetTemperatureStatus(w http.ResponseWriter, r *http.Reques
 	return
 }
 
-// GetFanOn gets if the fan is currently running over HTTP
+// GetFan gets if the fan is currently running over HTTP
 func (h *HTTPWrapper) GetFan(w http.ResponseWriter, r *http.Request) {
 	on, err := h.Camera.GetFan()
 	if err != nil {
@@ -358,7 +359,7 @@ func (h *HTTPWrapper) GetFan(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-// SetFanOn sets the fan operation over HTTP
+// SetFan sets the fan operation over HTTP
 func (h *HTTPWrapper) SetFan(w http.ResponseWriter, r *http.Request) {
 	b := server.BoolT{}
 	err := json.NewDecoder(r.Body).Decode(&b)
