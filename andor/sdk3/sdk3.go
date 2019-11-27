@@ -537,15 +537,7 @@ func (c *Camera) GetFrame() ([]uint16, error) {
 	if err != nil {
 		return []uint16{}, err
 	}
-	// wait a multiple of the shutter time, or a fixed time if that is too short for the SDK to be stable
-	minWait := 100 * time.Millisecond
-	Wait := minWait
-
-	calcWait := expT * 3
-	if calcWait > Wait {
-		Wait = calcWait
-	}
-	err = c.WaitBuffer(Wait)
+	err = c.WaitBuffer(expT + 1*time.Second)
 	if err != nil {
 		return []uint16{}, err
 	}
