@@ -21,7 +21,7 @@ var (
 	ErrBufferNotOnQueue = errors.New("no buffer placed on queue, this error saves you from memory corruption")
 
 	// ErrCodes is a map of error codes (ints) to error strings
-	ErrCodes = map[DRVError]string{
+	ErrCodes = map[int]string{
 		0:  "AT_SUCCESS",
 		1:  "AT_ERR_NOT_INITIALISED", // added _ after NOT
 		2:  "AT_ERR_NOT_IMPLEMENTED",
@@ -68,13 +68,28 @@ var (
 )
 
 // DRVError represents a driver error
-type DRVError int
+type DRVError struct {
+	// code is a member of ErrCodes
+	code int
 
+	// Feature is a string that helps us understand where the error was generated
+	// it may not actually be a feature, but almost always will be.
+	feature string
+}
+
+// Error satisfies the error interface
 func (e DRVError) Error() string {
-	if s, ok := ErrCodes[e]; ok {
-		return fmt.Sprintf("%d - %s", e, s)
+	var err string
+	if s, ok := ErrCodes[e.code]; ok {
+		err = fmt.Sprintf("%d - %s", e.code, s)
+	} else {
+		err = fmt.Sprintf("%v - UNKNOWN_ERROR_CODE", e)
+
 	}
-	return fmt.Sprintf("%v - UNKNOWN_ERROR_CODE", e)
+	if e.feature != "" {
+		err = fmt.Sprintf("%s [%s]", err, e.feature)
+	}
+	return err
 }
 
 // Error returns nil on beneign error codes or returns an error object on non-beneign ones
@@ -82,7 +97,19 @@ func Error(code int) error {
 	if code == 0 {
 		return nil
 	}
-	return DRVError(code)
+	return DRVError{code: code}
+}
+
+// enrich populates feature on a DRVError, or is a no-op for a nil
+func enrich(e error, s string) error {
+	if e == nil {
+		return nil
+	}
+	err, ok := e.(DRVError)
+	if !ok {
+		return fmt.Errorf("error passed to enrich not nil or DRVError, T: %T", e)
+	}
+	return DRVError{code: err.code, feature: s}
 }
 
 func boolToAT(b bool) C.AT_BOOL {
@@ -128,7 +155,7 @@ func SetInt(handle int, feature string, val int64) error {
 		return err
 	}
 	str := (*C.AT_WC)(cstr.Pointer())
-	return Error(int(C.AT_SetInt(C.AT_H(handle), str, C.AT_64(val))))
+	return enrich(Error(int(C.AT_SetInt(C.AT_H(handle), str, C.AT_64(val)))), feature)
 }
 
 // GetInt gets an integer
@@ -140,7 +167,7 @@ func GetInt(handle int, feature string) (int, error) {
 	str := (*C.AT_WC)(cstr.Pointer())
 	var out C.AT_64
 	errCode := int(C.AT_GetInt(C.AT_H(handle), str, &out))
-	return int(out), Error(errCode)
+	return int(out), enrich(Error(errCode), feature)
 }
 
 // GetIntMax gets the max value an integer can be set to
@@ -154,7 +181,7 @@ func GetIntMax(handle int, feature string) (int, error) {
 
 	var out C.AT_64
 	errCode := int(C.AT_GetIntMax(C.AT_H(handle), str, &out))
-	return int(out), Error(errCode)
+	return int(out), enrich(Error(errCode), feature)
 }
 
 // GetIntMin gets the min value an integer can be set to
@@ -168,7 +195,7 @@ func GetIntMin(handle int, feature string) (int, error) {
 
 	var out C.AT_64
 	errCode := int(C.AT_GetIntMin(C.AT_H(handle), str, &out))
-	return int(out), Error(errCode)
+	return int(out), enrich(Error(errCode), feature)
 }
 
 // SetFloat sets a floating point value
@@ -179,7 +206,7 @@ func SetFloat(handle int, feature string, value float64) error {
 	}
 	str := (*C.AT_WC)(cstr.Pointer())
 
-	return Error(int(C.AT_SetFloat(C.AT_H(handle), str, C.double(value))))
+	return enrich(Error(int(C.AT_SetFloat(C.AT_H(handle), str, C.double(value)))), feature)
 }
 
 // GetFloat gets a floating point value
@@ -192,7 +219,7 @@ func GetFloat(handle int, feature string) (float64, error) {
 
 	var out C.double
 	errCode := int(C.AT_GetFloat(C.AT_H(handle), str, &out))
-	return float64(out), Error(errCode)
+	return float64(out), enrich(Error(errCode), feature)
 }
 
 // GetFloatMax gets the maximum of a floating point value
@@ -206,7 +233,7 @@ func GetFloatMax(handle int, feature string) (float64, error) {
 
 	var out C.double
 	errCode := int(C.AT_GetFloatMax(C.AT_H(handle), str, &out))
-	return float64(out), Error(errCode)
+	return float64(out), enrich(Error(errCode), feature)
 }
 
 // GetFloatMin gets the minimum of a floating point value
@@ -220,7 +247,7 @@ func GetFloatMin(handle int, feature string) (float64, error) {
 
 	var out C.double
 	errCode := int(C.AT_GetFloatMin(C.AT_H(handle), str, &out))
-	return float64(out), Error(errCode)
+	return float64(out), enrich(Error(errCode), feature)
 }
 
 // SetBool sets a boolean feature
@@ -231,7 +258,7 @@ func SetBool(handle int, feature string, tru bool) error {
 		return err
 	}
 	str := (*C.AT_WC)(cstr.Pointer())
-	return Error(int(C.AT_SetBool(C.AT_H(handle), str, boolToAT(tru))))
+	return enrich(Error(int(C.AT_SetBool(C.AT_H(handle), str, boolToAT(tru)))), feature)
 }
 
 // GetBool gets the value of a boolean feature
@@ -244,7 +271,7 @@ func GetBool(handle int, feature string) (bool, error) {
 	str := (*C.AT_WC)(cstr.Pointer())
 	var b C.AT_BOOL
 	errCode := int(C.AT_GetBool(C.AT_H(handle), str, &b))
-	return atToBool(b), Error(errCode)
+	return atToBool(b), enrich(Error(errCode), feature)
 }
 
 // SetString sets the value of a string
@@ -261,7 +288,7 @@ func SetString(handle int, feature, value string) error {
 	}
 	valstr := (*C.AT_WC)(cstr.Pointer())
 
-	return Error(int(C.AT_SetString(C.AT_H(handle), featstr, valstr)))
+	return enrich(Error(int(C.AT_SetString(C.AT_H(handle), featstr, valstr))), feature)
 }
 
 // GetStringMaxLength returns the length of a string, use this to determine how big
@@ -275,7 +302,7 @@ func GetStringMaxLength(handle int, feature string) (int, error) {
 
 	var len C.int
 	errCode := int(C.AT_GetStringMaxLength(C.AT_H(handle), str, &len))
-	return int(len), Error(errCode)
+	return int(len), enrich(Error(errCode), feature)
 }
 
 // GetString returns the string value of a feature
@@ -301,7 +328,7 @@ func GetString(handle int, feature string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return str, Error(errCode)
+	return str, enrich(Error(errCode), feature)
 }
 
 // GetEnumIndex gets the currently selected index into the enum behind feature
@@ -313,7 +340,7 @@ func GetEnumIndex(handle int, feature string) (int, error) {
 	strc := (*C.AT_WC)(cstr.Pointer())
 	var out C.int
 	errCode := int(C.AT_GetEnumIndex(C.AT_H(handle), strc, &out))
-	return int(out), Error(errCode)
+	return int(out), enrich(Error(errCode), feature)
 }
 
 // GetEnumCount gets the number of items in the enum behind a feature
@@ -326,7 +353,7 @@ func GetEnumCount(handle int, feature string) (int, error) {
 	strc := (*C.AT_WC)(cstr.Pointer())
 	var out C.int
 	errCode := int(C.AT_GetEnumCount(C.AT_H(handle), strc, &out))
-	return int(out), Error(errCode)
+	return int(out), enrich(Error(errCode), feature)
 }
 
 // GetEnumStringByIndex gets the string value of an enum at a given index
@@ -348,7 +375,7 @@ func GetEnumStringByIndex(handle int, feature string, idx int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return gostr, Error(errCode)
+	return gostr, enrich(Error(errCode), feature)
 }
 
 // GetEnumStrings gets the string values that are valid for an enum
@@ -376,7 +403,7 @@ func SetEnumIndex(handle int, feature string, idx int) error {
 	}
 	strc := (*C.AT_WC)(cstr.Pointer())
 	errCode := int(C.AT_SetEnumIndex(C.AT_H(handle), strc, C.int(idx)))
-	return Error(errCode)
+	return enrich(Error(errCode), feature)
 }
 
 // GetEnumString gets the string value of an enum.
@@ -404,7 +431,7 @@ func SetEnumString(handle int, feature, value string) error {
 	}
 	strb := (*C.AT_WC)(cstr2.Pointer())
 	errCode := int(C.AT_SetEnumString(C.AT_H(handle), strc, strb))
-	return Error(errCode)
+	return enrich(Error(errCode), feature)
 }
 
 // IssueCommand sends a command to the SDK
@@ -414,5 +441,5 @@ func IssueCommand(handle int, feature string) error {
 		return err
 	}
 	strc := (*C.AT_WC)(cstr.Pointer())
-	return Error(int(C.AT_Command(C.AT_H(handle), strc)))
+	return enrich(Error(int(C.AT_Command(C.AT_H(handle), strc))), feature)
 }

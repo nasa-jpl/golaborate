@@ -213,14 +213,14 @@ type Camera struct {
 func Open(camIdx int) (*Camera, error) {
 	c := Camera{}
 	var hndle C.AT_H
-	err := Error(int(C.AT_Open(C.int(camIdx), &hndle)))
+	err := enrich(Error(int(C.AT_Open(C.int(camIdx), &hndle))), "AT_OPEN")
 	c.Handle = int(hndle)
 	return &c, err
 }
 
 // Close closes a connection to the camera
 func (c *Camera) Close() error {
-	return Error(int(C.AT_Close(C.AT_H(c.Handle))))
+	return enrich(Error(int(C.AT_Close(C.AT_H(c.Handle)))), "AT_CLOSE")
 }
 
 // Allocate creates the buffer that will be populated by the SDK
@@ -280,6 +280,7 @@ func (c *Camera) GetSensorHeight() (int, error) {
 	}
 	return i, err
 }
+
 // GetAOIStride is the stride of one row in the image buffer in bytes.  This
 // function allows us to cache the value without going to the SDK for it.
 // Use GetInt directly if you want to guarantee there are no desync bugs.
@@ -328,6 +329,7 @@ func (c *Camera) GetAOIHeight() (int, error) {
 	return i, err
 }
 
+// GetAOILeft gets the left pixel of the AOI.  Starts at 1.
 func (c *Camera) GetAOILeft() (int, error) {
 	var i int
 	var err error
@@ -341,6 +343,7 @@ func (c *Camera) GetAOILeft() (int, error) {
 	return i, err
 }
 
+// GetAOITop gets the top pixel index of the AOI.  Starts at 1.
 func (c *Camera) GetAOITop() (int, error) {
 	var i int
 	var err error
@@ -357,7 +360,7 @@ func (c *Camera) GetAOITop() (int, error) {
 // SetAOI updates the AOI and re-allocates the buffer.  Width and height are
 // calculated from the difference of the sensor dimensions and top-left if they
 // are zero
-func (c *Camera) SetAOI(aoi AOI) (error) {
+func (c *Camera) SetAOI(aoi AOI) error {
 	// top
 	err := SetInt(c.Handle, "AOITop", int64(aoi.Top))
 	if err != nil {
@@ -484,6 +487,7 @@ func (c *Camera) GetSerialNumber() (string, error) {
 	}
 	return serial, err
 }
+
 // QueueBuffer puts the Camera's internal buffer into the write queue for the SDK
 // only one buffer is supported in this wrapper, though the SDK supports
 // multiple buffers
@@ -754,8 +758,8 @@ func UnpadBuffer(buf []byte, aoistride, aoiwidth, aoiheight int) ([]byte, error)
 	out := make([]byte, 0, len(buf))
 
 	// TODO: generalize this to other modes besides 16-bit
-	bidx := 0                    // byte index
-	bpp := 2                     // bytes per pixel
+	bidx := 0                       // byte index
+	bpp := 2                        // bytes per pixel
 	rowWidthBytes := bpp * aoiwidth // width (stride) or a row in bytes
 	// implicitly row major order, but seems to be from the SDK
 	for row := 0; row < aoiheight; row++ {
