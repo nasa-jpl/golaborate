@@ -18,13 +18,9 @@ type ObjSetup struct {
 	// on a digi portserver
 	Addr string `yaml:"addr"`
 
-	// URL is the slash-concatenation of the network node and any custom "folder" for the device to live in
-	//
-	// for example, URL: /omc/nkt will map to OMC in the network, and make a new mux called "nkt" that these
-	// routes bind to.
-	//
-	// If no slash is present, a new submux will not be created
-	URL string `yaml:"stem"`
+	// URL is the full path the routes from this device will be served on
+	// ex. URL="/omc/nkt" will produce routes of /omc/nkt/power, etc.
+	URL string `yaml:"endpoint"`
 
 	// Endpt is the final "directory" to put object functionality under, it will be
 	// prepended to routes
