@@ -75,6 +75,8 @@ import (
 	"fmt"
 	"time"
 	"unsafe"
+
+	"github.jpl.nasa.gov/HCIT/go-hcit/util"
 )
 
 // AcquisitionMode represents a mode of acquisition to the camera.
@@ -422,21 +424,10 @@ func (e DRVError) Error() string {
 	return fmt.Sprintf("%v - UNKNOWN_ERROR_CODE", e)
 }
 
-// uintSliceContains returns true if value is in slice, otherwise false
-func uintSliceContains(slice []uint, value uint) bool {
-	ret := false
-	for _, cmpV := range slice {
-		if value == cmpV {
-			ret = true
-		}
-	}
-	return ret
-}
-
 // Error returns nil if the error code is beneign, otherwise returns
 // an object which prints the error code and string value
 func Error(code uint) error {
-	if uintSliceContains(BeneignErrorCodes, code) {
+	if util.UintSliceContains(BeneignErrorCodes, code) {
 		return nil
 	}
 	return DRVError(code)
