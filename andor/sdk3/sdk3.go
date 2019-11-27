@@ -25,6 +25,10 @@ const (
 	// string when we have no way of knowing ahead of time how big it is
 	// it is measured in Wchars
 	LengthOfUndefinedBuffers = 255
+
+	// WRAPVER is the andor wrapper code version.
+	// Incremement this when pkg sdk3 is updated.
+	WRAPVER = 2
 )
 
 // ErrFeatureNotFound is generated when a feature is looked up in the Features
@@ -187,6 +191,21 @@ type Camera struct {
 
 	// sensorHeight holds the height of the sensor in pixels
 	sensorHeight int
+
+	// sdkver holds the sdk version
+	sdkver string
+
+	// fwver holds the firmware version
+	fwver string
+
+	// drvver holds the driver version
+	drvver string
+
+	// model holds the model number
+	model string
+
+	// serial holds the serial number
+	serial string
 }
 
 // Open opens a connection to the camera.  Typically, a real camera
@@ -380,7 +399,9 @@ func (c *Camera) SetAOI(aoi AOI) (error) {
 		return err
 	}
 	c.aoiHeight = height
-	return nil
+
+	err = c.Allocate()
+	return err
 }
 
 // GetAOI gets the AOI
@@ -394,6 +415,75 @@ func (c *Camera) GetAOI() (AOI, error) {
 	return AOI{Top: top, Left: left, Width: width, Height: height}, err
 }
 
+// GetSDKVersion gets the software version of the SDK
+func (c *Camera) GetSDKVersion() (string, error) {
+	var s string
+	var err error
+	if c.sdkver == "" {
+		s, err = SoftwareVersion()
+		c.sdkver = s
+	} else {
+		s = c.sdkver
+		err = nil
+	}
+	return s, err
+}
+
+// GetFirmwareVersion gets the firmware version of the camera
+func (c *Camera) GetFirmwareVersion() (string, error) {
+	var s string
+	var err error
+	if c.fwver == "" {
+		s, err = GetString(c.Handle, "FirmwareVersion")
+		c.fwver = s
+	} else {
+		s = c.fwver
+		err = nil
+	}
+	return s, err
+}
+
+// GetDriverVersion gets the software version of the SDK
+func (c *Camera) GetDriverVersion() (string, error) {
+	var s string
+	var err error
+	if c.drvver == "" {
+		s, err = GetString(c.Handle, "DriverVersion")
+		c.drvver = s
+	} else {
+		s = c.drvver
+		err = nil
+	}
+	return s, err
+}
+
+// GetModel returns the model string
+func (c *Camera) GetModel() (string, error) {
+	var model string
+	var err error
+	if c.model == "" {
+		model, err = GetString(c.Handle, "CameraModel")
+		c.model = model
+	} else {
+		model = c.model
+		err = nil
+	}
+	return model, err
+}
+
+// GetSerialNumber return the serial number
+func (c *Camera) GetSerialNumber() (string, error) {
+	var serial string
+	var err error
+	if c.serial == "" {
+		serial, err = GetString(c.Handle, "SerialNumber")
+		c.serial = serial
+	} else {
+		serial = c.serial
+		err = nil
+	}
+	return serial, err
+}
 // QueueBuffer puts the Camera's internal buffer into the write queue for the SDK
 // only one buffer is supported in this wrapper, though the SDK supports
 // multiple buffers
@@ -552,14 +642,14 @@ func (c *Camera) GetTemperatureStatus() (string, error) {
 	return GetEnumString(c.Handle, "TemperatureStatus")
 }
 
-// GetFanOn gets if the fan is currently on
-func (c *Camera) GetFanOn() (bool, error) {
+// GetFan gets if the fan is currently on
+func (c *Camera) GetFan() (bool, error) {
 	speed, err := GetEnumString(c.Handle, "FanSpeed")
 	return speed == "Off", err
 }
 
-// SetFanOn sets the fan on or off
-func (c *Camera) SetFanOn(b bool) error {
+// SetFan sets the fan on or off
+func (c *Camera) SetFan(b bool) error {
 	return SetEnumString(c.Handle, "FanSpeed", "On")
 }
 

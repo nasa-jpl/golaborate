@@ -35,8 +35,8 @@ func NewHTTPWrapper(c *Camera) HTTPWrapper {
 		pat.Post("/exposure-time"): w.SetExposureTime,
 
 		// thermals
-		pat.Get("/fan"):                          w.GetFanOn,
-		pat.Post("/fan"):                         w.SetFanOn,
+		pat.Get("/fan"):                          w.GetFan,
+		pat.Post("/fan"):                         w.SetFan,
 		pat.Get("/sensor-cooling"):               w.GetCooling,
 		pat.Post("/sensor-cooling"):              w.SetCooling,
 		pat.Get("/temperature"):                  w.GetTemperature,
@@ -126,33 +126,96 @@ func (h *HTTPWrapper) GetFrame(w http.ResponseWriter, r *http.Request) {
 	if fmt == "" {
 		fmt = "jpg"
 	}
+
+	aoi, err := h.Camera.GetAOI()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	switch fmt {
 	case "jpg":
 		buf := make([]byte, len(img))
 		for idx := 0; idx < len(img); idx++ {
 			buf[idx] = byte(img[idx] / 256) // scale 16 to 8 bits
 		}
-		im := &image.Gray{Pix: buf, Stride: 2560, Rect: image.Rect(0, 0, 2560, 2160)}
+		im := &image.Gray{Pix: buf, Stride: aoi.Width, Rect: image.Rect(0, 0, aoi.Width, aoi.Height)}
 		w.Header().Set("Content-Type", "image/jpeg")
+		w.WriteHeader(http.StatusOK)
 		jpeg.Encode(w, im, nil)
 	case "png":
 		buf := make([]byte, len(img))
 		for idx := 0; idx < len(img); idx++ {
 			buf[idx] = byte(img[idx] / 256) // scale 16 to 8 bits
 		}
-		im := &image.Gray{Pix: buf, Stride: 2560, Rect: image.Rect(0, 0, 2560, 2160)}
+		im := &image.Gray{Pix: buf, Stride: aoi.Width, Rect: image.Rect(0, 0, aoi.Width, aoi.Height)}
 		w.Header().Set("Content-Type", "image/png")
+		w.WriteHeader(http.StatusOK)
 		png.Encode(w, im)
 	case "fits":
+		// grab all the shit we care about from the camera so we can fill out the header
+		// plow through errors, no need to bail early
+		texp, err := h.Camera.GetExposureTime()
+		sdkver, err := h.Camera.GetSDKVersion()
+		drvver, err := h.Camera.GetDriverVersion()
+		firmver, err := h.Camera.GetFirmwareVersion()
+		cammodel, err := h.Camera.GetModel()
+		camsn, err := h.Camera.GetSerialNumber()
+		fan, err := h.Camera.GetFan()
+		tsetpt, err := h.Camera.GetTemperatureSetpoint()
+		tstat, err := h.Camera.GetTemperatureStatus()
+		temp, err := h.Camera.GetTemperature()
+
+
+
 		fits, err := fitsio.Create(w)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		defer fits.Close()
-		im := fitsio.NewImage(16, []int{2560, 2160})
+		im := fitsio.NewImage(16, []int{aoi.Width, aoi.Height})
 		defer im.Close()
 		err = im.Header().Append(
+			/* andor-http header format includes:
+				- header format tag
+				- go-hcit andor version
+				- sdk software version
+				- driver version
+				- camera firmware version
+
+				- camera model
+				- camera serial number
+
+				- aoi top, left, top, bottom
+				- binning
+
+				- fan on/off
+				- thermal setpoint
+				- thermal status
+				- fpa temperature
+			*/
+			// header to the header
+			fitsio.Card{Name: "HDRVER", Value: "2", Comment: "header version"},
+			fitsio.Card{Name: "WRAPVER", Value: WRAPVER, Comment: "server library code version"},
+			fitsio.Card{Name: "SDKVER", Value: sdkver, Comment: "sdk version"},
+			fitsio.Card{Name: "DRVVER", Value: drvver, Comment: "driver version"},
+			fitsio.Card{Name: "FIRMVER", Value: firmver, Comment: "camera firmware version"},
+			fitsio.Card{Name: "CAMMODL", Value: cammodel, Comment: "camera model"},
+			fitsio.Card{Name: "CAMSN", Value: camsn, Comment:  "camera serial number"},
+
+			// exposure parameters
+			fitsio.Card{Name: "EXPTIME", Value: texp.Seconds(), Comment: "exposure time, seconds"},
+
+			// thermal parameters
+			fitsio.Card{Name: "FAN", Value: fan, Comment: "on (true) or off"},
+			fitsio.Card{Name: "TEMPSETP", Value: tsetpt, Comment: "Temperature setpoint"},
+			fitsio.Card{Name: "TEMPSTAT", Value: tstat, Comment: "TEC status"},
+			fitsio.Card{Name: "TEMPER", Value: temp, Comment: "FPA temperature (Celcius)"},
+			// aoi parameters
+			fitsio.Card{Name: "AOILeft", Value: aoi.Left, Comment: "1-based left pixel of the AOI"},
+			fitsio.Card{Name: "AOITop", Value: aoi.Top, Comment: "1-based top pixel of the AOI"},
+			fitsio.Card{Name: "AOIWidth", Value: aoi.Width, Comment: "AOI width, px"},
+			fitsio.Card{Name: "AOIHeight", Value: aoi.Height, Comment: "AOI height, px"},
 			fitsio.Card{Name: "BZERO", Value: 32768},
 			fitsio.Card{Name: "BSCALE", Value: 1.0},
 		)
@@ -163,6 +226,7 @@ func (h *HTTPWrapper) GetFrame(w http.ResponseWriter, r *http.Request) {
 		hdr := w.Header()
 		hdr.Set("Content-Type", "image/fits")
 		hdr.Set("Content-Disposition", "attachment; filename=image.fits")
+		w.WriteHeader(http.StatusOK)
 		buf := make([]int16, len(img))
 		for idx := 0; idx < len(img); idx++ {
 			// scale uint16 to int16.  Underflow on uint16 produces the appropriate wrapping for the FITS standard
@@ -283,8 +347,8 @@ func (h *HTTPWrapper) GetTemperatureStatus(w http.ResponseWriter, r *http.Reques
 }
 
 // GetFanOn gets if the fan is currently running over HTTP
-func (h *HTTPWrapper) GetFanOn(w http.ResponseWriter, r *http.Request) {
-	on, err := h.Camera.GetFanOn()
+func (h *HTTPWrapper) GetFan(w http.ResponseWriter, r *http.Request) {
+	on, err := h.Camera.GetFan()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -295,7 +359,7 @@ func (h *HTTPWrapper) GetFanOn(w http.ResponseWriter, r *http.Request) {
 }
 
 // SetFanOn sets the fan operation over HTTP
-func (h *HTTPWrapper) SetFanOn(w http.ResponseWriter, r *http.Request) {
+func (h *HTTPWrapper) SetFan(w http.ResponseWriter, r *http.Request) {
 	b := server.BoolT{}
 	err := json.NewDecoder(r.Body).Decode(&b)
 	if err != nil {
@@ -303,7 +367,7 @@ func (h *HTTPWrapper) SetFanOn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer r.Body.Close()
-	err = h.Camera.SetFanOn(b.Bool)
+	err = h.Camera.SetFan(b.Bool)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
