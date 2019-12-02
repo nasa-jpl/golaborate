@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
-	"github.jpl.nasa.gov/HCIT/go-hcit/server"
 	"github.jpl.nasa.gov/HCIT/go-hcit/util"
 )
 
@@ -167,18 +166,12 @@ the way they are used in most other motion controllers, which is a shame.
 */
 type XPS struct {
 	*comm.RemoteDevice
-	server.Server
 }
 
 // NewXPS makes a new XPS instance
-func NewXPS(addr, urlStem string) *XPS {
+func NewXPS(addr string) *XPS {
 	rd := comm.NewRemoteDevice(addr, false, nil, makeSerConf(addr))
-	srv := server.NewServer(urlStem)
-	xps := XPS{RemoteDevice: &rd}
-	srv.RouteTable["simple-pos-abs"] = xps.HTTPPos
-	srv.RouteTable["simple-home"] = xps.HTTPHome
-	xps.Server = srv
-	return &xps
+	return &XPS{RemoteDevice: &rd}
 }
 
 // GroupMoveAbsolute moves a group to an absolute position
