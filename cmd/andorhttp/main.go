@@ -16,7 +16,21 @@ import (
 	_ "net/http/pprof"
 )
 
+var (
+	// Version is the version number.  Typically injected via ldflags with git build
+	Version = "dev"
+)
+
 func main() {
+	var cmd string
+	args := os.Args
+	if len(args) == 1 {
+		// no args given, print help
+	} else {
+		cmd = args[1]
+		fmt.Println(cmd)
+		return
+	}
 	err := sdk3.InitializeLibrary()
 	if err != nil {
 		return
@@ -60,7 +74,7 @@ func main() {
 
 	w := sdk3.NewHTTPWrapper(c)
 	mux := goji.NewMux()
-	w.RouteTable.Bind(mux)
+	w.RT().Bind(mux)
 	mux.HandleFunc(pat.New("/debug/pprof/"), pprof.Index)
 	mux.HandleFunc(pat.New("/debug/pprof/cmdline"), pprof.Cmdline)
 	mux.HandleFunc(pat.New("/debug/pprof/profile"), pprof.Profile)

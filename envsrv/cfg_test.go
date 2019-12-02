@@ -1,6 +1,9 @@
 package envsrv
 
-import "testing"
+import (
+	"net/http"
+	"testing"
+)
 
 func TestGojiRoutesBuiltProperly(t *testing.T) {
 	routes := []Node{
@@ -11,4 +14,8 @@ func TestGojiRoutesBuiltProperly(t *testing.T) {
 		Node{Name: "env", Parent: "omc"},
 		Node{Name: "vacuum", Parent: "env"},
 	}
+
+	mux := BuildNetwork()
+
+	req, _ := http.NewRequest("GET", "/omc/env/vacuum")
 }

@@ -1,34 +1,58 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 
-	//gp "github.jpl.nasa.gov/HCIT/go-hcit/granvillephillips"
-	// "github.jpl.nasa.gov/HCIT/go-hcit/omega"
-	"github.jpl.nasa.gov/HCIT/go-hcit/fluke"
-	lw "github.jpl.nasa.gov/HCIT/go-hcit/ixllightwave"
-	"github.jpl.nasa.gov/HCIT/go-hcit/lesker"
+	"github.jpl.nasa.gov/HCIT/go-hcit/envsrv"
+	"goji.io"
+)
+
+const (
+	helpBlurb = `
+Usage: envsrv [CONFIGPATH]
+Example:
+envsrv cfg.yaml
+cat cfg.yaml
+Flukes:
+  - addr: "192.168.100.71"
+    url: /zygo-bench
+
+NKTs:
+  - addr: "192.168.100.40:2106"
+    url: /omc/nkt
+
+IXLLightwaves:
+  - addr: "192.168.100.40:2106"
+    url: /omc/ixl-diode
+
+Leskers:
+  - addr: "192.168.100.187:2113"
+    url: /dst/lesker
+
+  GPConvectrons:
+  - addr: "192.168.100.41:2106"
+    url: /dst/convectron
+
+envsrv cfg.yaml
+`
 )
 
 func main() {
-	// pressureGauge, err := gp.NewGuage("/dev/ttyUSB3")
-	// pressureGauge, err := lesker.NewGauge("/dev/ttyUSB5")
-	// pressureGauge, err := omega.NewMeter("/dev/ttyUSB4")
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	if len(os.Args) == 1 || os.Args[1] == "help" {
+		fmt.Println(helpBlurb)
+		return
+	}
+	cfg, err := envsrv.LoadYaml(arg)
+	if err != nil {
+		panic(err)
+	}
+	mainframe := envsrv.SetupDevices(cfg)
+	mux := goji.NewMux()
+	mainframe.BindRoutes(mux)
 
-	// bind the IXL lightwave
-	ldc := lw.LDC3916{Addr: "192.168.100.40:2106"}
-	ldc.BindRoutes("/ldc")
-
-	// bind the Zygo
-	zygobench := fluke.DewK{Addr: "192.168.100.71", Conntype: "TCP", Name: "Zygo bench"}
-	zygobench.BindRoutes("/zygo-bench")
-
-	// bind the lesker
-	pgauge := lesker.NewSensor("192.168.100.187:2113", "TCP")
-	pgauge.BindRoutes("/dst")
-	log.Fatal(http.ListenAndServe("localhost:8080", nil))
+	log.Println("envsrv started bound to :8080")
+	log.Fatal(http.ListenAndServe(":8080", mux))
 }

@@ -21,28 +21,35 @@ But you may build your own binary after installing go-hcit and its dependencies,
 
 # usage
 
-To use the server, make a config file that looks similar to this snippet:
+To use the server, make a config file that looks similar to the snippet given in the help file:
+
+```sh
+./ envsrv help
+```
+
+... produces text and ...
 
 ```yaml
 Flukes:
-  - addr: 192.168.100.71
+  - addr: "192.168.100.71"
     url: /zygo-bench
 
 NKTs:
-  - addr: 192.168.100.40:2106
+  - addr: "192.168.100.40:2106"
     url: /omc/nkt
 
 IXLLightwaves:
-  - addr: 192.168.100.40:2106
+  - addr: "192.168.100.40:2106"
     url: /omc/ixl-diode
 
 Leskers:
-  - addr: 192.168.100.187:2113
+  - addr: "192.168.100.187:2113"
     url: /dst/lesker
 
 GPConvectrons:
-  - addr: 192.168.100.41:2106
+  - addr: "192.168.100.41:2106"
     url: /dst/convectron
+
 
 # ... etc
 ```
