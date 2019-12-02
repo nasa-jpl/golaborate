@@ -59,6 +59,10 @@ func NewHTTPWrapper(c *Camera) HTTPWrapper {
 	return w
 }
 
+func (h *HTTPWrapper) RT() server.RouteTable {
+	return h.RouteTable
+}
+
 // SetExposureTime sets the exposure time on a POST request
 func (h *HTTPWrapper) SetExposureTime(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -167,7 +171,12 @@ func (h *HTTPWrapper) GetFrame(w http.ResponseWriter, r *http.Request) {
 		tstat, err := h.Camera.GetTemperatureStatus()
 		temp, err := h.Camera.GetTemperature()
 
-		metaerr := fmt.Sprintf("%s", err)
+		var metaerr string
+		if err != nil {
+			metaerr = err.Error()
+		} else {
+			metaerr = ""
+		}
 
 		now := time.Now()
 		ts := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d",
@@ -227,10 +236,10 @@ func (h *HTTPWrapper) GetFrame(w http.ResponseWriter, r *http.Request) {
 			fitsio.Card{Name: "TEMPSTAT", Value: tstat, Comment: "TEC status"},
 			fitsio.Card{Name: "TEMPER", Value: temp, Comment: "FPA temperature (Celcius)"},
 			// aoi parameters
-			fitsio.Card{Name: "AOILeft", Value: aoi.Left, Comment: "1-based left pixel of the AOI"},
-			fitsio.Card{Name: "AOITop", Value: aoi.Top, Comment: "1-based top pixel of the AOI"},
-			fitsio.Card{Name: "AOIWidth", Value: aoi.Width, Comment: "AOI width, px"},
-			fitsio.Card{Name: "AOIHeight", Value: aoi.Height, Comment: "AOI height, px"},
+			fitsio.Card{Name: "AOIL", Value: aoi.Left, Comment: "1-based left pixel of the AOI"},
+			fitsio.Card{Name: "AOIT", Value: aoi.Top, Comment: "1-based top pixel of the AOI"},
+			fitsio.Card{Name: "AOIW", Value: aoi.Width, Comment: "AOI width, px"},
+			fitsio.Card{Name: "AOIH", Value: aoi.Height, Comment: "AOI height, px"},
 
 			// needed for uint16 encoding
 			fitsio.Card{Name: "BZERO", Value: 32768},
@@ -463,17 +472,15 @@ func (h *HTTPWrapper) GetFeature(w http.ResponseWriter, r *http.Request) {
 // GetFeatureOptions gets a feature's type and options.
 // For numerical features, it returns the min and max values.  For enum
 // features, it returns the possible strings that can be used
-func (h *HTTPWrapper) GetFeatureOPtions(w http.ResponseWriter, r *http.Request) {
-	feature := pat.param(r, "feature")
+func (h *HTTPWrapper) GetFeatureInfo(w http.ResponseWriter, r *http.Request) {
+	feature := pat.Param(r, "feature")
 	typ, known := Features[feature]
 	if !known {
 		err := ErrFeatureNotFound{Feature: feature}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	ret := map[string]interface{}{
-		"type": typ
-	}
+	ret := map[string]interface{}{"type": typ}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	switch typ {
@@ -484,14 +491,17 @@ func (h *HTTPWrapper) GetFeatureOPtions(w http.ResponseWriter, r *http.Request) 
 		}
 		return
 	case "int", "float":
+		var err error
 		if typ == "int" {
-			min, err := GetIntMin(h.Camera.Handle, feature)
-			max, err := GetIntMax(h.Camera.Handle, feature)
+			var min, max int
+			min, err = GetIntMin(h.Camera.Handle, feature)
+			max, err = GetIntMax(h.Camera.Handle, feature)
 			ret["min"] = min
 			ret["max"] = max
 		} else {
-			min, err := GetFloatMin(h.Camera.Handle, feature)
-			max, err := GetFloatMax(h.Camera.Handle, feature)
+			var min, max float64
+			min, err = GetFloatMin(h.Camera.Handle, feature)
+			max, err = GetFloatMax(h.Camera.Handle, feature)
 			ret["min"] = min
 			ret["max"] = max
 		}
@@ -499,38 +509,39 @@ func (h *HTTPWrapper) GetFeatureOPtions(w http.ResponseWriter, r *http.Request) 
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		err := json.NewEncoder(w).Encode(ret)
+		err = json.NewEncoder(w).Encode(ret)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
 	case "enum":
-		opts, err := GetEnumStrings(c.Camera.Handle, feature)
+		opts, err := GetEnumStrings(h.Camera.Handle, feature)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		ret["options"] = opts
-		err := json.NewEncoder(w).Encode(ret)
+		err = json.NewEncoder(w).Encode(ret)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 	case "string":
-		maxlen, err := GetStringMaxLength(c.Camera.Handle, feature)
+		maxlen, err := GetStringMaxLength(h.Camera.Handle, feature)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		ret["maxLength"] = maxlen
-		err := json.NewEncoder(w).Encode(ret)
+		err = json.NewEncoder(w).Encode(ret)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
 }
+
 // SetFeature sets a feature, the type of which is determined by the setup
 func (h *HTTPWrapper) SetFeature(w http.ResponseWriter, r *http.Request) {
 	// the contents of this is basically identical to GetFeature
