@@ -9,23 +9,22 @@ import (
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/server"
 
-	"goji.io"
 	"goji.io/pat"
 )
 
 // ESP301HTTPWrapper wraps ESP301 operation in an HTTP interface
 type ESP301HTTPWrapper struct {
 	// ESP is the underlying motion controller
-	ESP301
+	*ESP301
 
 	// RouteTable is the map of Goji patterns to route handlers
-	RouteTable map[goji.Pattern]http.HandlerFunc
+	RouteTable server.RouteTable
 }
 
 // NewESP301HTTPWrapper returns a new wrapper with the route table populated
-func NewESP301HTTPWrapper(esp ESP301) ESP301HTTPWrapper {
+func NewESP301HTTPWrapper(esp *ESP301) ESP301HTTPWrapper {
 	w := ESP301HTTPWrapper{ESP301: esp}
-	rt := map[goji.Pattern]http.HandlerFunc{
+	rt := server.RouteTable{
 		pat.Post("raw"):            w.Raw,
 		pat.Post("single-cmd"):     w.JSONSingle,
 		pat.Post("multi-cmd"):      w.JSONArray,
