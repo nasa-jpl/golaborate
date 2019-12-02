@@ -47,9 +47,10 @@ func NewHTTPWrapper(c *Camera) HTTPWrapper {
 		pat.Get("/temperature-status"):           w.GetTemperatureStatus,
 
 		// generic
-		pat.Get("/feature"):           w.GetFeatures,
-		pat.Get("/feature/:feature"):  w.GetFeature,
-		pat.Post("/feature/:feature"): w.SetFeature,
+		pat.Get("/feature"):                  w.GetFeatures,
+		pat.Get("/feature/:feature"):         w.GetFeature,
+		pat.Get("/feature/:feature/options"): w.GetFeatureInfo,
+		pat.Post("/feature/:feature"):        w.SetFeature,
 
 		// AOI
 		pat.Get("/aoi"):  w.GetAOI,
@@ -459,6 +460,77 @@ func (h *HTTPWrapper) GetFeature(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// GetFeatureOptions gets a feature's type and options.
+// For numerical features, it returns the min and max values.  For enum
+// features, it returns the possible strings that can be used
+func (h *HTTPWrapper) GetFeatureOPtions(w http.ResponseWriter, r *http.Request) {
+	feature := pat.param(r, "feature")
+	typ, known := Features[feature]
+	if !known {
+		err := ErrFeatureNotFound{Feature: feature}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	ret := map[string]interface{}{
+		"type": typ
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	switch typ {
+	case "command", "bool":
+		err := json.NewEncoder(w).Encode(ret)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
+		return
+	case "int", "float":
+		if typ == "int" {
+			min, err := GetIntMin(h.Camera.Handle, feature)
+			max, err := GetIntMax(h.Camera.Handle, feature)
+			ret["min"] = min
+			ret["max"] = max
+		} else {
+			min, err := GetFloatMin(h.Camera.Handle, feature)
+			max, err := GetFloatMax(h.Camera.Handle, feature)
+			ret["min"] = min
+			ret["max"] = max
+		}
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		err := json.NewEncoder(w).Encode(ret)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+	case "enum":
+		opts, err := GetEnumStrings(c.Camera.Handle, feature)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		ret["options"] = opts
+		err := json.NewEncoder(w).Encode(ret)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	case "string":
+		maxlen, err := GetStringMaxLength(c.Camera.Handle, feature)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		ret["maxLength"] = maxlen
+		err := json.NewEncoder(w).Encode(ret)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+}
 // SetFeature sets a feature, the type of which is determined by the setup
 func (h *HTTPWrapper) SetFeature(w http.ResponseWriter, r *http.Request) {
 	// the contents of this is basically identical to GetFeature
