@@ -641,7 +641,7 @@ func (c *Camera) GetTemperatureStatus() (string, error) {
 // GetFan gets if the fan is currently on
 func (c *Camera) GetFan() (bool, error) {
 	speed, err := GetEnumString(c.Handle, "FanSpeed")
-	return speed == "Off", err
+	return speed != "Off", err
 }
 
 // SetFan sets the fan on or off
