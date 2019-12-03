@@ -59,15 +59,27 @@ func NewHTTPWrapper(c *Camera) HTTPWrapper {
 	return w
 }
 
+// RT yields the route table and implements the server.HTTPer interface
 func (h *HTTPWrapper) RT() server.RouteTable {
 	return h.RouteTable
 }
 
-// SetExposureTime sets the exposure time on a POST request
+// SetExposureTime sets the exposure time on a POST request.
+// it can be provided either as a query parameter exposureTime, formatted in a
+// way that is parseable by golang/time.ParseDuration, or a json payload with
+// key f64, holding the exposure time in seconds.
 func (h *HTTPWrapper) SetExposureTime(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	texp := q.Get("exposureTime")
-	d, err := time.ParseDuration(texp)
+	var d time.Duration
+	var err error
+	if texp == "" {
+		f := server.FloatT{}
+		err = json.NewDecoder(r.Body).Decode(&f)
+		d = f.F64 * time.Second
+	} else {
+		d, err = time.ParseDuration(texp)
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -103,7 +115,7 @@ func (h *HTTPWrapper) GetExposureTime(w http.ResponseWriter, r *http.Request) {
 //
 // if no unit is appended, an s (seconds) is added.
 //
-// if no exposure time is provided, 100 ms is used
+// if no exposure time is provided, it is not updated and the existing value is used.
 func (h *HTTPWrapper) GetFrame(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	texp := q.Get("exposureTime")
