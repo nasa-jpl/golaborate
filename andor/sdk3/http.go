@@ -76,7 +76,7 @@ func (h *HTTPWrapper) SetExposureTime(w http.ResponseWriter, r *http.Request) {
 	if texp == "" {
 		f := server.FloatT{}
 		err = json.NewDecoder(r.Body).Decode(&f)
-		d = f.F64 * time.Second
+		d = int(f.F64*1e9) * time.Nanosecond // 1e9 s => ns
 	} else {
 		d, err = time.ParseDuration(texp)
 	}
@@ -481,7 +481,7 @@ func (h *HTTPWrapper) GetFeature(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// GetFeatureOptions gets a feature's type and options.
+// GetFeatureInfo gets a feature's type and options.
 // For numerical features, it returns the min and max values.  For enum
 // features, it returns the possible strings that can be used
 func (h *HTTPWrapper) GetFeatureInfo(w http.ResponseWriter, r *http.Request) {
