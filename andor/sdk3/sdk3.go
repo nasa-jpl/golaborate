@@ -533,6 +533,11 @@ func (c *Camera) GetFrame() ([]uint16, error) {
 	if err != nil {
 		return []uint16{}, err
 	}
+
+	// injected here 2019-12-03, not writable on AcqStart happens because
+	// CameraAcquiring is true
+	IssueCommand(c.Handle, "AcquisitionStop") // gobble any errors from this
+
 	err = IssueCommand(c.Handle, "AcquisitionStart")
 	if err != nil {
 		return []uint16{}, err
@@ -541,10 +546,10 @@ func (c *Camera) GetFrame() ([]uint16, error) {
 	if err != nil {
 		return []uint16{}, err
 	}
-	err = IssueCommand(c.Handle, "AcquisitionStop")
-	if err != nil {
-		return []uint16{}, err
-	}
+	// err = IssueCommand(c.Handle, "AcquisitionStop")
+	// if err != nil {
+	// 	return []uint16{}, err
+	// }
 	buf, err := c.Buffer()
 	if err != nil {
 		return []uint16{}, err
@@ -646,7 +651,13 @@ func (c *Camera) GetFan() (bool, error) {
 
 // SetFan sets the fan on or off
 func (c *Camera) SetFan(b bool) error {
-	return SetEnumString(c.Handle, "FanSpeed", "On")
+	var str string
+	if b == true {
+		str = "On"
+	} else {
+		str = "Off"
+	}
+	return SetEnumString(c.Handle, "FanSpeed", str)
 }
 
 // Buffer the current buffer at this moment in time.  This is technically a copy

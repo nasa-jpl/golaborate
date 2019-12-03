@@ -76,7 +76,7 @@ func (h *HTTPWrapper) SetExposureTime(w http.ResponseWriter, r *http.Request) {
 	if texp == "" {
 		f := server.FloatT{}
 		err = json.NewDecoder(r.Body).Decode(&f)
-		d = int(f.F64*1e9) * time.Nanosecond // 1e9 s => ns
+		d = time.Duration(int(f.F64*1e9)) * time.Nanosecond // 1e9 s => ns
 	} else {
 		d, err = time.ParseDuration(texp)
 	}

@@ -120,10 +120,7 @@ func boolToAT(b bool) C.AT_BOOL {
 }
 
 func atToBool(b C.AT_BOOL) bool {
-	if b == C.AT_TRUE {
-		return true
-	}
-	return false
+	return b == C.AT_TRUE
 }
 
 // InitializeLibrary calls the function of the same name in the Andor SDK
