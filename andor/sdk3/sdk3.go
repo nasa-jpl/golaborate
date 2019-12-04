@@ -14,6 +14,7 @@ import "C"
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 	"unsafe"
 
@@ -404,6 +405,10 @@ func (c *Camera) SetAOI(aoi AOI) error {
 	c.aoiHeight = height
 
 	err = c.Allocate()
+	if err != nil {
+		return err
+	}
+	err = c.QueueBuffer()
 	return err
 }
 
@@ -680,78 +685,39 @@ func (c *Camera) Buffer() ([]byte, error) {
 	return buf, nil
 }
 
-// ShutDown shuts down the camera and 'finalizes' the SDK.
-// This maintains API compatibility with SDK2
-// and is not an exact match of SDK3
-func (c *Camera) ShutDown() {
-	return
-}
-
-// JPLNeoBootup runs the standard bootup sequence used for Andor Neo cameras in HCIT
-// this should be called after Initialize
-func JPLNeoBootup(c *Camera) error {
-	fmt.Println("eshutter")
-	err := SetEnumString(c.Handle, "ElectronicShutteringMode", "Rolling")
-	if err != nil {
-		return err
+// Configure takes a map of interfaces and calls Set_xxx for each, where
+// xxx is Bool, Int, etc.
+func (c *Camera) Configure(settings map[string]interface{}) error {
+	errs := []error{}
+	for k, v := range settings {
+		typs := Features[k]
+		var err error
+		err = nil
+		switch typs {
+		case "int":
+			// values will unmarshal to unsized ints, assert to int then cast
+			// to i64
+			err = SetInt(c.Handle, k, int64(v.(int)))
+		case "float":
+			err = SetFloat(c.Handle, k, v.(float64))
+		case "bool":
+			err = SetBool(c.Handle, k, v.(bool))
+		case "enum":
+			err = SetEnumString(c.Handle, k, v.(string))
+		default:
+			err = fmt.Errorf("value %v for key %s is not of type int, float64, bool, or string", v, k)
+		}
+		errs = append(errs, err)
 	}
-	fmt.Println("preampgain skipped - notimplemented on simcam")
-	err = SetEnumString(c.Handle, "SimplePreAmpGainControl", "16-bit (low noise & high well capacity)")
-	if err != nil {
-		return err
+	strs := []string{}
+	for idx := 0; idx < len(errs); idx++ {
+		err := errs[idx]
+		if err != nil {
+			strs = append(strs, err.Error())
+		}
 	}
-	fmt.Println("fan speed")
-	err = SetEnumString(c.Handle, "FanSpeed", "Off")
-	if err != nil {
-		return err
-	}
-	fmt.Println("pixel readout rate")
-	err = SetEnumString(c.Handle, "PixelReadoutRate", "280 MHz")
-	// err = SetEnumIndex(c.Handle, "PixelReadoutRate", 0)
-	if err != nil {
-		return err
-	}
+	return fmt.Errorf(strings.Join(strs, "\n"))
 
-	fmt.Println("pixel encoding")
-	// err = SetEnumIndex(c.Handle, "PixelEncoding", 2)
-	err = SetEnumString(c.Handle, "PixelEncoding", "Mono16")
-	strs, err := GetEnumStrings(c.Handle, "PixelEncoding")
-	fmt.Println(strs)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println("triggermode")
-	err = SetEnumString(c.Handle, "TriggerMode", "Internal")
-	if err != nil {
-		return err
-	}
-
-	fmt.Println("metadata - skipped simcam")
-	err = SetBool(c.Handle, "MetadataEnable", false)
-	if err != nil {
-		return err
-	}
-
-	// fmt.Println("metadatats")
-	// err = SetBool(c.Handle, "MetadataTimestamp", true)
-	// if err != nil {
-	// 	return err
-	// }
-
-	fmt.Println("cooling")
-	err = SetBool(c.Handle, "SensorCooling", false)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println("spurriousnoise - skipped simcak")
-	// err = SetBool(c.Handle, "SpuriousNoiseFilter", false)
-	// if err != nil {
-	// 	return err
-	// }
-
-	return nil
 }
 
 // UnpadBuffer strips padding bytes from a buffer
