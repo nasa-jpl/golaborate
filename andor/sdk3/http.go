@@ -60,7 +60,7 @@ func NewHTTPWrapper(c *Camera) HTTPWrapper {
 }
 
 // RT yields the route table and implements the server.HTTPer interface
-func (h *HTTPWrapper) RT() server.RouteTable {
+func (h HTTPWrapper) RT() server.RouteTable {
 	return h.RouteTable
 }
 
