@@ -5,14 +5,14 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
+	"strings"
 
-	"goji.io"
-	"goji.io/pat"
+	"github.jpl.nasa.gov/HCIT/go-hcit/server"
+
+	"github.com/spf13/viper"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/andor/sdk3"
 
-	"net/http/pprof"
 	_ "net/http/pprof"
 )
 
@@ -21,64 +21,167 @@ var (
 	Version = "dev"
 )
 
-func main() {
-	var cmd string
-	args := os.Args
-	if len(args) == 1 {
-		// no args given, print help
-	} else {
-		cmd = args[1]
-		fmt.Println(cmd)
-		return
+type kvp map[string]interface{}
+
+type config struct {
+	// Addr is the bind-to address, like ":8000" to listen to any remote on port 8000
+	Addr string
+
+	BootupArgs kvp
+}
+
+func setupviper() {
+	viper.SetConfigName("andor-http")
+	viper.AddConfigPath(".")
+	viper.SetDefault("Addr", ":8000")
+	viper.SetDefault("SerialNumber", "auto")
+	viper.SetDefault("BootupArgs", kvp{
+		"ElectronicShutteringMode": "Rolling",
+		"SimplePreAmpGainControl":  "16-bit (low noise & high well capacity)",
+		"FanSpeed":                 "Low",
+		"PixelReadoutRate":         "280 Mhz",
+		"PixelEncoding":            "Mono16",
+		"TriggerMode":              "Internal",
+		"MetaDataEnable":           false,
+		"SensorCooling":            true,
+		"SpuriousNoiseFilter":      false})
+}
+func root() {
+	str := `andor-http is an application that exposes control of andor Neo cameras over HTTP.
+This enables a server-client architecture, and the clients can leverage the excellent HTTP
+libraries for any programming language, instead of custom socket logic.
+
+Usage:
+	andor-http <command>
+
+Commands:
+	run
+	help
+	mkconf`
+	fmt.Println(str)
+}
+
+func help() {
+	str := `andor-http is amenable to configuration via its .yaml file.  For a primer on YAML, see
+https://yaml.org/start.html
+
+When no configuration is provided, the defaults are used.  Keys are not case-sensitive.
+The command mkconf generates the configuration file with the default values.
+There is no need to do this unless you want to start from the prepopulated defaults when making
+a config file.
+
+If for some reason there is an error during server bootup, it may be that a feature is not supported by the camera.
+Modify the BootupArgs portion of the config to remove the offending parameters.
+
+serialNumber 'auto' causes the server to scan the available cameras and pick the first one
+which is not a software simulation camera.`
+	fmt.Println(str)
+}
+
+func mkconf() {
+	err := viper.ReadInConfig()
+	if err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			// pass
+		} else {
+			log.Fatalf("loading of config file failed %q", err)
+		}
 	}
+	err = viper.WriteConfigAs("andor-http.yaml")
+	if err != nil {
+		log.Fatalf("writing of config file failed %q", err)
+	}
+	return
+}
+
+func run() {
+	// load the library and see how many cameras are connected
 	err := sdk3.InitializeLibrary()
 	if err != nil {
-		return
-
+		log.Fatal(err)
 	}
 	defer sdk3.FinalizeLibrary()
 	ncam, err := sdk3.DeviceCount()
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Fatal(err)
 	}
-	fmt.Printf("%d cameras\n", ncam)
+	log.Printf("There are %d cameras connected\n", ncam)
 	swver, err := sdk3.SoftwareVersion()
 	if err != nil {
-		fmt.Println(err)
+		log.Fatal(err)
 		return
 	}
-	fmt.Printf("version %s\n", swver)
+	log.Printf("SDK version is %s\n", swver)
 
-	var idx int
-	if len(os.Args) > 1 {
-		idx, _ = strconv.Atoi(os.Args[1])
-	} else {
-		idx = 0
+	// now scan for the right serial number
+	// c escapes into the outer scope
+	log.Println("reached top of sn scan block")
+	sn := viper.GetString("SerialNumber")
+	var c *sdk3.Camera
+	var snCam string
+	for idx := 0; idx < ncam; idx++ {
+		c, err := sdk3.Open(idx)
+		if err != nil {
+			log.Fatal(err)
+		}
+		snCam, err := c.GetSerialNumber()
+		if err != nil {
+			c.Close()
+			log.Fatal(err)
+		}
+		if sn == "auto" {
+			if !strings.Contains(sn, "SFT") {
+				break
+			} else {
+				c.Close()
+			}
+		} else {
+			if sn == snCam {
+				break
+			} else {
+				c.Close()
+			}
+		}
 	}
-
-	c, err := sdk3.Open(idx)
+	log.Println("reached bottom of sn scan block")
+	log.Println(snCam)
+	model, err := c.GetModel()
+	log.Println(model, err)
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Fatal(err)
 	}
-	defer c.Close()
-	err = sdk3.JPLNeoBootup(c)
-	fmt.Println(err)
-
-	fmt.Println(sdk3.GetString(c.Handle, "SerialNumber"))
+	log.Println("passed model query")
+	log.Printf("connection to camera model %s S/N %s opened\n", model, snCam)
 
 	c.Allocate()
 	err = c.QueueBuffer()
-	fmt.Println("queue error", err)
 
 	w := sdk3.NewHTTPWrapper(c)
-	mux := goji.NewMux()
-	w.RT().Bind(mux)
-	mux.HandleFunc(pat.New("/debug/pprof/"), pprof.Index)
-	mux.HandleFunc(pat.New("/debug/pprof/cmdline"), pprof.Cmdline)
-	mux.HandleFunc(pat.New("/debug/pprof/profile"), pprof.Profile)
-	mux.HandleFunc(pat.New("/debug/pprof/symbol"), pprof.Symbol)
-	mux.HandleFunc(pat.New("/debug/pprof/trace"), pprof.Trace)
-	log.Fatal(http.ListenAndServe(":8000", mux))
+	mux := server.BuildMux([]server.HTTPer{w}, []string{""})
+	log.Fatal(http.ListenAndServe(viper.GetString("Addr"), mux))
+}
+
+func main() {
+	var cmd string
+	args := os.Args
+	if len(args) == 1 {
+		root()
+		return
+	}
+	setupviper()
+	cmd = args[1]
+	cmd = strings.ToLower(cmd)
+	switch cmd {
+	case "help":
+		help()
+		return
+	case "mkconf":
+		mkconf()
+		return
+	case "run":
+		run()
+		return
+	default:
+		log.Fatal("unknown command")
+	}
 }
