@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/server"
+	"gopkg.in/yaml.v2"
 
 	"github.com/spf13/viper"
 
@@ -47,9 +48,11 @@ func setupviper() {
 		"SpuriousNoiseFilter":      false})
 }
 func root() {
-	str := `andor-http is an application that exposes control of andor Neo cameras over HTTP.
-This enables a server-client architecture, and the clients can leverage the excellent HTTP
-libraries for any programming language, instead of custom socket logic.
+	str := `andor-http exposes control of andor Neo cameras over HTTP
+This enables a server-client architecture,
+and the clients can leverage the excellent HTTP
+libraries for any programming language,
+instead of custom socket logic.
 
 Usage:
 	andor-http <command>
@@ -94,6 +97,22 @@ func mkconf() {
 	return
 }
 
+func printconf() {
+	err := viper.ReadInConfig()
+	if err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			// pass
+		} else {
+			log.Fatalf("loading of config file failed %q", err)
+		}
+	}
+	fmt.Println("The configuration that will be used is:")
+	c := viper.AllSettings()
+	err = yaml.NewEncoder(os.Stdout).Encode(c)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
 func run() {
 	// load the library and see how many cameras are connected
 	err := sdk3.InitializeLibrary()
@@ -115,16 +134,17 @@ func run() {
 
 	// now scan for the right serial number
 	// c escapes into the outer scope
-	log.Println("reached top of sn scan block")
 	sn := viper.GetString("SerialNumber")
-	var c *sdk3.Camera
-	var snCam string
+	var (
+		c     *sdk3.Camera
+		snCam string
+	)
 	for idx := 0; idx < ncam; idx++ {
-		c, err := sdk3.Open(idx)
+		c, err = sdk3.Open(idx)
 		if err != nil {
 			log.Fatal(err)
 		}
-		snCam, err := c.GetSerialNumber()
+		snCam, err = c.GetSerialNumber()
 		if err != nil {
 			c.Close()
 			log.Fatal(err)
@@ -143,22 +163,20 @@ func run() {
 			}
 		}
 	}
-	log.Println("reached bottom of sn scan block")
-	log.Println(snCam)
 	model, err := c.GetModel()
-	log.Println(model, err)
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println("passed model query")
-	log.Printf("connection to camera model %s S/N %s opened\n", model, snCam)
+	log.Printf("connected to %s SN %s\n", model, snCam)
 
 	c.Allocate()
 	err = c.QueueBuffer()
 
 	w := sdk3.NewHTTPWrapper(c)
 	mux := server.BuildMux([]server.HTTPer{w}, []string{""})
-	log.Fatal(http.ListenAndServe(viper.GetString("Addr"), mux))
+	addr := viper.GetString("Addr")
+	log.Println("now listening for requests at ", addr)
+	log.Fatal(http.ListenAndServe(addr, mux))
 }
 
 func main() {
@@ -177,6 +195,9 @@ func main() {
 		return
 	case "mkconf":
 		mkconf()
+		return
+	case "conf":
+		printconf()
 		return
 	case "run":
 		run()
