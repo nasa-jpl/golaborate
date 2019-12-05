@@ -7,45 +7,51 @@ import (
 	"os"
 	"strings"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/server"
-	"gopkg.in/yaml.v2"
-
-	"github.com/spf13/viper"
-
+	"github.com/knadh/koanf"
+	"github.com/knadh/koanf/parsers/yaml"
+	"github.com/knadh/koanf/providers/file"
+	"github.com/knadh/koanf/providers/structs"
 	"github.jpl.nasa.gov/HCIT/go-hcit/andor/sdk3"
+	"github.jpl.nasa.gov/HCIT/go-hcit/server"
 
-	_ "net/http/pprof"
+	yml "gopkg.in/yaml.v2"
 )
 
 var (
 	// Version is the version number.  Typically injected via ldflags with git build
 	Version = "dev"
+
+	// ConfigFileName is what it sounds like
+	ConfigFileName = "andor-http.yml"
+	k              = koanf.New(".")
 )
 
-type kvp map[string]interface{}
-
 type config struct {
-	// Addr is the bind-to address, like ":8000" to listen to any remote on port 8000
-	Addr string
-
-	BootupArgs kvp
+	Addr         string                 `yaml:"Addr"`
+	SerialNumber string                 `yaml:"SerialNumber"`
+	BootupArgs   map[string]interface{} `yaml:"BootupArgs"`
 }
 
-func setupviper() {
-	viper.SetConfigName("andor-http")
-	viper.AddConfigPath(".")
-	viper.SetDefault("Addr", ":8000")
-	viper.SetDefault("SerialNumber", "auto")
-	viper.SetDefault("BootupArgs", kvp{
-		"ElectronicShutteringMode": "Rolling",
-		"SimplePreAmpGainControl":  "16-bit (low noise & high well capacity)",
-		"FanSpeed":                 "Low",
-		"PixelReadoutRate":         "280 Mhz",
-		"PixelEncoding":            "Mono16",
-		"TriggerMode":              "Internal",
-		"MetaDataEnable":           false,
-		"SensorCooling":            true,
-		"SpuriousNoiseFilter":      false})
+func setupconfig() {
+	k.Load(structs.Provider(config{
+		Addr:         ":8000",
+		SerialNumber: "auto",
+		BootupArgs: map[string]interface{}{
+			"ElectronicShutteringMode": "Rolling",
+			"SimplePreAmpGainControl":  "16-bit (low noise & high well capacity)",
+			"FanSpeed":                 "Low",
+			"PixelReadoutRate":         "280 MHz",
+			"PixelEncoding":            "Mono16",
+			"TriggerMode":              "Internal",
+			"MetadataEnable":           false,
+			"SensorCooling":            true,
+			"SpuriousNoiseFilter":      false}}, "koanf"), nil)
+	if err := k.Load(file.Provider(ConfigFileName), yaml.Parser()); err != nil {
+		errtxt := err.Error()
+		if !strings.Contains(errtxt, "no such") { // file missing, who cares
+			log.Fatalf("error loading config: %v", err)
+		}
+	}
 }
 func root() {
 	str := `andor-http exposes control of andor Neo cameras over HTTP
@@ -60,7 +66,9 @@ Usage:
 Commands:
 	run
 	help
-	mkconf`
+	mkconf
+	conf
+	version`
 	fmt.Println(str)
 }
 
@@ -82,37 +90,35 @@ which is not a software simulation camera.`
 }
 
 func mkconf() {
-	err := viper.ReadInConfig()
+	c := config{}
+	err := k.Unmarshal("", &c)
 	if err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			// pass
-		} else {
-			log.Fatalf("loading of config file failed %q", err)
-		}
+		log.Fatal(err)
 	}
-	err = viper.WriteConfigAs("andor-http.yaml")
+	f, err := os.Create(ConfigFileName)
+	defer f.Close()
 	if err != nil {
-		log.Fatalf("writing of config file failed %q", err)
+		log.Fatal(err)
 	}
-	return
-}
-
-func printconf() {
-	err := viper.ReadInConfig()
-	if err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			// pass
-		} else {
-			log.Fatalf("loading of config file failed %q", err)
-		}
-	}
-	fmt.Println("The configuration that will be used is:")
-	c := viper.AllSettings()
-	err = yaml.NewEncoder(os.Stdout).Encode(c)
+	err = yml.NewEncoder(f).Encode(c)
 	if err != nil {
 		log.Fatal(err)
 	}
 }
+
+func printconf() {
+	c := config{}
+	k.Unmarshal("", &c)
+	err := yml.NewEncoder(os.Stdout).Encode(c)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func pversion() {
+	fmt.Printf("andor-http version %v\n", Version)
+}
+
 func run() {
 	// load the library and see how many cameras are connected
 	err := sdk3.InitializeLibrary()
@@ -134,7 +140,7 @@ func run() {
 
 	// now scan for the right serial number
 	// c escapes into the outer scope
-	sn := viper.GetString("SerialNumber")
+	sn := k.String("SerialNumber")
 	var (
 		c     *sdk3.Camera
 		snCam string
@@ -169,12 +175,16 @@ func run() {
 	}
 	log.Printf("connected to %s SN %s\n", model, snCam)
 
+	err = c.Configure(k.Get("BootupArgs").(map[string]interface{}))
+	if err != nil {
+		log.Fatal(err)
+	}
 	c.Allocate()
 	err = c.QueueBuffer()
 
 	w := sdk3.NewHTTPWrapper(c)
 	mux := server.BuildMux([]server.HTTPer{w}, []string{""})
-	addr := viper.GetString("Addr")
+	addr := k.String("Addr")
 	log.Println("now listening for requests at ", addr)
 	log.Fatal(http.ListenAndServe(addr, mux))
 }
@@ -186,7 +196,7 @@ func main() {
 		root()
 		return
 	}
-	setupviper()
+	setupconfig()
 	cmd = args[1]
 	cmd = strings.ToLower(cmd)
 	switch cmd {
@@ -201,6 +211,9 @@ func main() {
 		return
 	case "run":
 		run()
+		return
+	case "version":
+		pversion()
 		return
 	default:
 		log.Fatal("unknown command")
