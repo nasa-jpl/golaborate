@@ -117,6 +117,7 @@ var (
 		"TemperatureControl":       "enum",
 		"TemperatureStatus":        "enum",
 		"TriggerMode":              "enum",
+		"SimplePreAmpGainControl":  "enum",
 
 		// strings
 		"CameraModel":     "string",
@@ -716,8 +717,11 @@ func (c *Camera) Configure(settings map[string]interface{}) error {
 			strs = append(strs, err.Error())
 		}
 	}
-	return fmt.Errorf(strings.Join(strs, "\n"))
-
+	err := fmt.Errorf(strings.Join(strs, "\n"))
+	if err.Error() == "" {
+		return nil
+	}
+	return err
 }
 
 // UnpadBuffer strips padding bytes from a buffer
