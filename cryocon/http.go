@@ -8,7 +8,6 @@ import (
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/server"
 
-	"goji.io"
 	"goji.io/pat"
 )
 
@@ -19,19 +18,24 @@ type HTTPWrapper struct {
 	TemperatureMonitor
 
 	// RouteTable maps goji patterns to http handlers
-	RouteTable map[goji.Pattern]http.HandlerFunc
+	RouteTable server.RouteTable
 }
 
 // NewHTTPWrapper returns a new HTTP wrapper with the route table pre-configured
 func NewHTTPWrapper(m TemperatureMonitor) HTTPWrapper {
 	w := HTTPWrapper{TemperatureMonitor: m}
-	rt := map[goji.Pattern]http.HandlerFunc{
+	rt := server.RouteTable{
 		pat.Get("read"):     w.ReadAll,
 		pat.Get("read/:ch"): w.ReadChan,
 		pat.Get("version"):  w.Version,
 	}
 	w.RouteTable = rt
 	return w
+}
+
+// RT satisfies the HTTPer interface
+func (h HTTPWrapper) RT() server.RouteTable {
+	return h.RouteTable
 }
 
 // ReadAll reads all the channels and returns them as an array of f64 over JSON.  Units of Celcius.  NaN (no probe) encoded as -274.
