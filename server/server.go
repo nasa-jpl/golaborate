@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
 	"github.jpl.nasa.gov/HCIT/go-hcit/util"
 	"goji.io"
 	"goji.io/pat"
@@ -54,9 +53,11 @@ type RouteTable map[*pat.Pattern]http.HandlerFunc
 
 // Endpoints returns the endpoints in the route table
 func (rt RouteTable) Endpoints() []string {
-	routes := make([]string, 0, len(rt))
-	for k := range rt {
-		routes = append(routes, k.String())
+	routes := make([]string, len(rt))
+	idx := 0
+	for key := range rt {
+		routes[idx] = key.String()
+		idx++
 	}
 	return routes
 }
