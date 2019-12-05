@@ -552,10 +552,10 @@ func (c *Camera) GetFrame() ([]uint16, error) {
 	if err != nil {
 		return []uint16{}, err
 	}
-	// err = IssueCommand(c.Handle, "AcquisitionStop")
-	// if err != nil {
-	// 	return []uint16{}, err
-	// }
+	err = IssueCommand(c.Handle, "AcquisitionStop")
+	if err != nil {
+		return []uint16{}, err
+	}
 	buf, err := c.Buffer()
 	if err != nil {
 		return []uint16{}, err
@@ -684,6 +684,11 @@ func (c *Camera) Buffer() ([]byte, error) {
 	hdr.Len = nbytes
 	hdr.Cap = nbytes
 	return buf, nil
+}
+
+// Command issues a command to this camera's handle
+func (c *Camera) Command(cmd string) error {
+	return IssueCommand(c.Handle, cmd)
 }
 
 // Configure takes a map of interfaces and calls Set_xxx for each, where

@@ -436,8 +436,11 @@ func (h *HTTPWrapper) GetFeature(w http.ResponseWriter, r *http.Request) {
 	}
 	switch typ {
 	case "command":
-		http.Error(w, "cannot get a command feature", http.StatusBadRequest)
-		return
+		err := h.Camera.Command(feature)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 	case "int":
 		i, err := GetInt(h.Camera.Handle, feature)
 		if err != nil {
