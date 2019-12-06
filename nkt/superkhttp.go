@@ -8,7 +8,6 @@ import (
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/mathx"
 	"github.jpl.nasa.gov/HCIT/go-hcit/server"
-	"goji.io"
 	"goji.io/pat"
 )
 
@@ -21,13 +20,13 @@ type SuperKHTTPWrapper struct {
 	SuperKVaria
 
 	// RouteTable holds the map of patterns and routes
-	RouteTable map[goji.Pattern]http.HandlerFunc
+	RouteTable server.RouteTable
 }
 
 // NewHTTPWrapper creates a new HTTP wrapper and populates the route table
 func NewHTTPWrapper(extr SuperKExtreme, varia SuperKVaria) SuperKHTTPWrapper {
 	w := SuperKHTTPWrapper{SuperKExtreme: extr, SuperKVaria: varia}
-	rt := map[goji.Pattern]http.HandlerFunc{
+	rt := server.RouteTable{
 		pat.Get("emission"):           w.GetEmission,
 		pat.Get("emission/on"):        w.EmissionOn,
 		pat.Get("emission/off"):       w.EmissionOff,
@@ -47,6 +46,11 @@ func NewHTTPWrapper(extr SuperKExtreme, varia SuperKVaria) SuperKHTTPWrapper {
 	}
 	w.RouteTable = rt
 	return w
+}
+
+// RT satisfies the server.HTTPer interface
+func (h SuperKHTTPWrapper) RT() server.RouteTable {
+	return h.RouteTable
 }
 
 // GetEmission gets the emission state and pipes it back as a bool json

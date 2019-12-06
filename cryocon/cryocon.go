@@ -50,7 +50,7 @@ type TemperatureMonitor struct {
 }
 
 // NewTemperatureMonitor creates a new temperature monitor instance
-func NewTemperatureMonitor(addr, urlStem string) *TemperatureMonitor {
+func NewTemperatureMonitor(addr string) *TemperatureMonitor {
 	term := comm.Terminators{Rx: '\n', Tx: '\n'}
 	rd := comm.NewRemoteDevice(addr, false, &term, nil)
 	return &TemperatureMonitor{RemoteDevice: &rd}

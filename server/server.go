@@ -8,8 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
-	"github.jpl.nasa.gov/HCIT/go-hcit/util"
+
 	"goji.io"
 	"goji.io/pat"
 )
@@ -67,57 +66,6 @@ func (rt RouteTable) Bind(mux *goji.Mux) {
 	for ptrn, meth := range rt {
 		mux.HandleFunc(ptrn, meth)
 	}
-}
-
-// BuildMux takes equal length slices of HTTPers and strings ("stems")
-// and uses them to construct a goji mux with populated handlers.
-// The mux serves a special route, route-list, which returns an
-// array of strings containing all routes as JSON.
-func BuildMux(https []HTTPer, strs []string) *goji.Mux {
-	root := goji.NewMux()
-	protomuxes := make([]string, 0, len(strs))
-	leaves := make([]string, 0, len(strs))
-
-	// pop the potential muxes off the paths
-	for _, str := range strs {
-		pieces := strings.Split(str, "/")
-		proto := strings.Join(pieces[:len(pieces)-1], "/")
-		leaf := pieces[len(pieces)-1]
-
-		leaves = append(leaves, leaf)
-		protomuxes = append(protomuxes, proto)
-	}
-	uniq := util.UniqueString(protomuxes)
-
-	// now build a map of muxes and protos
-	muxes := make(map[string]*goji.Mux, len(uniq))
-	for _, str := range uniq {
-		mux := goji.SubMux()
-		root.Handle(pat.New(str+"/*"), mux)
-		muxes[str] = mux
-	}
-
-	// collect all the endpoints and binx the muxes
-	AllEndpoints := []string{}
-	for idx := 0; idx < len(https); idx++ {
-		// dump the endpoints
-		h := https[idx]
-		rt := h.RT()
-		AllEndpoints = append(AllEndpoints, rt.Endpoints()...)
-
-		// now bind the routes to the mux
-		mux := muxes[protomuxes[idx]]
-		leaf := leaves[idx]
-		if leaf != "" {
-			// if the leaf isn't blank, it means we need yet another mux
-			newMux := goji.SubMux()
-			mux.Handle(pat.New(leaf+"/*"), newMux)
-			rt.Bind(newMux)
-		} else {
-			rt.Bind(mux)
-		}
-	}
-	return root
 }
 
 // all of the following types are followed with a capital T for homogenaeity and

@@ -51,7 +51,7 @@ type LDC3916 struct {
 }
 
 // NewLDC3916 creates a new LDC3916 instance, which embeds both comm.RemoteDevice and server.Server
-func NewLDC3916(addr, urlStem string) *LDC3916 {
+func NewLDC3916(addr string) *LDC3916 {
 	term := &comm.Terminators{Rx: '\n', Tx: '\n'}
 	rd := comm.NewRemoteDevice(addr, false, term, nil)
 	return &LDC3916{RemoteDevice: &rd}

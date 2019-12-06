@@ -10,7 +10,6 @@ import (
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/server"
 	"github.jpl.nasa.gov/HCIT/go-hcit/util"
-	"goji.io"
 	"goji.io/pat"
 )
 
@@ -20,13 +19,13 @@ type HTTPWrapper struct {
 	LDC3916
 
 	// RouteTable maps goji patterns to http handlers
-	RouteTable map[goji.Pattern]http.HandlerFunc
+	RouteTable server.RouteTable
 }
 
 // NewHTTPWrapper returns a new HTTP wrapper with the route table pre-configured
 func NewHTTPWrapper(ldc LDC3916) HTTPWrapper {
 	w := HTTPWrapper{LDC3916: ldc}
-	rt := map[goji.Pattern]http.HandlerFunc{
+	rt := server.RouteTable{
 		// channel
 		pat.Get("chan"):  w.GetChan,
 		pat.Post("chan"): w.SetChan,
@@ -50,8 +49,13 @@ func NewHTTPWrapper(ldc LDC3916) HTTPWrapper {
 	return w
 }
 
+// RT satisfies server.HTTPer
+func (h HTTPWrapper) RT() server.RouteTable {
+	return h.RouteTable
+}
+
 // GetChan gets the currently active channel(s) over HTTP
-func (h *HTTPWrapper) GetChan(w http.ResponseWriter, r *http.Request) {
+func (h HTTPWrapper) GetChan(w http.ResponseWriter, r *http.Request) {
 	cmd := "chan"
 	typ := "[]int"
 	resp, err := h.LDC3916.processCommand(cmd, true, "")
@@ -60,7 +64,7 @@ func (h *HTTPWrapper) GetChan(w http.ResponseWriter, r *http.Request) {
 }
 
 // SetChan sets the currently active channel(s) over HTTP
-func (h *HTTPWrapper) SetChan(w http.ResponseWriter, r *http.Request) {
+func (h HTTPWrapper) SetChan(w http.ResponseWriter, r *http.Request) {
 	cmd := "chan"
 	typ := "[]int"
 	resp, err := h.LDC3916.processCommand(cmd, true, "")
@@ -81,7 +85,7 @@ func (h *HTTPWrapper) SetChan(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetTempControl gets if TEC is currently active over HTTP
-func (h *HTTPWrapper) GetTempControl(w http.ResponseWriter, r *http.Request) {
+func (h HTTPWrapper) GetTempControl(w http.ResponseWriter, r *http.Request) {
 	cmd := "temperature-control"
 	typ := "bool"
 	resp, err := h.LDC3916.processCommand(cmd, true, "")
@@ -90,7 +94,7 @@ func (h *HTTPWrapper) GetTempControl(w http.ResponseWriter, r *http.Request) {
 }
 
 // SetTempControl sets if TEC is currently active over HTTP
-func (h *HTTPWrapper) SetTempControl(w http.ResponseWriter, r *http.Request) {
+func (h HTTPWrapper) SetTempControl(w http.ResponseWriter, r *http.Request) {
 	cmd := "temperature-control"
 	typ := "bool"
 	boo := server.BoolT{}
@@ -108,7 +112,7 @@ func (h *HTTPWrapper) SetTempControl(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetLaserOutput gets the laser output (on/off) over HTTP
-func (h *HTTPWrapper) GetLaserOutput(w http.ResponseWriter, r *http.Request) {
+func (h HTTPWrapper) GetLaserOutput(w http.ResponseWriter, r *http.Request) {
 	cmd := "laser-output"
 	typ := "bool"
 	resp, err := h.LDC3916.processCommand(cmd, true, "")
@@ -117,7 +121,7 @@ func (h *HTTPWrapper) GetLaserOutput(w http.ResponseWriter, r *http.Request) {
 }
 
 // SetLaserOutput set the laser output (on/off) over HTTP
-func (h *HTTPWrapper) SetLaserOutput(w http.ResponseWriter, r *http.Request) {
+func (h HTTPWrapper) SetLaserOutput(w http.ResponseWriter, r *http.Request) {
 	cmd := "laser-output"
 	typ := "bool"
 	boo := server.BoolT{}
@@ -134,7 +138,7 @@ func (h *HTTPWrapper) SetLaserOutput(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetLaserCurrent gets the laser current (mA) over HTTP
-func (h *HTTPWrapper) GetLaserCurrent(w http.ResponseWriter, r *http.Request) {
+func (h HTTPWrapper) GetLaserCurrent(w http.ResponseWriter, r *http.Request) {
 	cmd := "laser-current"
 	typ := "float"
 
@@ -144,7 +148,7 @@ func (h *HTTPWrapper) GetLaserCurrent(w http.ResponseWriter, r *http.Request) {
 }
 
 // SetLaserCurrent set the laser current (mA) over HTTP
-func (h *HTTPWrapper) SetLaserCurrent(w http.ResponseWriter, r *http.Request) {
+func (h HTTPWrapper) SetLaserCurrent(w http.ResponseWriter, r *http.Request) {
 	cmd := "laser-current"
 	typ := "float"
 	float := server.FloatT{}
@@ -161,7 +165,7 @@ func (h *HTTPWrapper) SetLaserCurrent(w http.ResponseWriter, r *http.Request) {
 }
 
 // Raw sends a 'raw' command to the LDC and returns the raw response as a string
-func (h *HTTPWrapper) Raw(w http.ResponseWriter, r *http.Request) {
+func (h HTTPWrapper) Raw(w http.ResponseWriter, r *http.Request) {
 	str := server.StrT{}
 	json.NewDecoder(r.Body).Decode(&str)
 	defer r.Body.Close()

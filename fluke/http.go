@@ -3,7 +3,8 @@ package fluke
 import (
 	"net/http"
 
-	"goji.io"
+	"github.jpl.nasa.gov/HCIT/go-hcit/server"
+
 	"goji.io/pat"
 )
 
@@ -14,21 +15,26 @@ type HTTPWrapper struct {
 	DewK
 
 	// RouteTable maps goji patterns to http handlers
-	RouteTable map[goji.Pattern]http.HandlerFunc
+	RouteTable server.RouteTable
 }
 
 // NewHTTPWrapper returns a new HTTP wrapper with the route table pre-configured
 func NewHTTPWrapper(dk DewK) HTTPWrapper {
 	w := HTTPWrapper{DewK: dk}
-	rt := map[goji.Pattern]http.HandlerFunc{
+	rt := server.RouteTable{
 		pat.Get("read"): w.Read,
 	}
 	w.RouteTable = rt
 	return w
 }
 
+// RT satisfies server.HTTPer
+func (h HTTPWrapper) RT() server.RouteTable {
+	return h.RouteTable
+}
+
 // Read reads the temp and humidity from the DewK and sends the response back as JSON
-func (h *HTTPWrapper) Read(w http.ResponseWriter, r *http.Request) {
+func (h HTTPWrapper) Read(w http.ResponseWriter, r *http.Request) {
 	th, err := h.DewK.Read()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

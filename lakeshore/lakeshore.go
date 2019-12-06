@@ -43,11 +43,11 @@ type TempController struct {
 }
 
 // NewController returns a new TempController instance
-func NewController(addr string) (TempController, error) {
+func NewController(addr string) TempController {
 	cfg := makeSerConf(addr)
-	conn, err := serial.OpenPort(cfg)
+	conn, _ := serial.OpenPort(cfg)
 	tc := TempController{conn: conn}
-	return tc, err
+	return tc
 }
 
 // MkMsg generates a message that conforms to the IEEE standard

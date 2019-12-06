@@ -12,15 +12,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/cryocon"
-	"github.jpl.nasa.gov/HCIT/go-hcit/nkt"
-
-	"github.jpl.nasa.gov/HCIT/go-hcit/granvillephillips"
-	"github.jpl.nasa.gov/HCIT/go-hcit/ixllightwave"
-	"github.jpl.nasa.gov/HCIT/go-hcit/lesker"
-	"github.jpl.nasa.gov/HCIT/go-hcit/newport"
-	"github.jpl.nasa.gov/HCIT/go-hcit/server"
-
 	"github.jpl.nasa.gov/HCIT/go-hcit/fluke"
 
 	"github.com/brandondube/ringo"
@@ -109,46 +100,4 @@ func (em *Envmon) HTTPYield(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 	return
-}
-
-// SetupDevices creates new instances of the various device types
-// and packs them into a mainframe object
-func SetupDevices(c Config) server.Mainframe {
-	mf := server.Mainframe{}
-	for _, params := range c.Flukes {
-		flk := fluke.NewDewK(params.Addr, params.URLStem, params.Serial)
-		mf.Add(flk)
-	}
-	for _, params := range c.IXLLightwaves {
-		diode := ixllightwave.NewLDC3916(params.Addr, params.URLStem)
-		mf.Add(diode)
-	}
-	for _, params := range c.GPConvectrons {
-		conv := granvillephillips.NewSensor(params.Addr, params.URLStem, params.Serial)
-		mf.Add(conv)
-	}
-	for _, params := range c.Leskers {
-		kjc := lesker.NewSensor(params.Addr, params.URLStem, params.Serial)
-		mf.Add(kjc)
-	}
-	for _, params := range c.ESP300s {
-		ctl := newport.NewESP301(params.Addr, params.URLStem, params.Serial)
-		mf.Add(ctl)
-	}
-	// for _, params := range c.Lakeshores {
-	// ctlm := lakeshore.New
-	// }
-	for _, params := range c.CryoCons {
-		mon := cryocon.NewTemperatureMonitor(params.Addr, params.URLStem)
-		mf.Add(mon)
-	}
-
-	for _, params := range c.NKTs {
-		main := nkt.NewSuperKExtreme(params.Addr, params.URLStem, params.Serial)
-		varia := nkt.NewSuperKVaria(params.Addr, params.URLStem, params.Serial)
-		mf.Add(main)
-		mf.Add(varia)
-	}
-
-	return mf
 }

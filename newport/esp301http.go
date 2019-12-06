@@ -38,6 +38,11 @@ func NewESP301HTTPWrapper(esp *ESP301) ESP301HTTPWrapper {
 	return w
 }
 
+// RT satisfies server.HTTPer
+func (h ESP301HTTPWrapper) RT() server.RouteTable {
+	return h.RouteTable
+}
+
 // Raw sends text to the ESP and returns the text it replies with.
 // Do not include terminators, the server will take care of it for you
 func (h *ESP301HTTPWrapper) Raw(w http.ResponseWriter, r *http.Request) {

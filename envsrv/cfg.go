@@ -2,10 +2,26 @@ package envsrv
 
 import (
 	"os"
+	"strings"
 
-	"goji.io"
+	"github.jpl.nasa.gov/HCIT/go-hcit/aerotech"
+	"github.jpl.nasa.gov/HCIT/go-hcit/cryocon"
 	"goji.io/pat"
 
+	"github.jpl.nasa.gov/HCIT/go-hcit/nkt"
+
+	"github.jpl.nasa.gov/HCIT/go-hcit/newport"
+
+	"github.jpl.nasa.gov/HCIT/go-hcit/ixllightwave"
+	"github.jpl.nasa.gov/HCIT/go-hcit/lesker"
+
+	"github.jpl.nasa.gov/HCIT/go-hcit/commonpressure"
+	"github.jpl.nasa.gov/HCIT/go-hcit/granvillephillips"
+
+	"github.jpl.nasa.gov/HCIT/go-hcit/fluke"
+	"github.jpl.nasa.gov/HCIT/go-hcit/server"
+
+	"goji.io"
 	"gopkg.in/yaml.v2"
 )
 
@@ -15,7 +31,7 @@ import (
 type ObjSetup struct {
 	// Addr holds the network or filesystem address of the remote device,
 	// e.g. 192.168.100.123:2006 for a device connected to port 6
-	// on a digi portserver
+	// on a digi portserver, or /dev/ttyS4 for an RS232 device on a serial cable
 	Addr string `yaml:"addr"`
 
 	// URL is the full path the routes from this device will be served on
@@ -33,78 +49,33 @@ type ObjSetup struct {
 type Config struct {
 	// Flukes is a list of setup parameters that will automap to Fluke DewK objects
 	Flukes []ObjSetup
+
 	// GPConvectrons is a list of setup parameters that will automap to GP375 convectrons
 	GPConvectrons []ObjSetup
+
 	// Leskers is a list of setup parameters that will automap to KJC300s
 	Leskers []ObjSetup
+
 	// IXLLightwaves is a list of setup parameters that will automap to LDC3916 diode controllers
 	IXLLightwaves []ObjSetup
+
 	// Lakeshores is a list of setup parameters that will automap to Lakeshore 322 temperature controllers
 	Lakeshores []ObjSetup
+
 	// ESP300s is a list of setup parameters that will automap to ESP301 motion controllers
 	ESP300s []ObjSetup
+
 	// XPSs is a list of setup parameters that will automap to XPS motion controllers
 	XPSs []ObjSetup
+
 	// NKTs is a list of setup parameters that will automap to NKT supercontinuum lasers
 	NKTs []ObjSetup
+
 	// CryoCons is a list of setup parameters that will automap to crycon temperature monitors
 	CryoCons []ObjSetup
 
-	// Network is a flat listing of network branches.  It is recursed over to produce a tree of Muxes with goji
-	Network []Node
-}
-
-// BuildNetwork returns a Goji mux that is populated with submuxes for the network
-// branches
-func BuildNetwork(nodes []Node) *goji.Mux {
-	// make the root mux
-	root := goji.NewMux()
-
-	// make a channel for stuff that has to processed because the parent is missing
-	// and close it on completion
-	reprocess := make(chan Node, len(nodes))
-	defer close(reprocess)
-
-	// then make a map of muxes so we know when the parents are made
-	muxes := make(map[string]*goji.Mux)
-
-	for _, node := range nodes {
-		// first pass, anything with a Parent has to be reprocessed
-		if node.Parent != "" {
-			reprocess <- node
-			continue
-		}
-		// otherwise, make a submux and put it on root
-		ptrn := pat.New("/" + node.Name + "/*")
-		mux := goji.SubMux()
-		muxes[node.Parent+node.Name] = mux
-		root.Handle(ptrn, mux)
-	}
-
-	for node := range reprocess {
-		// if the parent exists, make our mux and bind to it
-		if parent, ok := muxes[node.Parent+node.Name]; ok {
-			mux := goji.SubMux()
-			parent.Handle(pat.New("/"+node.Name+"/*"), mux)
-			muxes[node.Parent+node.Name] = mux
-		} else {
-			reprocess <- node
-		}
-	}
-
-	return root
-}
-
-// Node is a piece of a network tree.
-type Node struct {
-	// Parent is the parent node, if there is one
-	Parent string `yaml:"parent"`
-
-	// Name is the name of this node, if there is one
-	Name string `yaml:"name"`
-
-	// Children are the nodes connected below this one
-	Children []Node
+	// Aerotechs is a list of setup parameters that will automap to Aerotech Ensemble controllers
+	Aerotechs []ObjSetup
 }
 
 // LoadYaml converts a (path to a) yaml file into a Config struct
@@ -117,4 +88,91 @@ func LoadYaml(path string) (Config, error) {
 
 	err = yaml.NewDecoder(f).Decode(&cfg)
 	return cfg, err
+}
+
+// BuildMux takes equal length slices of HTTPers and strings ("stems")
+// and uses them to construct a goji mux with populated handlers.
+// The mux serves a special route, route-list, which returns an
+// array of strings containing all routes as JSON.
+func (c Config) BuildMux() *goji.Mux {
+	root := goji.NewMux()
+	stems := []string{}
+	httpers := []server.HTTPer{}
+
+	for _, setup := range c.Flukes {
+		dewK := fluke.NewDewK(setup.Addr, setup.Serial)
+		httper := fluke.NewHTTPWrapper(*dewK)
+		stems = append(stems, setup.URL)
+		httpers = append(httpers, httper)
+	}
+
+	for _, setup := range c.GPConvectrons {
+		cv := granvillephillips.NewSensor(setup.Addr, setup.Serial)
+		httper := commonpressure.NewHTTPWrapper(*cv)
+		stems = append(stems, setup.URL)
+		httpers = append(httpers, httper)
+	}
+
+	for _, setup := range c.Leskers {
+		kjc := lesker.NewSensor(setup.Addr, setup.Serial)
+		httper := commonpressure.NewHTTPWrapper(*kjc)
+		stems = append(stems, setup.URL)
+		httpers = append(httpers, httper)
+	}
+
+	for _, setup := range c.IXLLightwaves {
+		ldc := ixllightwave.NewLDC3916(setup.Addr)
+		httper := ixllightwave.NewHTTPWrapper(*ldc)
+		stems = append(stems, setup.URL)
+		httpers = append(httpers, httper)
+	}
+	// for _, setup := range c.Lakeshores {
+	// ctl := lakeshore.NewController()
+	// }
+	for _, setup := range c.ESP300s {
+		esp := newport.NewESP301(setup.Addr, setup.Serial)
+		httper := newport.NewESP301HTTPWrapper(esp)
+		stems = append(stems, setup.URL)
+		httpers = append(httpers, httper)
+	}
+
+	for _, setup := range c.NKTs {
+		skE := nkt.NewSuperKExtreme(setup.Addr, setup.Serial)
+		skV := nkt.NewSuperKVaria(setup.Addr, setup.Serial)
+		httper := nkt.NewHTTPWrapper(*skE, *skV)
+		stems = append(stems, setup.URL)
+		httpers = append(httpers, httper)
+	}
+
+	for _, setup := range c.CryoCons {
+		cryo := cryocon.NewTemperatureMonitor(setup.Addr)
+		httper := cryocon.NewHTTPWrapper(*cryo)
+		stems = append(stems, setup.URL)
+		httpers = append(httpers, httper)
+	}
+
+	for _, setup := range c.Aerotechs {
+		ensemble := aerotech.NewEnsemble(setup.Addr, setup.Serial)
+		httper := aerotech.NewHTTPWrapper(*ensemble)
+		stems = append(stems, setup.URL)
+		httpers = append(httpers, httper)
+	}
+
+	// the above just collected everything from the configs
+	for idx := 0; idx < len(stems); idx++ {
+		stem := stems[idx]
+		httper := httpers[idx]
+		mux := goji.SubMux()
+		if !strings.HasPrefix(stem, "/") {
+			stem = "/" + stem
+		}
+		if !strings.HasSuffix(stem, "/") {
+			stem = stem + "/"
+		}
+		stem = stem + "*"
+		strP := pat.New(stem)
+		root.Handle(strP, mux)
+		httper.RT().Bind(mux)
+	}
+	return root
 }

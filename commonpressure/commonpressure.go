@@ -69,7 +69,7 @@ type Sensor struct {
 }
 
 // NewSensor creates a new Sensor instance
-func NewSensor(addr, urlStem string, serial bool) *Sensor {
+func NewSensor(addr string, serial bool) *Sensor {
 	rd := comm.NewRemoteDevice(addr, serial, nil, makeSerConf(addr))
 	s := Sensor{RemoteDevice: &rd}
 	return &s

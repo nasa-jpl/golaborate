@@ -1,6 +1,8 @@
 package fluke
 
 import (
+	"strings"
+
 	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
 )
 
@@ -11,8 +13,8 @@ type DewK struct {
 }
 
 // NewDewK creates a new DewK instance
-func NewDewK(addr string, urlStem string, serial bool) *DewK {
-	if !serial {
+func NewDewK(addr string, serial bool) *DewK {
+	if !serial && !strings.HasSuffix(addr, ":10001") {
 		addr = addr + ":10001"
 	}
 	rd := comm.NewRemoteDevice(addr, serial, nil, nil)
