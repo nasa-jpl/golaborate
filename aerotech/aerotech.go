@@ -81,13 +81,23 @@ type Ensemble struct {
 // NewEnsemble returns a new Ensemble instance with the remote
 // device preconfigured
 func NewEnsemble(addr string, serial bool) *Ensemble {
-	term := comm.Terminators{Rx: '\n', Tx: '\n'}
-	rd := comm.NewRemoteDevice(addr, false, &term, nil)
+	// we actually need \r terminators on both sides, but ACK responses
+	// are not terminated, so we strip them everywhere else.
+	terms := comm.Terminators{Rx: '\n', Tx: '\n'}
+	rd := comm.NewRemoteDevice(addr, false, &terms, nil)
 	return &Ensemble{RemoteDevice: &rd}
 }
 
 func (e *Ensemble) writeOnlyBus(msg string) error {
-	resp, err := e.RemoteDevice.OpenSendRecvClose([]byte(msg))
+	err := e.Open()
+	if err != nil {
+		return err
+	}
+	err = e.Send([]byte(msg))
+	if err != nil {
+		return err
+	}
+	resp, err := getAnyResponseFromEnsemble(e.RemoteDevice, true)
 	if err != nil {
 		return err
 	}
@@ -120,14 +130,17 @@ func (e *Ensemble) GetAxisEnabled(axis string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	resp = resp[:len(resp)-2] // drop the terminator
 	if resp[0] != OKCode {
 		return false, ErrBadResponse{string(resp)}
 	}
 	i, err := strconv.Atoi(string(resp[1:]))
-	return i > 0, err
+	return i < 0, err
 	// bit0, most significant bit contains the sign
 	// it also contains the axis enabled value
-	// so, if the int is positive, the axis is enabled
+	// so, if the int is positive, the axis is disabled
+	// I think this depends on the endianness of the controller and the server being different
+	// either way this is pretty fragile.
 }
 
 // Home commands the controller to home an axis
@@ -150,7 +163,7 @@ func (e *Ensemble) MoveRel(axis string, dist float64) error {
 // GetPos gets the absolute position of an axis from the controller
 func (e *Ensemble) GetPos(axis string) (float64, error) {
 	// this could be refactored into something like a talkReadSingleFloat
-	str := fmt.Sprintf("PFBKPROG(%s)", axis)
+	str := fmt.Sprintf("PFBK %s", axis)
 	resp, err := e.RemoteDevice.OpenSendRecvClose([]byte(str))
 	if err != nil {
 		return 0, err
