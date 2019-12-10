@@ -29,15 +29,17 @@ Environmental Sensors and controllers:
 Instruments:
 - Zygo interferometers
 
+Cameras:
+- Andor Neo sCMOS and iXON EMCCD (full SDK for both)
 
-## Setup
+## Installation and Compilation
 
-Most of these servers are written in golang.  Due to our need to compile for windows XP, we are using Golang 1.9.  Hopefully soon we will be able to updated to 1.13 or the latest with the replacement of the Zygo PC running windows XP.
+Most of these servers are written in Go.  Go has a statement of absolute compatability within the 1.x version series, so you may use any version that is recent enough for the dependencies.  At the time of writing, this is Go 1.12.  If you need to compile for XP (e.g., for a MetroPro remote server) use Go 1.9.  The dependency tree for `cmd/zygoserver` is compatible with Go 1.9 and includes several backports from newer versions of the language to facilitate this.
 
 To install golang, grab the binaries from http://golang.org/dl, use your system package manager, or [brew](https://brew.sh/) on MacOS.  For brew:
 
 ```
-brew install go@1.9
+brew install go  # you can use go@1.9 to get v1.9
 export $GOPATH=$HOME/go
 ```
 
@@ -48,46 +50,32 @@ cd ~/go/src
 mkdir github.jpl.nasa.gov && cd github.jpl.nasa.gov
 mkdir HCIT && cd HCIT
 git clone https://github.jpl.nasa.gov/HCIT/go-hcit
-
-go get github.com/tarm/serial  # talking to serial devices
-go get github.com/spf13/viper  # configuration
-go get gopkg.in/yaml.v2        # YAML file support for configs
-go get github.com/snksoft/crc  # Cyclic Redundancy Check library for NKT devices
-go get github.com/cenkalti/backoff  # graceful backoff when connections rejected by hardware
-
-go get github.com/astrogo/fitsio  # andor binaries need fits, no need for the rest
-go get github.com/lordadamson/cgo.wchar  # if you intend to build the Andor/sdk3 pkg
 ```
 
-There are no external dependencies aside from these .
+All external dependencies are bundled in the `vendor` directory, so you will always be able to download go 1.x and compile a program.
 
-If you need to modify a program, cd from `go-hcit` to `/cmd/<the program>` and edit `main.go`.  Then `cd ..` and run:
+If you need to modify a program, cd from `go-hcit` to `/cmd/<the program>` and edit `main.go`.  Then `cd ..` and compile:
 
 ```sh
-make <command>
+env GOOS=linux GOARCH=amd64 go build main.go
 ```
 
-For example,
+The `env` unix command sets environemnt variables for the current command only.  `GOOS`, "go operating system" should be appropriate for the machine you intend to run the software on.  `GOARCH` is the processor architecture, which should generally be 386 (32-bit) or amd64 (64-bit).  The complete list of acceptable values for these constants can be found at https://golang.org/doc/install/source#environment
 
-```sh
-make superk
-```
-`GOOS`, "go operating system" should be appropriate for the machine you intend to run the software on.  `GOARCH` is the processor architecture, which should generally be 386 (32-bit) or amd64 (64-bit).  The complete list of acceptable values for these constants can be found at https://golang.org/doc/install/source#environment
-
-Note that go supports cross compilation, so compiling for linux or windows from a mac is a nonissue (excluding the andor module).
+Note that go supports cross compilation, so compiling for linux or windows from a mac is a nonissue (excluding the andor module).  Also note that as of now (late 2019) operating systems are beginning to drop support for 32-bit binaries, so generally you should use `GOARCH=amd64`.
 
 
 ## Binary servers
 
 see the `cmd` directory for the top-level source code of the server binaries.  When this project reaches maturity,
 a collection of the binaries for various architectures and platforms will be stored on the S383 netowrk.  For now, build
-a binary to use it.  The `superk` program is running continuously on misery.
+a binary to use it.
 
 ## Documentation
 
 To view the documentation for the `Go` code, cd to the root of this repository under `$GOPATH`, then run `godoc -http=:6060` and visit http://localhost:6060/pkg/github.jpl.nasa.gov/HCIT/go-hcit/ in your browser.
 
-To view the documentation for the HTTP endpoints, the current best approach is to clone [swagger-ui](https://github.com/swagger-api/swagger-ui), then `npm start` to run the serve, and paste `docs/http-documentation.yaml` into the editor.
+To view the documentation for HTTP clients, you can build envsrv and visit http://<envsrv-url>/static/docs.html, or use [swagger-ui](https://github.com/swagger-api/swagger-ui) to view and edit the docs locally.
 
 ## development status
 
@@ -95,11 +83,11 @@ To view the documentation for the HTTP endpoints, the current best approach is t
 | :---              | :----: |  ---:  |
 | JPL DM Controller |        |        |
 | BMC commercial    | X      |  X     |
-| Andor cameras     | ~X     |        |
+| Andor cameras     | X      |  X     |
 | other cameras (?) |        |        |
 | Newport EPS       |  X     |  X     |
-| Newport XPS       |        |        |
-| Aerotech Ensemble |        |        |
+| Newport XPS       |  X     |        |
+| Aerotech Ensemble |  X     |  X     |
 | PI motion         |        |        |
 | Lakeshore temp    |  X     |        |
 | Fluke temp/RH     |  X     |  X     |
