@@ -1,12 +1,10 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
-	"os"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/envsrv"
+	"github.jpl.nasa.gov/HCIT/go-hcit/aerotech"
 	"goji.io"
 )
 
@@ -40,19 +38,25 @@ envsrv cfg.yaml
 `
 )
 
-func main() {
-	if len(os.Args) == 1 || os.Args[1] == "help" {
-		fmt.Println(helpBlurb)
-		return
-	}
-	cfg, err := envsrv.LoadYaml(arg)
-	if err != nil {
-		panic(err)
-	}
-	mainframe := envsrv.SetupDevices(cfg)
-	mux := goji.NewMux()
-	mainframe.BindRoutes(mux)
+// func main() {
+// 	if len(os.Args) == 1 || os.Args[1] == "help" {
+// 		fmt.Println(helpBlurb)
+// 		return
+// 	}
+// 	cfg, err := envsrv.LoadYaml(arg)
+// 	if err != nil {
+// 		panic(err)
+// 	}
+// 	mux := envsrv.SetupDevices()
 
-	log.Println("envsrv started bound to :8080")
-	log.Fatal(http.ListenAndServe(":8080", mux))
+// 	log.Println("envsrv started bound to :8080")
+// 	log.Fatal(http.ListenAndServe(":8080", mux))
+// }
+
+func main() {
+	at := aerotech.NewEnsemble("192.168.100.154:8000", false)
+	httper := aerotech.NewHTTPWrapper(*at)
+	mux := goji.NewMux()
+	httper.RT().Bind(mux)
+	log.Fatal(http.ListenAndServe(":8083", mux))
 }
