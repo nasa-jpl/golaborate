@@ -93,6 +93,7 @@ func (e *Ensemble) writeOnlyBus(msg string) error {
 	if err != nil {
 		return err
 	}
+	defer e.CloseEventually()
 	err = e.Send([]byte(msg))
 	if err != nil {
 		return err
