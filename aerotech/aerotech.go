@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
 )
@@ -85,6 +86,7 @@ func NewEnsemble(addr string, serial bool) *Ensemble {
 	// are not terminated, so we strip them everywhere else.
 	terms := comm.Terminators{Rx: '\n', Tx: '\n'}
 	rd := comm.NewRemoteDevice(addr, false, &terms, nil)
+	rd.Timeout = 60 * time.Second // long timeout for aerotech equipment
 	return &Ensemble{RemoteDevice: &rd}
 }
 
