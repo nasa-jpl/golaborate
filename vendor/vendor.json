@@ -111,6 +111,18 @@
 			"revisionTime": "2019-01-26T23:58:29Z"
 		},
 		{
+			"checksumSHA1": "pwKEcvjPuybiYSQSn54I/Za9S94=",
+			"path": "goji.io/pat",
+			"revision": "490b001d03d16a116d7c44d95d216c69a1aae798",
+			"revisionTime": "2019-01-26T23:58:29Z"
+		},
+		{
+			"checksumSHA1": "HiFwLEdH2hi65LxmHk2lKjA3CU8=",
+			"path": "goji.io/pattern",
+			"revision": "490b001d03d16a116d7c44d95d216c69a1aae798",
+			"revisionTime": "2019-01-26T23:58:29Z"
+		},
+		{
 			"checksumSHA1": "lf3OvUrZwkDyPvEAvc5s88it/dU=",
 			"path": "golang.org/x/sys/unix",
 			"revision": "eeba5f6aabab6d6594a9191d6bfeaca5fa6a8248",
