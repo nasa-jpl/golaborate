@@ -104,6 +104,10 @@ func (e *Ensemble) writeOnlyBus(msg string) error {
 	if err != nil {
 		return err
 	}
+	// sanitize in case there is the response from a previous message here
+	if len(resp) == 2 {
+		resp = resp[1:] // discard the first byte (it was the old response)
+	}
 	if len(resp) != 1 || resp[0] != OKCode {
 		return ErrBadResponse{string(resp)}
 	}
@@ -133,7 +137,10 @@ func (e *Ensemble) GetAxisEnabled(axis string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	resp = resp[:len(resp)-2] // drop the terminator
+	resp = resp[1:] // drop the terminator
+	if resp[0] == OKCode {
+		resp = resp[1:] // the ensemble may have a % in its write buffer still from a connection it dropped
+	}
 	if resp[0] != OKCode {
 		return false, ErrBadResponse{string(resp)}
 	}
@@ -173,6 +180,13 @@ func (e *Ensemble) GetPos(axis string) (float64, error) {
 	}
 	if resp[0] != OKCode {
 		return 0, ErrBadResponse{string(resp)}
+	}
+	// there may be a garbage OK/NOK flag in the second byte
+	// if a long-running communication was cut short by TCP timeout,
+	// we just discard the first byte (which came from the old message)
+	// since there is nothing to do with it now (we are on a separate communication)
+	if len(resp) > 2 && (resp[1] == OKCode) {
+		resp = resp[1:]
 	}
 	str = string(resp[1:])
 	return strconv.ParseFloat(str, 64)
