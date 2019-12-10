@@ -131,6 +131,10 @@ type RemoteDevice struct {
 	// IsSerial indicates if the connection type is serial or not
 	IsSerial bool
 
+	// Timeout holds the duration of time to wait for replies
+	Timeout time.Duration
+
+	// Conn holds the TCP or Serial connection
 	Conn     io.ReadWriteCloser
 	lastComm time.Time
 	txTerm   byte
@@ -159,6 +163,7 @@ func NewRemoteDevice(addr string, serial bool, t *Terminators, s *serial.Config)
 	return RemoteDevice{
 		Addr:     addr,
 		IsSerial: serial,
+		Timeout:  3 * time.Second,
 		txTerm:   tx,
 		rxTerm:   rx,
 		serCfg:   s}
@@ -168,7 +173,7 @@ func NewRemoteDevice(addr string, serial bool, t *Terminators, s *serial.Config)
 
 This function transparently opens either a TCP or a serial connection.
 
-If conn is not nil, this function is a noopt and does not error.
+If conn is not nil, this function is a no-op and does not error.
 */
 func (rd *RemoteDevice) Open() error {
 	if rd.Conn != nil {
@@ -221,7 +226,7 @@ func (rd *RemoteDevice) open() error {
 		}
 		conn, err = serial.OpenPort(conf)
 	} else {
-		conn, err = TCPSetup(rd.Addr, 3*time.Second)
+		conn, err = TCPSetup(rd.Addr, rd.Timeout)
 	}
 	if err != nil {
 		return err
@@ -282,9 +287,10 @@ func (rd *RemoteDevice) Send(b []byte) error {
 		return ErrNotConnected
 	}
 	if conn, ok := rd.Conn.(net.Conn); ok {
-		deadline := time.Now().Add(3 * time.Second)
-		conn.SetReadDeadline(deadline)
-		conn.SetWriteDeadline(deadline)
+		// update the deadline; deadlines are wall times and connection
+		// may have persisted from a previous communication
+		deadline := time.Now().Add(rd.Timeout)
+		conn.SetDeadline(deadline)
 	}
 
 	b = append(b, rd.txTerm)
@@ -356,7 +362,6 @@ func TCPSetup(addr string, timeout time.Duration) (net.Conn, error) {
 		return nil, err
 	}
 	deadline := time.Now().Add(timeout)
-	conn.SetReadDeadline(deadline)
-	conn.SetWriteDeadline(deadline)
+	conn.SetDeadline(deadline)
 	return conn, nil
 }
