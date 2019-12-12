@@ -1,13 +1,68 @@
 package newport
 
+/*responses are formatted as:
+< err code >,TheExactTextYouSentIfThereIsABadError,EndOfAPI
+or
+< err code>,returnVal,EndOfApi
+
+Ex:
+"-20,GroupPositionCurrentGet(Group1,double *),EndOfAPI"
+(status code -20 => fatal init)
+OR
+"0,0.000314605934,EndOfAPI"
+(status code 0, OK)
+*/
+
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
-	"net/http"
+	"strconv"
+	"strings"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
-	"github.jpl.nasa.gov/HCIT/go-hcit/util"
 )
+
+type xpsResponse struct {
+	errCode int
+	content string
+}
+
+func parse(input string) xpsResponse {
+	// first, check what the error codepoint is.
+	pieces := strings.SplitN(input, ",", 2)
+	if len(pieces) < 2 {
+		return xpsResponse{errCode: 2, content: input}
+	}
+	ecode, err := strconv.Atoi(pieces[0])
+	if err != nil {
+		return xpsResponse{errCode: 3, content: input}
+	}
+
+	// now pop EndOfAPI
+	resp := pieces[1]
+	endIdx := strings.Index(resp, "EndOfAPI")
+	if endIdx == -1 {
+		return xpsResponse{errCode: 2, content: input}
+	}
+	resp = resp[:endIdx]
+	if strings.HasSuffix(resp, ",") {
+		resp = resp[:endIdx-1]
+	}
+	// now resp is just the bit we actually want
+	return xpsResponse{errCode: ecode, content: resp}
+}
+
+// XPSError is a formatible error code from the XPS
+type XPSError struct {
+	code int
+}
+
+func (e XPSError) Error() string {
+	if s, ok := XPSErrorCodes[e.code]; ok {
+		return fmt.Sprintf("%d - %s", e.code, s)
+	}
+	return fmt.Sprintf("%d - UNKNOWN ERROR CODE", e.code)
+}
 
 var (
 	// XPSErrorCodes maps XPS error integers to strings
@@ -111,26 +166,93 @@ var (
 		-2: "TCP TIMEOUT",
 		-1: "BUSY SOCKET",
 		1:  "TCL INTERPRETOR ERROR",
+		2:  "RESPONSE INCOMPLETE", // below here is custom and not part of the XPS "spec"
+		3:  "ERROR PARSING ERROR CODE",
+	}
+
+	// XPSGroupStatuses maps status ints to their strings for XPS groups
+	//
+	// if i < 10 || i == 50, things are not initialized.
+	// 10 < i < 20 OK/ready.
+	// 20 <= i < 40, disabled
+	XPSGroupStatuses = map[int]string{
+		0:  "Not initialized state",
+		1:  "Not initialized state due to an emergency brake : see positioner status",
+		2:  "Not initialized state due to an emergency stop : see positioner status",
+		3:  "Not initialized state due to a following error during homing",
+		4:  "Not initialized state due to a following error",
+		5:  "Not initialized state due to a homing timeout",
+		6:  "Not initialized state due to a motion done timeout during homing",
+		7:  "Not initialized state due to a KillAll command",
+		8:  "Not initialized state due to an end of run after homing",
+		9:  "Not initialized state due to an encoder calibration error",
+		10: "Ready state due to an AbortMove command",
+		11: "Ready state from homing",
+		12: "Ready state from motion",
+		13: "Ready state due to a MotionEnable command",
+		14: "Ready state from slave",
+		15: "Ready state from jogging",
+		16: "ready state from analog tracking",
+		17: "Ready state from trajectory",
+		18: "Ready state from spinning",
+		// 19 skipped
+		20: "Disable state",
+		21: "Disabled state due a following error on ready state",
+		22: "Disabled state due to a following error during motion",
+		23: "Disabled state due to a motion done timeout during moving",
+		24: "Disabled state due to a following error on slave state",
+		25: "Disabled state due to a following error on jogging state",
+		26: "Disabled state due to a following error during trajectory",
+		27: "Disabled state due to a motion done timeout during trajectory",
+		28: "Disabled state due to a following error during analog tracking",
+		29: "Disabled state due to a slave error during motion",
+		30: "Disabled state due to a slave error on slave state",
+		31: "Disabled state due to a slave error on jogging state",
+		32: "Disabled state due to a slave error during trajectory",
+		33: "Disabled state due to a slave error during analog tracking",
+		34: "Disabled state due to a slave error on ready state",
+		35: "Disabled state due to a following error on spinning state",
+		36: "Disabled state due to a slave error on spinning state",
+		37: "Disabled state due to a following error on auto-tuning",
+		38: "Disabled state due to a slave error on auto-tuning",
+		// 39 skipped
+		40: "Emergency braking",
+		41: "Motor initialization state",
+		42: "Not referenced state",
+		43: "Homing state",
+		44: "moving state",
+		45: "Trajectory state",
+		46: "slave state due to a SlaveEnable command",
+		47: "Jogging state due to a JogEnable command",
+		48: "Analog tracking state due to a TrackingEnable command",
+		49: "Analog interpolated encoder calibration state",
+		50: "Not initialized state due to a mechanical zero inconsistency during homing",
+		51: "Spinning state due to a SpinParametersSet command",
+		// 52~62 skipped
+		63: "Not initialized state due to a motor initialization error",
+		64: "Referencing state",
+		// 65 skipped
+		66: "Not initialized state due to a perpendicularity error homing",
+		67: "Not initialized state due to a master/slave error during homing",
+		68: "Auto-tuning state",
+		69: "Scaling calibration state",
+		70: "Ready state from auto-tuning",
+		71: "Not initialized state from scaling calibration",
+		72: "Not initialized state due to a scaling calibration error",
+		73: "Excitation signal generation state",
+		74: "Disable state due to a following error on excitation signal generation state",
+		75: "Disable state due to a master/slave error on excitation signal generation state",
+		76: "Disable state due to an emergency stop on excitation signal generation state",
+		77: "Ready state from excitation signal generation",
 	}
 )
 
-// XPSErr is a fancy Error() wrapper around error codes
-type XPSErr int
-
-// Error implements the error interface
-func (e XPSErr) Error() string {
-	if s, ok := XPSErrorCodes[int(e)]; ok {
-		return fmt.Sprintf("%d - %s", e, s)
-	}
-	return fmt.Sprintf("%d - ERROR_UNKNOWN_TO_GO-HCIT", e)
-}
-
-// XPSError converts an error code to something that implements the error interface
-func XPSError(code int) error {
+// XPSErr converts an error code to something that implements the error interface
+func XPSErr(code int) error {
 	if code == 0 {
 		return nil
 	}
-	return XPSErr(code)
+	return XPSError{code}
 }
 
 // popError pulls the error code off of a raw response if it is present
@@ -163,6 +285,12 @@ supply the number of positioners to query for.  Consequently, a best practice
 emerges to simply put each positioner in its own group, and not use the group
 functionality at all.  This practice eliminates the ability to work with groups
 the way they are used in most other motion controllers, which is a shame.
+
+There is also no use of terminators for datagrams; the controller scans inputs
+for valid entries and sends them back to enable synchronization.
+
+You also send commands formatted as C/++ source code, which is presumably
+compiled or interpreted by the controller.
 */
 type XPS struct {
 	*comm.RemoteDevice
@@ -174,86 +302,106 @@ func NewXPS(addr string) *XPS {
 	return &XPS{RemoteDevice: &rd}
 }
 
-// GroupMoveAbsolute moves a group to an absolute position
-func (xps *XPS) GroupMoveAbsolute(gid string, pos []float64) error {
-	fstr := util.Float64SliceToCSV(pos, 'G', 9)
-	cmd := fmt.Sprintf("GroupMoveAbsolute(%s,%s)", gid, fstr)
-	fmt.Println(cmd)
+func (xps *XPS) openReadWriteClose(cmd string) (xpsResponse, error) {
+	resp := xpsResponse{}
+	err := xps.Open()
+	if err != nil {
+		return resp, err
+	}
+	defer xps.CloseEventually()
+	msg := []byte(cmd)
+	n, err := xps.Conn.Write(msg)
+	if err != nil {
+		return resp, err
+	} else if n != len(msg) {
+		return resp, errors.New("XPS did not accept the entire message")
+	}
+	// apparently the XPS always writes everything in one packet.
+	// I sure hope so, otherwise we will get data loss since NACKs don't have "EndOfAPI"
+	// and there is nothing to scan for.  Really garbage interface on their part.
+	buf := make([]byte, 1500)
+	n, err = xps.Conn.Read(buf)
+	if err != nil {
+		return resp, err
+	}
+	buf = buf[:n]
+	fmt.Println("received buffer", string(buf))
+	resp = parse(string(buf))
+	return resp, nil
+}
+
+// Enable enables the axis
+func (xps *XPS) Enable(axis string) error {
+	cmd := fmt.Sprintf("GroupMotionEnable(%s)", axis)
+	resp, err := xps.openReadWriteClose(cmd)
+	if err != nil {
+		return err
+	}
+	if resp.errCode != 0 {
+		return XPSErr(resp.errCode)
+	}
 	return nil
 }
 
-// GroupPositionCurrentGet gets the current absolute position of a group.
-// Note that we hard-code "nbElements" to 1, since there is no way to
-// query for that information, so the user will not know unless they are the
-// only person who has ever assigned group elements on the controller.
-func (xps *XPS) GroupPositionCurrentGet(gid string) ([]float64, error) {
-	cmd := fmt.Sprintf("GroupPositionCurrentGet(%s, double *)", gid)
-	fmt.Println(cmd)
-	return []float64{0}, nil
+// Disable disables the axis
+func (xps *XPS) Disable(axis string) error {
+	cmd := fmt.Sprintf("GroupMotionDisable(%s)", axis)
+	resp, err := xps.openReadWriteClose(cmd)
+	if err != nil {
+		return err
+	}
+	if resp.errCode != 0 {
+		return XPSErr(resp.errCode)
+	}
+	return nil
 }
 
-// GroupHomeSearch homes each of the axes in a given group
-func (xps *XPS) GroupHomeSearch(gid string) error {
-	cmd := fmt.Sprintf("GroupHomeSearch(%s)", gid)
-	fmt.Println(cmd)
-	return XPSError(0)
+// GetEnabled gets if the axis is enabled
+func (xps *XPS) GetEnabled(axis string) (bool, error) {
+	// todo: look at GroupMotionStatusGet
+	cmd := fmt.Sprintf("GroupStatusGet(%s, int *)", axis)
+	resp, err := xps.openReadWriteClose(cmd)
+	if err != nil {
+		return false, err
+	}
+	fmt.Printf("%+v\n", resp)
+	return false, nil
+	// return false, errors.New("XPS controllers do not have a way to query if motion is enabled")
 }
 
-// HTTPPos triggers GroupMoveAbsolute from an HTTP POST request with "group"
-// (str) and "f64" ([]float) fields
-// or GroupPositionCurrentGet from an HTTP GET request with "group" (str) field
-func (xps *XPS) HTTPPos(w http.ResponseWriter, r *http.Request) {
-	jcmd := JSONGroupCommand{}
-	err := json.NewDecoder(r.Body).Decode(&jcmd)
-	defer r.Body.Close()
+// GetPos gets the absolute position of an axis
+func (xps *XPS) GetPos(axis string) (float64, error) {
+	cmd := fmt.Sprintf("GroupPositionCurrentGet(%s, double *)", axis)
+	resp, err := xps.openReadWriteClose(cmd)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return 0, err
 	}
-	switch r.Method {
-	case http.MethodGet:
-		pos, err := xps.GroupPositionCurrentGet(jcmd.Group)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		s := struct {
-			F64 []float64 `json:"f64"`
-		}{pos}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		err = json.NewEncoder(w).Encode(s)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-		return
-
-	case http.MethodPost:
-		err := xps.GroupMoveAbsolute(jcmd.Group, jcmd.F64)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		return
-
+	if resp.errCode != 0 {
+		return 0, XPSErr(resp.errCode)
 	}
+	return strconv.ParseFloat(resp.content, 64)
 }
 
-// HTTPHome triggers GroupHomeSearch on the given group
-func (xps *XPS) HTTPHome(w http.ResponseWriter, r *http.Request) {
-	jcmd := JSONGroupCommand{}
-	err := json.NewDecoder(r.Body).Decode(&jcmd)
-	defer r.Body.Close()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	err = xps.GroupHomeSearch(jcmd.Group)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-	return
+// Home homes the axis
+func (xps *XPS) Home(axis string) error {
+	cmd := fmt.Sprintf("GroupHomeSearch(%s)", axis)
+	resp, err := xps.openReadWriteClose(cmd)
+	fmt.Printf("%+v\n", resp)
+	return err
+}
+
+// MoveAbs moves an axis to an absolute position
+func (xps *XPS) MoveAbs(axis string, pos float64) error {
+	cmd := fmt.Sprintf("GroupMoveAbsolute(%s,%f)", axis, pos)
+	resp, err := xps.openReadWriteClose(cmd)
+	fmt.Printf("%+v\n", resp)
+	return err
+}
+
+// MoveRel moves the axis a relative distance
+func (xps *XPS) MoveRel(axis string, pos float64) error {
+	cmd := fmt.Sprintf("GroupMoveRelative(%s,%f)", axis, pos)
+	resp, err := xps.openReadWriteClose(cmd)
+	fmt.Printf("%+v\n", resp)
+	return err
 }
