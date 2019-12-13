@@ -130,13 +130,13 @@ func (h *HTTPWrapper) GetFrame(w http.ResponseWriter, r *http.Request) {
 		}
 		err = h.Camera.SetExposureTime(T)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
 	img, err := h.Camera.GetFrame()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
