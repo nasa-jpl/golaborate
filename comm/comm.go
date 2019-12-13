@@ -72,7 +72,7 @@ const (
 	// DefaultTerminator is the default transmission termination byte
 	DefaultTerminator = byte('\r')
 
-	closeDelay = 5 * time.Second
+	closeDelay = 30 * time.Second
 )
 
 // Sender has a Send method that passes along a byte slice with the transmission termination appended
