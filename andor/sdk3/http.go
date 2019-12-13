@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/astrogo/fitsio"
+	"github.jpl.nasa.gov/HCIT/go-hcit/mathx"
 	"github.jpl.nasa.gov/HCIT/go-hcit/server"
 	"github.jpl.nasa.gov/HCIT/go-hcit/util"
 	"goji.io/pat"
@@ -568,26 +569,8 @@ func (h *HTTPWrapper) SetFeature(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	switch typ {
-	case "command":
-		http.Error(w, "cannot set a command feature", http.StatusBadRequest)
-		return
-	case "int":
-		i := server.IntT{}
-		err := json.NewDecoder(r.Body).Decode(&i)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		defer r.Body.Close()
-		err = SetInt(h.Camera.Handle, feature, int64(i.Int))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		return
-	case "float":
+	switch feature {
+	case "ExposureTime":
 		f := server.FloatT{}
 		err := json.NewDecoder(r.Body).Decode(&f)
 		if err != nil {
@@ -595,48 +578,110 @@ func (h *HTTPWrapper) SetFeature(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		defer r.Body.Close()
-		err = SetFloat(h.Camera.Handle, feature, f.F64)
+		tNs := time.Duration(int(mathx.Round(f*1e9, 1))) * time.Nanosecond
+		err = h.Camera.SetExposureTime(tNs)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		return
-	case "bool":
-		b := server.BoolT{}
-		err := json.NewDecoder(r.Body).Decode(&b)
+	case "AOIWidth", "AOIHeight", "AOITop", "AOILeft":
+		// get the parameter from the client and create the struct
+		i := server.IntT{}
+		err := json.NewDecoder(r.Body).Decode(&i)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		defer r.Body.Close()
-		err = SetBool(h.Camera.Handle, feature, b.Bool)
+		aoi := AOI{}
+		switch feature {
+		case "AOIWidth":
+			aoi.Width = i
+		case "AOIHeight":
+			aoi.Height = i
+		case "AOILeft":
+			aoi.Left = i
+		case "AOITop":
+			aoi.Top = i
+		}
+		err = h.Camera.SetAOI(aoi)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		w.WriteHeader(http.StatusOK)
-		return
-	case "enum", "string":
-		s := server.StrT{}
-		err := json.NewDecoder(r.Body).Decode(&s)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+	default:
+		switch typ {
+		case "command":
+			http.Error(w, "cannot set a command feature", http.StatusBadRequest)
+			return
+		case "int":
+			i := server.IntT{}
+			err := json.NewDecoder(r.Body).Decode(&i)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			defer r.Body.Close()
+			err = SetInt(h.Camera.Handle, feature, int64(i.Int))
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			return
+		case "float":
+			f := server.FloatT{}
+			err := json.NewDecoder(r.Body).Decode(&f)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			defer r.Body.Close()
+			err = SetFloat(h.Camera.Handle, feature, f.F64)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			return
+		case "bool":
+			b := server.BoolT{}
+			err := json.NewDecoder(r.Body).Decode(&b)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			defer r.Body.Close()
+			err = SetBool(h.Camera.Handle, feature, b.Bool)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			return
+		case "enum", "string":
+			s := server.StrT{}
+			err := json.NewDecoder(r.Body).Decode(&s)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			defer r.Body.Close()
+			if typ == "enum" {
+				err = SetEnumString(h.Camera.Handle, feature, s.Str)
+			} else {
+				err = SetString(h.Camera.Handle, feature, s.Str)
+			}
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
 			return
 		}
-		defer r.Body.Close()
-		if typ == "enum" {
-			err = SetEnumString(h.Camera.Handle, feature, s.Str)
-		} else {
-			err = SetString(h.Camera.Handle, feature, s.Str)
-		}
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		return
 	}
+
 }
 
 // GetAOI gets the AOI and returns it as json over the wire

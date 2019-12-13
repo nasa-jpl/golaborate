@@ -133,16 +133,16 @@ var (
 // AOI describes an area of interest on the camera
 type AOI struct {
 	// Left is the left pixel index.  1-based
-	Left int
+	Left int `json:"left"`
 
 	// Top is the top pixel index.  1-based
-	Top int
+	Top int `json:"top"`
 
 	// Width is the width in pixels
-	Width int
+	Width int `json:"width"`
 
 	// Height is the height in pixels
-	Height int
+	Height int `json:"height"`
 }
 
 // Camera represents a camera from SDK3
