@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
 )
@@ -309,6 +310,7 @@ type XPS struct {
 // NewXPS makes a new XPS instance
 func NewXPS(addr string) *XPS {
 	rd := comm.NewRemoteDevice(addr, false, nil, makeSerConf(addr))
+	rd.Timeout = 60 * time.Second
 	return &XPS{RemoteDevice: &rd}
 }
 
@@ -335,7 +337,6 @@ func (xps *XPS) openReadWriteClose(cmd string) (xpsResponse, error) {
 		return resp, err
 	}
 	buf = buf[:n]
-	fmt.Println("received buffer", string(buf))
 	resp = parse(string(buf))
 	return resp, nil
 }
@@ -347,10 +348,7 @@ func (xps *XPS) Enable(axis string) error {
 	if err != nil {
 		return err
 	}
-	if resp.errCode != 0 {
-		return XPSErr(resp.errCode)
-	}
-	return nil
+	return XPSErr(resp.errCode)
 }
 
 // Disable disables the axis
@@ -360,10 +358,7 @@ func (xps *XPS) Disable(axis string) error {
 	if err != nil {
 		return err
 	}
-	if resp.errCode != 0 {
-		return XPSErr(resp.errCode)
-	}
-	return nil
+	return XPSErr(resp.errCode)
 }
 
 // GetStatus gets the current status of an axis (group) from the controller
@@ -414,16 +409,20 @@ func (xps *XPS) GetPos(axis string) (float64, error) {
 func (xps *XPS) Home(axis string) error {
 	cmd := fmt.Sprintf("GroupHomeSearch(%s)", axis)
 	resp, err := xps.openReadWriteClose(cmd)
-	fmt.Printf("%+v\n", resp)
-	return err
+	if err != nil {
+		return err
+	}
+	return XPSErr(resp.errCode)
 }
 
 // Initialize initializes the axis
 func (xps *XPS) Initialize(axis string) error {
 	cmd := fmt.Sprintf("GroupInitialize(%s)", axis)
 	resp, err := xps.openReadWriteClose(cmd)
-	fmt.Printf("%+v\n", resp)
-	return err
+	if err != nil {
+		return err
+	}
+	return XPSErr(resp.errCode)
 }
 
 // MoveAbs moves an axis to an absolute position
