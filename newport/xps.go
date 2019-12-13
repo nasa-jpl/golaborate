@@ -57,11 +57,36 @@ type XPSError struct {
 	code int
 }
 
+func intToXPSStatus(i int) XPSStatus {
+	if str, ok := XPSGroupStatuses[i]; ok {
+		return XPSStatus{Code: i, Text: str}
+	}
+	return XPSStatus{Code: i, Text: "UNKNOWN STATUS"}
+}
+
 func (e XPSError) Error() string {
 	if s, ok := XPSErrorCodes[e.code]; ok {
 		return fmt.Sprintf("%d - %s", e.code, s)
 	}
 	return fmt.Sprintf("%d - UNKNOWN ERROR CODE", e.code)
+}
+
+// XPSStatus is a struct holding a status code and its string
+type XPSStatus struct {
+	// Code is the status code
+	Code int
+
+	// Text is the textual version of the status
+	Text string
+}
+
+// IsReady returns true if the axis status is "ready" or false if not
+func (s XPSStatus) IsReady() bool {
+	c := s.Code
+	if (c >= 10 && c < 20) || (c == 70) || (c == 77) {
+		return true
+	}
+	return false
 }
 
 var (
@@ -255,21 +280,6 @@ func XPSErr(code int) error {
 	return XPSError{code}
 }
 
-// popError pulls the error code off of a raw response if it is present
-// and returns the code as an int and the trimmed string
-func popError(resp string) (int, string) {
-	return 0, ""
-}
-
-// JSONGroupCommand is a primitive describing a command sent as JSON.
-// CMD may either be a command (Command.Cmd) or an alias (Command.Alias)
-// if Write is true, the data (F64) will be used.  If false, it will be ignored.
-type JSONGroupCommand struct {
-	Group string    `json:"group"`
-	F64   []float64 `json:"f64"`
-	Write bool      `json:"write"`
-}
-
 /*XPS represents an XPS series motion controller.
 
 Note that the programming manual has a lot of socket numbers sprinkled around.
@@ -356,6 +366,20 @@ func (xps *XPS) Disable(axis string) error {
 	return nil
 }
 
+// GetStatus gets the current status of an axis (group) from the controller
+func (xps *XPS) GetStatus(axis string) (XPSStatus, error) {
+	cmd := fmt.Sprintf("GroupStatusGet(%s, int *)", axis)
+	resp, err := xps.openReadWriteClose(cmd)
+	if err != nil {
+		return XPSStatus{}, err
+	}
+	i, err := strconv.Atoi(resp.content)
+	if err != nil {
+		return XPSStatus{}, err
+	}
+	return intToXPSStatus(i), nil
+}
+
 // GetEnabled gets if the axis is enabled
 func (xps *XPS) GetEnabled(axis string) (bool, error) {
 	// todo: look at GroupMotionStatusGet
@@ -364,8 +388,12 @@ func (xps *XPS) GetEnabled(axis string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	fmt.Printf("%+v\n", resp)
-	return false, nil
+	i, err := strconv.Atoi(resp.content)
+	if err != nil {
+		return false, err
+	}
+	status := intToXPSStatus(i)
+	return status.IsReady(), nil
 	// return false, errors.New("XPS controllers do not have a way to query if motion is enabled")
 }
 
@@ -390,18 +418,30 @@ func (xps *XPS) Home(axis string) error {
 	return err
 }
 
+// Initialize initializes the axis
+func (xps *XPS) Initialize(axis string) error {
+	cmd := fmt.Sprintf("GroupInitialize(%s)", axis)
+	resp, err := xps.openReadWriteClose(cmd)
+	fmt.Printf("%+v\n", resp)
+	return err
+}
+
 // MoveAbs moves an axis to an absolute position
 func (xps *XPS) MoveAbs(axis string, pos float64) error {
 	cmd := fmt.Sprintf("GroupMoveAbsolute(%s,%f)", axis, pos)
 	resp, err := xps.openReadWriteClose(cmd)
-	fmt.Printf("%+v\n", resp)
-	return err
+	if err != nil {
+		return err
+	}
+	return XPSErr(resp.errCode)
 }
 
 // MoveRel moves the axis a relative distance
 func (xps *XPS) MoveRel(axis string, pos float64) error {
 	cmd := fmt.Sprintf("GroupMoveRelative(%s,%f)", axis, pos)
 	resp, err := xps.openReadWriteClose(cmd)
-	fmt.Printf("%+v\n", resp)
-	return err
+	if err != nil {
+		return err
+	}
+	return XPSErr(resp.errCode)
 }
