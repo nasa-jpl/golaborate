@@ -1,6 +1,8 @@
 package envsrv
 
 import (
+	"encoding/json"
+	"net/http"
 	"os"
 	"strings"
 
@@ -158,6 +160,8 @@ func (c Config) BuildMux() *goji.Mux {
 		httpers = append(httpers, httper)
 	}
 
+	supergraph := map[string][]string{}
+
 	// the above just collected everything from the configs
 	for idx := 0; idx < len(stems); idx++ {
 		stem := stems[idx]
@@ -169,10 +173,19 @@ func (c Config) BuildMux() *goji.Mux {
 		if !strings.HasSuffix(stem, "/") {
 			stem = stem + "/"
 		}
+		supergraph[stem] = httper.RT().Endpoints()
 		stem = stem + "*"
 		strP := pat.New(stem)
 		root.Handle(strP, mux)
 		httper.RT().Bind(mux)
 	}
+	root.HandleFunc(pat.Get("/endpoints"), func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		err := json.NewEncoder(w).Encode(supergraph)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	})
 	return root
 }

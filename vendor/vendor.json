@@ -39,12 +39,6 @@
 			"revisionTime": "2019-10-07T09:55:39Z"
 		},
 		{
-			"checksumSHA1": "sxluRJHmkjYbZbKN2Ol9V86quHU=",
-			"path": "github.com/go-yaml/yaml",
-			"revision": "bec87e4332aede01fb63a4ab299d8af28480cd96",
-			"revisionTime": "2014-09-22T21:32:25Z"
-		},
-		{
 			"checksumSHA1": "4ymI38LnFF9HeOU1LJqzlQJPrKU=",
 			"path": "github.com/knadh/koanf",
 			"revision": "a1272d0c07ad8ab89903a1394b97f20b5e8df35c",

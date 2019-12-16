@@ -61,10 +61,28 @@ func (rt RouteTable) Endpoints() []string {
 	return routes
 }
 
-// Bind calls HandleFunc for each route in the table on the given mux
+// EndpointsHTTP returns a function that encodes the endpoint list to a ResponseWriter
+func (rt RouteTable) EndpointsHTTP() func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		endpts := rt.Endpoints()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		err := json.NewEncoder(w).Encode(endpts)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	}
+}
+
+// Bind calls HandleFunc for each route in the table on the given mux.
+// It also binds the endpoints route if it is not in the table already
 func (rt RouteTable) Bind(mux *goji.Mux) {
 	for ptrn, meth := range rt {
 		mux.HandleFunc(ptrn, meth)
+	}
+	pg := pat.Get("/endpoints")
+	if _, exists := rt[pg]; !exists {
+		mux.HandleFunc(pg, rt.EndpointsHTTP())
 	}
 }
 
