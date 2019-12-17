@@ -1,4 +1,4 @@
-package envsrv
+package multiserver
 
 import (
 	"encoding/json"

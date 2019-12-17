@@ -8,11 +8,11 @@ import (
 	"strings"
 
 	"github.com/knadh/koanf"
-	"github.com/knadh/koanf/parsers/yaml"
-	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/structs"
 
-	yml "github.com/go-yaml/yaml"
+	"github.jpl.nasa.gov/HCIT/go-hcit/multiserver"
+
+	"gopkg.in/yaml.v2"
 )
 
 var (
@@ -25,14 +25,23 @@ var (
 )
 
 func setupconfig() {
-	k.Load(structs.Provider(multiserver.Config{}, "koanf"), nil)
-	if err := k.Load(file.Provider(ConfigFileName), yaml.Parser()); err != nil {
+	c := multiserver.Config{}
+	// k.Load(structs.Provider(c, "koanf"), nil)
+	f, err := os.Open(ConfigFileName)
+	if err != nil {
 		errtxt := err.Error()
 		if !strings.Contains(errtxt, "no such") { // file missing, who cares
 			log.Fatalf("error loading config: %v", err)
 		}
 	}
+	defer f.Close()
+	err = yaml.NewDecoder(f).Decode(&c)
+	if err != nil {
+		log.Fatal(err)
+	}
+	k.Load(structs.Provider(c, "koanf"), nil)
 }
+
 func root() {
 	str := `multiserver communicates with lab hardware and exposes an HTTP interface to them
 This enables a server-client architecture,
@@ -74,16 +83,16 @@ func mkconf() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = yml.NewEncoder(f).Encode(c)
+	err = yaml.NewEncoder(f).Encode(c)
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
 func printconf() {
-	c := config{}
+	c := multiserver.Config{}
 	k.Unmarshal("", &c)
-	err := yml.NewEncoder(os.Stdout).Encode(c)
+	err := yaml.NewEncoder(os.Stdout).Encode(c)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -100,8 +109,8 @@ func run() {
 		log.Fatal(err)
 	}
 	mux := c.BuildMux()
-	log.Println("now listening for requests at ", addr)
-	log.Fatal(http.ListenAndServe(addr, mux))
+	log.Println("now listening for requests at ", c.Addr)
+	log.Fatal(http.ListenAndServe(c.Addr, mux))
 }
 
 func main() {
