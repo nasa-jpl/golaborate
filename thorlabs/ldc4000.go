@@ -3,12 +3,42 @@ package thorlabs
 import (
 	"fmt"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
+	"github.jpl.nasa.gov/HCIT/go-hcit/usbtmc"
 )
+
+/* unlike the remotedevice classes, this package assumes the connection to the
+device is always open
+*/
+const (
+	// TLVID is the Thorlabs vendor ID
+	TLVID = 0x1313
+
+	// LDC4001PID is the LDC4001 product ID
+	LDC4001PID = 0x804a
+)
+
+// LDCError is a formatible error code from the XPS
+type LDCError struct {
+	code int
+}
+
+// Error satisfies stdlib error interface
+func (e LDCError) Error() string {
+	if s, ok := LDC4000Errors[e.code]; ok {
+		return fmt.Sprintf("%d - %s", e.code, s)
+	}
+	return fmt.Sprintf("%d - UNKNOWN ERROR CODE", e.code)
+}
 
 // LDC4000 represents an LDC4000 laser diode and TEC controller
 type LDC4000 struct {
-	*comm.RemoteDevice
+	dev usbtmc.USBDevice
+}
+
+// NewLDC4000 creates a new LDC4000 instance absorbing the first one seen on the USB[us]
+func NewLDC4000() (LDC4000, error) {
+	d, err := usbtmc.NewUSBDevice(TLVID, LDC4001PID)
+	return LDC4000{dev: d}, err
 }
 
 var (
@@ -81,21 +111,33 @@ var (
 	}
 )
 
+func (ldc *LDC4000) writeReadBus(cmd string) (usbtmc.BulkInResponse, error) {
+	err := ldc.dev.Write(append([]byte(cmd), '\n'))
+	if err != nil {
+		return usbtmc.BulkInResponse{}, err
+	}
+	return ldc.dev.Read()
+}
+func (ldc *LDC4000) writeOnlyBus(cmd string) error {
+	resp, err := ldc.writeReadBus(cmd)
+	fmt.Println(resp.Data)
+	return err
+}
+
 // On turns the LD on
 func (ldc *LDC4000) On() error {
-	cmd := "OUTPUT ON"
-	return nil
+	return ldc.writeOnlyBus("OUTPUT ON")
 }
 
 // Off turns the LD off
 func (ldc *LDC4000) Off() error {
-	cmd := "OUTPUT OFF"
-	return nil
+	return ldc.writeOnlyBus("OUTPUT OFF")
 }
 
 // IsOn checks if the LDC is on or off
 func (ldc *LDC4000) IsOn() (bool, error) {
-	cmd := "OUTPUT?"
+	resp, err := ldc.writeReadBus("OUTPUT?")
+	fmt.Printf("%+v %w\n", resp, err)
 	return false, nil
 }
 
@@ -107,23 +149,24 @@ func (ldc *LDC4000) SetConstantPowerMode(b bool) error {
 	} else {
 		cmd = "SOURCE:FUNCTION:MODE CURRENT"
 	}
-	return nil
+	return ldc.writeOnlyBus(cmd)
 }
 
 // GetConstantPowerMode gets if the laser is in constant power mode (true) or constant current mode (false)
 func (ldc *LDC4000) GetConstantPowerMode() (bool, error) {
-	cmd := "SOURCE:FUNCTION:MODE?"
+	resp, err := ldc.writeReadBus("SOURCE:FUNCTION:MODE?")
+	fmt.Printf("%+v %w\n", resp, err)
 	return false, nil
 }
 
 // SetPowerLevel sets the output power level in watts
 func (ldc *LDC4000) SetPowerLevel(p float64) error {
 	cmd := fmt.Sprintf("SOURCE:POWER %f.9", p)
-	return nil
+	return ldc.writeOnlyBus(cmd)
 }
 
 // SetCurrentLevel sets the output current in Amps
 func (ldc *LDC4000) SetCurrentLevel(c float64) error {
 	cmd := fmt.Sprintf("SOURCE:CURRENT %f.9", c)
-	return nil
+	return ldc.writeOnlyBus(cmd)
 }
