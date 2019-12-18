@@ -1,5 +1,11 @@
 package sdk3
 
+import (
+	"io"
+
+	"github.com/astrogo/fitsio"
+)
+
 // writeFits streams a fits file to w
 func writeFits(w io.Writer, metadata []fitsio.Card, buffer []uint16, width, height, nframes int) error {
 	fits, err := fitsio.Create(w)
@@ -13,7 +19,7 @@ func writeFits(w io.Writer, metadata []fitsio.Card, buffer []uint16, width, heig
 	}
 	im = fitsio.NewImage(16, dims)
 	defer im.CLose()
-	err = im.Header().Append(...metadata)
+	err = im.Header().Append(metadata...)
 	if err != nil {
 		return err
 	}
