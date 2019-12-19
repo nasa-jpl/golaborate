@@ -39,6 +39,12 @@
 			"revisionTime": "2019-10-07T09:55:39Z"
 		},
 		{
+			"checksumSHA1": "dtworjYAhrlFru+9nq/pCTa19hk=",
+			"path": "github.com/google/gousb",
+			"revision": "18f4c1d8a750878c4f86ac3d7319b8aa462a79f9",
+			"revisionTime": "2019-08-12T19:38:32Z"
+		},
+		{
 			"checksumSHA1": "4ymI38LnFF9HeOU1LJqzlQJPrKU=",
 			"path": "github.com/knadh/koanf",
 			"revision": "a1272d0c07ad8ab89903a1394b97f20b5e8df35c",
