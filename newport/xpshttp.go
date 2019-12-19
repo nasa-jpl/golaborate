@@ -3,9 +3,9 @@ package newport
 import (
 	"net/http"
 
+	"github.jpl.nasa.gov/HCIT/go-hcit/generichttp"
 	"github.jpl.nasa.gov/HCIT/go-hcit/server"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/motion"
 	"goji.io/pat"
 )
 
@@ -16,12 +16,12 @@ type XPSHTTPWrapper struct {
 	// XPS is the embedded XPS controller
 	*XPS
 
-	motion.HTTPWrapper
+	HTTPWrapper generichttp.HTTPMotionController
 }
 
 // NewXPSHTTPWrapper creates a new HTTP wrapper around an XPS controller
 func NewXPSHTTPWrapper(xps *XPS) XPSHTTPWrapper {
-	basic := motion.NewHTTPWrapper(xps)
+	basic := generichttp.NewHTTPMotionController(xps)
 	w := XPSHTTPWrapper{XPS: xps, HTTPWrapper: basic}
 	basic.RouteTable[pat.Post("/axis/:axis/initialize")] = w.Initialize
 	return w
