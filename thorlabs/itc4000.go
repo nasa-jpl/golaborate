@@ -24,26 +24,26 @@ type LDCError struct {
 
 // Error satisfies stdlib error interface
 func (e LDCError) Error() string {
-	if s, ok := LDC4000Errors[e.code]; ok {
+	if s, ok := ITC4000Errors[e.code]; ok {
 		return fmt.Sprintf("%d - %s", e.code, s)
 	}
 	return fmt.Sprintf("%d - UNKNOWN ERROR CODE", e.code)
 }
 
-// LDC4000 represents an LDC4000 laser diode and TEC controller
-type LDC4000 struct {
+// ITC4000 represents an ITC4000 laser diode and TEC controller
+type ITC4000 struct {
 	dev usbtmc.USBDevice
 }
 
-// NewLDC4000 creates a new LDC4000 instance absorbing the first one seen on the USB[us]
-func NewLDC4000() (LDC4000, error) {
+// NewITC4000 creates a new ITC4000 instance absorbing the first one seen on the USB[us]
+func NewITC4000() (ITC4000, error) {
 	d, err := usbtmc.NewUSBDevice(TLVID, LDC4001PID)
-	return LDC4000{dev: d}, err
+	return ITC4000{dev: d}, err
 }
 
 var (
-	// LDC4000Errors maps LDC4000 error codes to strings
-	LDC4000Errors = map[int]string{
+	// ITC4000Errors maps ITC4000 error codes to strings
+	ITC4000Errors = map[int]string{
 		-100: "COMMAND ERROR",
 		-101: "INVALID CHARACTER",
 		-102: "SYNTAX ERROR",
@@ -111,38 +111,36 @@ var (
 	}
 )
 
-func (ldc *LDC4000) writeReadBus(cmd string) (usbtmc.BulkInResponse, error) {
+func (ldc *ITC4000) writeReadBus(cmd string) (usbtmc.BulkInResponse, error) {
 	err := ldc.dev.Write(append([]byte(cmd), '\n'))
 	if err != nil {
 		return usbtmc.BulkInResponse{}, err
 	}
 	return ldc.dev.Read()
 }
-func (ldc *LDC4000) writeOnlyBus(cmd string) error {
-	resp, err := ldc.writeReadBus(cmd)
-	fmt.Println(resp.Data)
-	return err
+func (ldc *ITC4000) writeOnlyBus(cmd string) error {
+	return ldc.dev.Write(append([]byte(cmd), '\n'))
 }
 
-// On turns the LD on
-func (ldc *LDC4000) On() error {
+// EmissionOn turns the LD on
+func (ldc *ITC4000) EmissionOn() error {
 	return ldc.writeOnlyBus("OUTPUT ON")
 }
 
-// Off turns the LD off
-func (ldc *LDC4000) Off() error {
+// EmissionOff turns the LD off
+func (ldc *ITC4000) EmissionOff() error {
 	return ldc.writeOnlyBus("OUTPUT OFF")
 }
 
-// IsOn checks if the LDC is on or off
-func (ldc *LDC4000) IsOn() (bool, error) {
+// EmissionIsOn checks if the LDC is on or off
+func (ldc *ITC4000) EmissionIsOn() (bool, error) {
 	resp, err := ldc.writeReadBus("OUTPUT?")
 	fmt.Printf("%+v %w\n", resp, err)
 	return false, nil
 }
 
 // SetConstantPowerMode puts the laser into constant power mode (true) or into constant current mode (false)
-func (ldc *LDC4000) SetConstantPowerMode(b bool) error {
+func (ldc *ITC4000) SetConstantPowerMode(b bool) error {
 	var cmd string
 	if b {
 		cmd = "SOURCE:FUNCTION:MODE POWER"
@@ -153,20 +151,28 @@ func (ldc *LDC4000) SetConstantPowerMode(b bool) error {
 }
 
 // GetConstantPowerMode gets if the laser is in constant power mode (true) or constant current mode (false)
-func (ldc *LDC4000) GetConstantPowerMode() (bool, error) {
+func (ldc *ITC4000) GetConstantPowerMode() (bool, error) {
 	resp, err := ldc.writeReadBus("SOURCE:FUNCTION:MODE?")
 	fmt.Printf("%+v %w\n", resp, err)
 	return false, nil
 }
 
 // SetPowerLevel sets the output power level in watts
-func (ldc *LDC4000) SetPowerLevel(p float64) error {
+func (ldc *ITC4000) SetPowerLevel(p float64) error {
 	cmd := fmt.Sprintf("SOURCE:POWER %f.9", p)
 	return ldc.writeOnlyBus(cmd)
 }
 
-// SetCurrentLevel sets the output current in Amps
-func (ldc *LDC4000) SetCurrentLevel(c float64) error {
-	cmd := fmt.Sprintf("SOURCE:CURRENT %f.9", c)
+// SetCurrent sets the output current in mA
+func (ldc *ITC4000) SetCurrent(c float64) error {
+	cmd := fmt.Sprintf("SOURCE:CURRENT %f.9", c*1e3)
 	return ldc.writeOnlyBus(cmd)
+}
+
+// GetCurrent gets the output current in mA
+func (ldc *ITC4000) GetCurrent() (float64, error) {
+	cmd := fmt.Sprintf("SOURCE:CURRENT?")
+	resp, err := ldc.writeReadBus(cmd)
+	fmt.Println(resp)
+	return 0, err
 }
