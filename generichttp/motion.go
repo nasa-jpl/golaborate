@@ -1,6 +1,4 @@
-// Package motion contains an abstract interface for a motion controller
-// and HTTP wrapper layer.
-package motion
+package generichttp
 
 import (
 	"encoding/json"
@@ -36,16 +34,16 @@ type Controller interface {
 	Home(string) error
 }
 
-// HTTPWrapper wraps a motion controller with HTTP
-type HTTPWrapper struct {
+// HTTPMotionController wraps a motion controller with HTTP
+type HTTPMotionController struct {
 	Controller
 
 	RouteTable server.RouteTable
 }
 
-// NewHTTPWrapper returns a new HTTP wrapper with the route table pre-configured
-func NewHTTPWrapper(c Controller) HTTPWrapper {
-	w := HTTPWrapper{Controller: c}
+// NewHTTPMotionController returns a new HTTP wrapper with the route table pre-configured
+func NewHTTPMotionController(c Controller) HTTPMotionController {
+	w := HTTPMotionController{Controller: c}
 	rt := server.RouteTable{
 		// enable/disable
 		pat.Get("/axis/:axis/enabled"):  w.GetAxisEnabled,
@@ -63,12 +61,12 @@ func NewHTTPWrapper(c Controller) HTTPWrapper {
 }
 
 // RT satisfies the HTTPer interface
-func (h HTTPWrapper) RT() server.RouteTable {
+func (h HTTPMotionController) RT() server.RouteTable {
 	return h.RouteTable
 }
 
 // SetAxisEnabled enables or disables an axis
-func (h HTTPWrapper) SetAxisEnabled(w http.ResponseWriter, r *http.Request) {
+func (h HTTPMotionController) SetAxisEnabled(w http.ResponseWriter, r *http.Request) {
 	axis := pat.Param(r, "axis")
 	err := h.Controller.Enable(axis)
 	if err != nil {
@@ -80,7 +78,7 @@ func (h HTTPWrapper) SetAxisEnabled(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetAxisEnabled gets if an axis is enabled or disabled
-func (h HTTPWrapper) GetAxisEnabled(w http.ResponseWriter, r *http.Request) {
+func (h HTTPMotionController) GetAxisEnabled(w http.ResponseWriter, r *http.Request) {
 	axis := pat.Param(r, "axis")
 	enabled, err := h.Controller.GetEnabled(axis)
 	if err != nil {
@@ -92,7 +90,7 @@ func (h HTTPWrapper) GetAxisEnabled(w http.ResponseWriter, r *http.Request) {
 }
 
 // HomeAxis homes an axis
-func (h HTTPWrapper) HomeAxis(w http.ResponseWriter, r *http.Request) {
+func (h HTTPMotionController) HomeAxis(w http.ResponseWriter, r *http.Request) {
 	axis := pat.Param(r, "axis")
 	err := h.Controller.Home(axis)
 	if err != nil {
@@ -102,7 +100,7 @@ func (h HTTPWrapper) HomeAxis(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetPos gets the absolute position of an axis
-func (h HTTPWrapper) GetPos(w http.ResponseWriter, r *http.Request) {
+func (h HTTPMotionController) GetPos(w http.ResponseWriter, r *http.Request) {
 	axis := pat.Param(r, "axis")
 	pos, err := h.Controller.GetPos(axis)
 	if err != nil {
@@ -115,7 +113,7 @@ func (h HTTPWrapper) GetPos(w http.ResponseWriter, r *http.Request) {
 
 // SetPos sets the position of an axis, and takes a rel query parameter
 // to adjust in a relative, rather than absolute, manner
-func (h HTTPWrapper) SetPos(w http.ResponseWriter, r *http.Request) {
+func (h HTTPMotionController) SetPos(w http.ResponseWriter, r *http.Request) {
 	axis := pat.Param(r, "axis")
 	relative := r.URL.Query().Get("relative")
 	if relative == "" {
