@@ -164,6 +164,10 @@ func NewUSBDevice(vid, pid uint16) (USBDevice, error) {
 	if err != nil {
 		return out, err
 	}
+	err = out.device.Reset()
+	if err != nil {
+		return out, err
+	}
 	err = out.device.SetAutoDetach(true)
 	if err != nil {
 		return out, err
