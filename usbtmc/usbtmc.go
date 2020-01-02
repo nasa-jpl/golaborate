@@ -127,7 +127,7 @@ func encBulkInHeader(btag BTagger, bufsize int, terminator *byte) [12]byte {
 	10~11 reserved
 	*/
 	tag := btag.nextbTag()
-	out[0] = 0x02 // REQUEST_DEV_DEP_MSG_IN
+	out[0] = byte(2) // REQUEST_DEV_DEP_MSG_IN
 	out[1] = tag
 	out[2] = invbTag(tag)
 	out[3] = reserved
@@ -185,12 +185,13 @@ func NewUSBDevice(vid, pid uint16) (USBDevice, error) {
 	if err != nil {
 		return out, err
 	}
+	out.tagger = newBTagGen()
 	return out, nil
 }
 
 func (d *USBDevice) Read() (BulkInResponse, error) {
 	const (
-		bufSize = 1500
+		bufSize = 64
 	)
 	var out BulkInResponse
 	term := byte(0x10)
@@ -198,19 +199,6 @@ func (d *USBDevice) Read() (BulkInResponse, error) {
 	n, err := d.out.Write(hdr[:])                    // [:] fixed size array to byte slice
 	if err != nil {                                  // problem in transmission
 		return out, err
-	}
-	if n < 12 { // incomplete transmission
-		nOld := n
-		// attempt a second write
-		hdrB := hdr[n:]
-		n, err = d.out.Write(hdrB)
-		total := n + nOld
-		if err != nil {
-			return out, err
-		}
-		if total != 12 {
-			return out, fmt.Errorf("wrote %d bytes, not full 12 required to transmit read request", total)
-		}
 	}
 	// if this line was reached, the entire request succeeded, now we can actually do the read
 	buf := make([]byte, bufSize) // 1 TCP MTU, not even related to USB but pretty big, good enough for now

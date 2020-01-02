@@ -2,6 +2,8 @@ package thorlabs
 
 import (
 	"fmt"
+	"strconv"
+	"sync"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/usbtmc"
 )
@@ -32,6 +34,8 @@ func (e LDCError) Error() string {
 
 // ITC4000 represents an ITC4000 laser diode and TEC controller
 type ITC4000 struct {
+	sync.Mutex
+
 	dev usbtmc.USBDevice
 }
 
@@ -111,13 +115,25 @@ var (
 	}
 )
 
-func (ldc *ITC4000) writeReadBus(cmd string) (usbtmc.BulkInResponse, error) {
+func (ldc *ITC4000) writeReadBus(cmd string) (string, error) {
+	ldc.Lock()
+	defer ldc.Unlock()
 	err := ldc.dev.Write(append([]byte(cmd), '\n'))
 	if err != nil {
-		return usbtmc.BulkInResponse{}, err
+		return "", err
 	}
-	return ldc.dev.Read()
+	resp, err := ldc.dev.Read()
+	idx := len(resp.Data) - 1
+	if resp.Data[idx] == 0x10 { // Data Link Escape may be last byte, pop it
+		resp.Data = resp.Data[:idx]
+		idx--
+	}
+	if resp.Data[idx] == '\n' { // pop trailing newline
+		resp.Data = resp.Data[:idx]
+	}
+	return string(resp.Data), err
 }
+
 func (ldc *ITC4000) writeOnlyBus(cmd string) error {
 	return ldc.dev.Write(append([]byte(cmd), '\n'))
 }
@@ -135,8 +151,7 @@ func (ldc *ITC4000) EmissionOff() error {
 // EmissionIsOn checks if the LDC is on or off
 func (ldc *ITC4000) EmissionIsOn() (bool, error) {
 	resp, err := ldc.writeReadBus("OUTPUT?")
-	fmt.Printf("%+v %w\n", resp, err)
-	return false, nil
+	return resp == "1", err
 }
 
 // SetConstantPowerMode puts the laser into constant power mode (true) or into constant current mode (false)
@@ -153,8 +168,7 @@ func (ldc *ITC4000) SetConstantPowerMode(b bool) error {
 // GetConstantPowerMode gets if the laser is in constant power mode (true) or constant current mode (false)
 func (ldc *ITC4000) GetConstantPowerMode() (bool, error) {
 	resp, err := ldc.writeReadBus("SOURCE:FUNCTION:MODE?")
-	fmt.Printf("%+v %w\n", resp, err)
-	return false, nil
+	return resp != "CURR", err
 }
 
 // SetPowerLevel sets the output power level in watts
@@ -165,14 +179,16 @@ func (ldc *ITC4000) SetPowerLevel(p float64) error {
 
 // SetCurrent sets the output current in mA
 func (ldc *ITC4000) SetCurrent(c float64) error {
-	cmd := fmt.Sprintf("SOURCE:CURRENT %f.9", c*1e3)
+	cmd := fmt.Sprintf("SOURCE:CURRENT %.9f", c/1e3)
 	return ldc.writeOnlyBus(cmd)
 }
 
 // GetCurrent gets the output current in mA
 func (ldc *ITC4000) GetCurrent() (float64, error) {
-	cmd := fmt.Sprintf("SOURCE:CURRENT?")
-	resp, err := ldc.writeReadBus(cmd)
-	fmt.Println(resp)
-	return 0, err
+	resp, err := ldc.writeReadBus("SOURCE:CURRENT?")
+	if err != nil {
+		return 0, err
+	}
+	f, err := strconv.ParseFloat(resp, 64)
+	return f * 1e3, err
 }
