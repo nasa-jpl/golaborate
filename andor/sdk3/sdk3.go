@@ -14,6 +14,7 @@ import "C"
 import (
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 	"unsafe"
@@ -29,7 +30,7 @@ const (
 
 	// WRAPVER is the andor wrapper code version.
 	// Incremement this when pkg sdk3 is updated.
-	WRAPVER = 2
+	WRAPVER = 3
 )
 
 // ErrFeatureNotFound is generated when a feature is looked up in the Features
@@ -130,6 +131,34 @@ var (
 	}
 )
 
+// Binning encapsulates information about
+type Binning struct {
+	// H is the horizontal binning factor
+	H int `json:"h"`
+
+	// V is the vertical binning factor
+	V int `json:"v"`
+}
+
+// FormatBinning converts a binning object to the SDK3 enum style.  Will
+// cause an error inside the SDK if b.H != b.V, or if 0 <= b.H <= 4
+func FormatBinning(b Binning) string {
+	return fmt.Sprintf("%dx%d", b.H, b.V)
+}
+
+// ParseBinning converts an "HxV" string from the SDK into a binning object
+func ParseBinning(sdkValue string) Binning {
+	b := Binning{}
+	chunks := strings.Split(sdkValue, "x")
+	if len(chunks) != 2 {
+		return b
+	}
+	// impossible for this to panic, since len must == 2
+	b.H, _ = strconv.Atoi(chunks[0])
+	b.V, _ = strconv.Atoi(chunks[1])
+	return b
+}
+
 // AOI describes an area of interest on the camera
 type AOI struct {
 	// Left is the left pixel index.  1-based
@@ -184,6 +213,9 @@ type Camera struct {
 
 	// aoiTop is the top pixel index (1-based) of the AOI
 	aoiTop int
+
+	// binning is a cross-compatible representation of AOIBinning
+	binning Binning
 
 	// imageSizeBytes is the size of the image buffer in bytes
 	imageSizeBytes int
@@ -405,6 +437,8 @@ func (c *Camera) SetAOI(aoi AOI) error {
 	}
 	c.aoiHeight = height
 
+	// blow the image size cache
+	c.imageSizeBytes = 0
 	err = c.Allocate()
 	if err != nil {
 		return err
@@ -436,6 +470,33 @@ func (c *Camera) GetSDKVersion() (string, error) {
 		err = nil
 	}
 	return s, err
+}
+
+// GetBinning gets the binning
+func (c *Camera) GetBinning() (Binning, error) {
+	if c.binning.H == 0 {
+		b := Binning{}
+		// uninitialized, fetch from SDK
+		s, err := GetString(c.Handle, "AOIBinning")
+		if err != nil {
+			return b, err
+		}
+		b = ParseBinning(s)
+		c.binning = b
+	}
+	return c.binning, nil
+}
+
+// SetBinning sets the AOIBinning feature
+func (c *Camera) SetBinning(b Binning) error {
+	// blow the image size cache
+	c.imageSizeBytes = 0
+	str := FormatBinning(b)
+	err := enrich(SetString(c.Handle, "AOIBinning", str), "AOIBinning")
+	if err != nil {
+		return err
+	}
+	return c.Allocate()
 }
 
 // GetFirmwareVersion gets the firmware version of the camera

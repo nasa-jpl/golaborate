@@ -183,6 +183,8 @@ func (h *HTTPWrapper) GetFrame(w http.ResponseWriter, r *http.Request) {
 		tsetpt, err := h.Camera.GetTemperatureSetpoint()
 		tstat, err := h.Camera.GetTemperatureStatus()
 		temp, err := h.Camera.GetTemperature()
+		bin, err := h.Camera.GetBinning()
+		binS := FormatBinning(bin)
 
 		var metaerr string
 		if err != nil {
@@ -228,7 +230,7 @@ func (h *HTTPWrapper) GetFrame(w http.ResponseWriter, r *http.Request) {
 			- fpa temperature
 			*/
 			// header to the header
-			fitsio.Card{Name: "HDRVER", Value: "2", Comment: "header version"},
+			fitsio.Card{Name: "HDRVER", Value: "3", Comment: "header version"},
 			fitsio.Card{Name: "WRAPVER", Value: WRAPVER, Comment: "server library code version"},
 			fitsio.Card{Name: "SDKVER", Value: sdkver, Comment: "sdk version"},
 			fitsio.Card{Name: "DRVVER", Value: drvver, Comment: "driver version"},
@@ -253,6 +255,7 @@ func (h *HTTPWrapper) GetFrame(w http.ResponseWriter, r *http.Request) {
 			fitsio.Card{Name: "AOIT", Value: aoi.Top, Comment: "1-based top pixel of the AOI"},
 			fitsio.Card{Name: "AOIW", Value: aoi.Width, Comment: "AOI width, px"},
 			fitsio.Card{Name: "AOIH", Value: aoi.Height, Comment: "AOI height, px"},
+			fitsio.Card{Name: "AOIB", Value: binS, Comment: "AOI Binning, HxV"},
 
 			// needed for uint16 encoding
 			fitsio.Card{Name: "BZERO", Value: 32768},
@@ -590,7 +593,7 @@ func (h *HTTPWrapper) SetFeature(w http.ResponseWriter, r *http.Request) {
 		i := server.IntT{}
 		err := json.NewDecoder(r.Body).Decode(&i)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		defer r.Body.Close()
@@ -610,6 +613,22 @@ func (h *HTTPWrapper) SetFeature(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+	case "AOIBinning":
+		s := server.StrT{}
+		err := json.NewDecoder(r.Body).Decode(&s)
+		defer r.Body.Close()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		b := ParseBinning(s.Str)
+		err = h.Camera.SetBinning(b)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		return
 	default:
 		switch typ {
 		case "command":
