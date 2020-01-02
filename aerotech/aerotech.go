@@ -46,25 +46,6 @@ const (
 	BadReqCode = byte(33)
 )
 
-var (
-	// MotionAliases maps B. Dube aliases to the way Aerotech wants them
-	MotionAliases = map[string]string{
-		"move-abs": "MOVEABS",
-		"move-rel": "MOVEINC",
-		"get-pos":  "PFBKPROG",
-	}
-
-	// CmdGCode maps commands (as aerotech knows them, not B. Dube aliases)
-	// to if a command is g-code style (true) or functional style (false)
-	CmdGCode = map[string]bool{
-		"MOVEABS": true,
-		"MOVEINC": true,
-		"HOME":    true,
-		"ENABLE":  true,
-		"DISABLE": true,
-	}
-)
-
 // ErrBadResponse is generated when a bad response comes from the controller
 type ErrBadResponse struct {
 	resp string
@@ -95,6 +76,8 @@ func (e *Ensemble) writeOnlyBus(msg string) error {
 	if err != nil {
 		return err
 	}
+	e.Lock()
+	defer e.Unlock()
 	defer e.CloseEventually()
 	err = e.Send([]byte(msg))
 	if err != nil {
