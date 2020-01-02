@@ -351,6 +351,8 @@ func (rd *RemoteDevice) OpenSendRecvClose(b []byte) ([]byte, error) {
 	if err != nil {
 		return []byte{}, err
 	}
+	rd.Lock()
+	defer rd.Unlock()
 	defer rd.CloseEventually()
 	return rd.SendRecv(b)
 }
