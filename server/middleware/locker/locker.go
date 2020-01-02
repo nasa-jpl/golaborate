@@ -12,7 +12,7 @@ import (
 )
 
 // Inject adds a lock route to a server.HTTPer which is used to manipulate the locker
-func Inject(l *Locker, other server.HTTPer) {
+func Inject(other server.HTTPer, l *Locker) {
 	rt := other.RT()
 	rt[pat.Get("/lock")] = l.HTTPGet
 	rt[pat.Post("/lock")] = l.HTTPSet
