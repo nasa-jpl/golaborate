@@ -578,7 +578,7 @@ func (h *HTTPWrapper) SetFeature(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		defer r.Body.Close()
-		tNs := time.Duration(int(mathx.Round(f*1e9, 1))) * time.Nanosecond
+		tNs := time.Duration(int(mathx.Round(f.F64*1e9, 1))) * time.Nanosecond
 		err = h.Camera.SetExposureTime(tNs)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -597,13 +597,13 @@ func (h *HTTPWrapper) SetFeature(w http.ResponseWriter, r *http.Request) {
 		aoi := AOI{}
 		switch feature {
 		case "AOIWidth":
-			aoi.Width = i
+			aoi.Width = i.Int
 		case "AOIHeight":
-			aoi.Height = i
+			aoi.Height = i.Int
 		case "AOILeft":
-			aoi.Left = i
+			aoi.Left = i.Int
 		case "AOITop":
-			aoi.Top = i
+			aoi.Top = i.Int
 		}
 		err = h.Camera.SetAOI(aoi)
 		if err != nil {
