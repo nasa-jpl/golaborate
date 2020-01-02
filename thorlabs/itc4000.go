@@ -3,6 +3,7 @@ package thorlabs
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/usbtmc"
@@ -40,9 +41,9 @@ type ITC4000 struct {
 }
 
 // NewITC4000 creates a new ITC4000 instance absorbing the first one seen on the USB[us]
-func NewITC4000() (ITC4000, error) {
+func NewITC4000() (*ITC4000, error) {
 	d, err := usbtmc.NewUSBDevice(TLVID, LDC4001PID)
-	return ITC4000{dev: d}, err
+	return &ITC4000{dev: d}, err
 }
 
 var (
@@ -191,4 +192,13 @@ func (ldc *ITC4000) GetCurrent() (float64, error) {
 	}
 	f, err := strconv.ParseFloat(resp, 64)
 	return f * 1e3, err
+}
+
+// Raw sends a command and retrieves the reply if there is a question mark in the command, else returns "", err
+func (ldc *ITC4000) Raw(cmd string) (string, error) {
+	if !strings.Contains(cmd, "?") {
+		err := ldc.writeOnlyBus(cmd)
+		return "", err
+	}
+	return ldc.writeReadBus(cmd)
 }
