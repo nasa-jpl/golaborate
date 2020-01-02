@@ -193,6 +193,11 @@ func (h *HTTPWrapper) GetFrame(w http.ResponseWriter, r *http.Request) {
 			metaerr = ""
 		}
 
+		hdr := w.Header()
+		hdr.Set("Content-Type", "image/fits")
+		hdr.Set("Content-Disposition", "attachment; filename=image.fits")
+		w.WriteHeader(http.StatusOK)
+
 		now := time.Now()
 		ts := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d",
 			now.Year(),
@@ -202,15 +207,7 @@ func (h *HTTPWrapper) GetFrame(w http.ResponseWriter, r *http.Request) {
 			now.Minute(),
 			now.Second())
 
-		fits, err := fitsio.Create(w)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		defer fits.Close()
-		im := fitsio.NewImage(16, []int{aoi.Width, aoi.Height})
-		defer im.Close()
-		err = im.Header().Append(
+		cards := []fitsio.Card{
 			/* andor-http header format includes:
 			- header format tag
 			- go-hcit andor version
@@ -259,31 +256,13 @@ func (h *HTTPWrapper) GetFrame(w http.ResponseWriter, r *http.Request) {
 
 			// needed for uint16 encoding
 			fitsio.Card{Name: "BZERO", Value: 32768},
-			fitsio.Card{Name: "BSCALE", Value: 1.0},
-		)
+			fitsio.Card{Name: "BSCALE", Value: 1.0}}
+
+		err := writeFits(w, cards, img, aoi.Width, aoi.Height, 1)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
 		}
-		hdr := w.Header()
-		hdr.Set("Content-Type", "image/fits")
-		hdr.Set("Content-Disposition", "attachment; filename=image.fits")
-		w.WriteHeader(http.StatusOK)
-		buf := make([]int16, len(img))
-		for idx := 0; idx < len(img); idx++ {
-			// scale uint16 to int16.  Underflow on uint16 produces the appropriate wrapping for the FITS standard
-			buf[idx] = int16(img[idx] - 32768)
-		}
-		err = im.Write(buf)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		err = fits.Write(im)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+		return
 	}
 
 }
