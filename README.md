@@ -18,6 +18,7 @@ Motion:
 Light sources:
 - NKT SuperK supercontinuum lasers
 - IXL Lightwave laser diodes
+- Thorlabs ITC4000 series laser drivers & thermal controller
 
 Environmental Sensors and controllers:
 - Granville-Phillips GP375 Convectron pressure sensors
@@ -30,7 +31,8 @@ Instruments:
 - Zygo interferometers
 
 Cameras:
-- Andor Neo sCMOS and iXON EMCCD (full SDK for both)
+- Andor Neo sCMOS
+- Andor iXON EMCCD
 
 ## Installation and Compilation
 
@@ -86,7 +88,7 @@ To view the documentation for HTTP clients, you can build envsrv and visit http:
 | Andor cameras     | X      |  X     |
 | other cameras (?) |        |        |
 | Newport EPS       |  X     |  X     |
-| Newport XPS       |  X     |        |
+| Newport XPS       |  X     |  X     |
 | Aerotech Ensemble |  X     |  X     |
 | PI motion         |        |        |
 | Lakeshore temp    |  X     |        |
