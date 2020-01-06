@@ -7,6 +7,10 @@ import (
 	"os"
 	"strings"
 
+	"goji.io/pat"
+
+	"goji.io"
+
 	"github.com/knadh/koanf"
 	"github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/file"
@@ -19,7 +23,7 @@ import (
 
 var (
 	// Version is the version number.  Typically injected via ldflags with git build
-	Version = "dev"
+	Version = "6"
 
 	// ConfigFileName is what it sounds like
 	ConfigFileName = "andor-http.yml"
@@ -28,6 +32,7 @@ var (
 
 type config struct {
 	Addr         string                 `yaml:"Addr"`
+	Root         string                 `yaml:"Root"`
 	SerialNumber string                 `yaml:"SerialNumber"`
 	BootupArgs   map[string]interface{} `yaml:"BootupArgs"`
 }
@@ -35,6 +40,7 @@ type config struct {
 func setupconfig() {
 	k.Load(structs.Provider(config{
 		Addr:         ":8000",
+		Root:         "/",
 		SerialNumber: "auto",
 		BootupArgs: map[string]interface{}{
 			"ElectronicShutteringMode": "Rolling",
@@ -183,10 +189,17 @@ func run() {
 	err = c.QueueBuffer()
 
 	w := sdk3.NewHTTPWrapper(c)
-	mux := server.BuildMux([]server.HTTPer{w}, []string{""})
-	addr := k.String("Addr")
+
+	// clean up the submux string
+	hndlrS := k.String("Root")
+	hndlrS = server.SubMuxSanitize(hndlrS)
+	root := goji.NewMux()
+	mux := goji.SubMux()
+	root.Handle(pat.New(hndlrS), mux)
+	w.RT().Bind(mux)
+	addr := k.String("Addr") + k.String("Root")
 	log.Println("now listening for requests at ", addr)
-	log.Fatal(http.ListenAndServe(addr, mux))
+	log.Fatal(http.ListenAndServe(k.String("Addr"), root))
 }
 
 func main() {

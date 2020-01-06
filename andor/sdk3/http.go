@@ -258,7 +258,7 @@ func (h *HTTPWrapper) GetFrame(w http.ResponseWriter, r *http.Request) {
 			fitsio.Card{Name: "BZERO", Value: 32768},
 			fitsio.Card{Name: "BSCALE", Value: 1.0}}
 
-		err := writeFits(w, cards, img, aoi.Width, aoi.Height, 1)
+		err = writeFits(w, cards, img, aoi.Width, aoi.Height, 1)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
