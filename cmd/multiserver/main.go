@@ -8,16 +8,18 @@ import (
 	"strings"
 
 	"github.com/knadh/koanf"
+	"github.com/knadh/koanf/parsers/yaml"
+	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/structs"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/multiserver"
 
-	"gopkg.in/yaml.v2"
+	yml "gopkg.in/yaml.v2"
 )
 
 var (
 	// Version is the version number.  Typically injected via ldflags with git build
-	Version = "dev"
+	Version = "1"
 
 	// ConfigFileName is what it sounds like
 	ConfigFileName = "multiserver.yml"
@@ -25,29 +27,21 @@ var (
 )
 
 func setupconfig() {
-	c := multiserver.Config{}
-	// k.Load(structs.Provider(c, "koanf"), nil)
-	f, err := os.Open(ConfigFileName)
-	if err != nil {
+	k.Load(structs.Provider(multiserver.Config{
+		Addr:  ":8000",
+		Nodes: []multiserver.ObjSetup{}}, "koanf"), nil)
+	if err := k.Load(file.Provider(ConfigFileName), yaml.Parser()); err != nil {
 		errtxt := err.Error()
 		if !strings.Contains(errtxt, "no such") { // file missing, who cares
 			log.Fatalf("error loading config: %v", err)
 		}
 	}
-	defer f.Close()
-	err = yaml.NewDecoder(f).Decode(&c)
-	if err != nil {
-		log.Fatal(err)
-	}
-	k.Load(structs.Provider(c, "koanf"), nil)
 }
 
 func root() {
 	str := `multiserver communicates with lab hardware and exposes an HTTP interface to them
-This enables a server-client architecture,
-and the clients can leverage the excellent HTTP
-libraries for any programming language,
-instead of custom socket logic.
+This enables a server-client architecture, and the clients can leverage the
+excellent HTTP libraries for any programming language.
 
 Usage:
 	multiserver <command>
@@ -65,10 +59,42 @@ func help() {
 	str := `multiserver is amenable to configuration via its .yaml file.  For a primer on YAML, see
 https://yaml.org/start.html
 
-When no configuration is provided, the defaults are used.  Keys are not case-sensitive.
-The command mkconf generates the configuration file with the default values.
-There is no need to do this unless you want to start from the prepopulated defaults when making
-a config file.`
+Without a configuration, the server will close immediately and display an error
+that there are no endpoints.
+
+No two endpoints can have the same URL.
+
+URLs may look like any variation between "omc/nkt" or "/omc/nkt/*", the leading
+and trailing slashes, as well as the *, are added by the server if missing.
+
+All hardware are supported on all common platforms (Windows, Linux, OSX).
+
+Hardware and matching "type" fields, case insensitive, alphabetical by vendor:
+- Aerotech:
+	> Ensemble "aerotech", "ensemble"
+- Cryocon:
+	> model 12, 14, 18i "cryocon"
+- Fluke
+	> DewK 1620a "fluke", "dewk"
+- Granville-Phillips
+	> GP375 Convectron "gp", "convectron", "gpconvectron"
+- IXL Lightwave
+	> LDC3916, "lightwave", "ldc3916", "ixl"
+- Lesker
+	> KJC pressure sensor
+- Newport
+	> ESP300 / ESP301 "esp", "esp300", "esp301"
+	> XPS "xps"
+- NKT
+	> SuperK Extreme / SuperK Varia "nkt", "superk"
+- Thorlabs
+	> ITC 4000 series "itc4000", "tl-laser-diode"
+`
+	/*
+	   - Omega
+	   	> DPF700 (flow meter) "dpf700" [ not actually working yet ]
+	   	>
+	*/
 	fmt.Println(str)
 }
 
@@ -83,7 +109,7 @@ func mkconf() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = yaml.NewEncoder(f).Encode(c)
+	err = yml.NewEncoder(f).Encode(c)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -92,7 +118,7 @@ func mkconf() {
 func printconf() {
 	c := multiserver.Config{}
 	k.Unmarshal("", &c)
-	err := yaml.NewEncoder(os.Stdout).Encode(c)
+	err := yml.NewEncoder(os.Stdout).Encode(c)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -108,7 +134,7 @@ func run() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	mux := c.BuildMux()
+	mux := multiserver.BuildMux(c)
 	log.Println("now listening for requests at ", c.Addr)
 	log.Fatal(http.ListenAndServe(c.Addr, mux))
 }

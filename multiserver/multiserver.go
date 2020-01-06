@@ -2,9 +2,14 @@ package multiserver
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"os"
 	"strings"
+
+	"github.jpl.nasa.gov/HCIT/go-hcit/generichttp"
+	"github.jpl.nasa.gov/HCIT/go-hcit/server/middleware/locker"
+	"github.jpl.nasa.gov/HCIT/go-hcit/thorlabs"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/aerotech"
 	"github.jpl.nasa.gov/HCIT/go-hcit/cryocon"
@@ -23,6 +28,8 @@ import (
 	"github.jpl.nasa.gov/HCIT/go-hcit/fluke"
 	"github.jpl.nasa.gov/HCIT/go-hcit/server"
 
+	"github.jpl.nasa.gov/HCIT/go-hcit/generichttp/ascii"
+
 	"github.com/go-yaml/yaml"
 	"goji.io"
 )
@@ -34,53 +41,29 @@ type ObjSetup struct {
 	// Addr holds the network or filesystem address of the remote device,
 	// e.g. 192.168.100.123:2006 for a device connected to port 6
 	// on a digi portserver, or /dev/ttyS4 for an RS232 device on a serial cable
-	Addr string `yaml:"addr"`
+	Addr string `yaml:"Addr"`
 
 	// URL is the full path the routes from this device will be served on
 	// ex. URL="/omc/nkt" will produce routes of /omc/nkt/power, etc.
-	URL string `yaml:"endpoint"`
+	Endpoint string `yaml:"Endpoint"`
 
 	// Endpt is the final "directory" to put object functionality under, it will be
 	// prepended to routes
 	// Serial determines if the connection is serial/RS232 (True) or TCP (False)
-	Serial bool `yaml:"serial"`
+	Serial bool `yaml:"Serial"`
+
+	// Typ is the "type" of the object, e.g. ESP301
+	Type string `yaml:"Type"`
 }
 
 // Config is a struct that holds the initialization parameters for various
 // HTTP adapted devices.  It is to be populated by a json/unmarshal call.
 type Config struct {
 	// Addr is the address to listen at
-	Addr string
+	Addr string `yaml:"Addr"`
 
-	// Flukes is a list of setup parameters that will automap to Fluke DewK objects
-	Flukes []ObjSetup
-
-	// GPConvectrons is a list of setup parameters that will automap to GP375 convectrons
-	GPConvectrons []ObjSetup
-
-	// Leskers is a list of setup parameters that will automap to KJC300s
-	Leskers []ObjSetup
-
-	// IXLLightwaves is a list of setup parameters that will automap to LDC3916 diode controllers
-	IXLLightwaves []ObjSetup
-
-	// Lakeshores is a list of setup parameters that will automap to Lakeshore 322 temperature controllers
-	Lakeshores []ObjSetup
-
-	// ESP300s is a list of setup parameters that will automap to ESP301 motion controllers
-	ESP300s []ObjSetup
-
-	// XPSs is a list of setup parameters that will automap to XPS motion controllers
-	XPSs []ObjSetup
-
-	// NKTs is a list of setup parameters that will automap to NKT supercontinuum lasers
-	NKTs []ObjSetup
-
-	// CryoCons is a list of setup parameters that will automap to crycon temperature monitors
-	CryoCons []ObjSetup
-
-	// Aerotechs is a list of setup parameters that will automap to Aerotech Ensemble controllers
-	Aerotechs []ObjSetup
+	// Nodes is the list of nodes to set up
+	Nodes []ObjSetup `yaml:"Nodes"`
 }
 
 // LoadYaml converts a (path to a) yaml file into a Config struct
@@ -99,88 +82,84 @@ func LoadYaml(path string) (Config, error) {
 // and uses them to construct a goji mux with populated handlers.
 // The mux serves a special route, route-list, which returns an
 // array of strings containing all routes as JSON.
-func (c Config) BuildMux() *goji.Mux {
+func BuildMux(c Config) *goji.Mux {
+	// make the root handler
 	root := goji.NewMux()
-	stems := []string{}
-	httpers := []server.HTTPer{}
-
-	for _, setup := range c.Flukes {
-		dewK := fluke.NewDewK(setup.Addr, setup.Serial)
-		httper := fluke.NewHTTPWrapper(*dewK)
-		stems = append(stems, setup.URL)
-		httpers = append(httpers, httper)
-	}
-
-	for _, setup := range c.GPConvectrons {
-		cv := granvillephillips.NewSensor(setup.Addr, setup.Serial)
-		httper := commonpressure.NewHTTPWrapper(*cv)
-		stems = append(stems, setup.URL)
-		httpers = append(httpers, httper)
-	}
-
-	for _, setup := range c.Leskers {
-		kjc := lesker.NewSensor(setup.Addr, setup.Serial)
-		httper := commonpressure.NewHTTPWrapper(*kjc)
-		stems = append(stems, setup.URL)
-		httpers = append(httpers, httper)
-	}
-
-	for _, setup := range c.IXLLightwaves {
-		ldc := ixllightwave.NewLDC3916(setup.Addr)
-		httper := ixllightwave.NewHTTPWrapper(*ldc)
-		stems = append(stems, setup.URL)
-		httpers = append(httpers, httper)
-	}
-	// for _, setup := range c.Lakeshores {
-	// ctl := lakeshore.NewController()
-	// }
-	for _, setup := range c.ESP300s {
-		esp := newport.NewESP301(setup.Addr, setup.Serial)
-		httper := newport.NewESP301HTTPWrapper(esp)
-		stems = append(stems, setup.URL)
-		httpers = append(httpers, httper)
-	}
-
-	for _, setup := range c.NKTs {
-		skE := nkt.NewSuperKExtreme(setup.Addr, setup.Serial)
-		skV := nkt.NewSuperKVaria(setup.Addr, setup.Serial)
-		httper := nkt.NewHTTPWrapper(*skE, *skV)
-		stems = append(stems, setup.URL)
-		httpers = append(httpers, httper)
-	}
-
-	for _, setup := range c.CryoCons {
-		cryo := cryocon.NewTemperatureMonitor(setup.Addr)
-		httper := cryocon.NewHTTPWrapper(*cryo)
-		stems = append(stems, setup.URL)
-		httpers = append(httpers, httper)
-	}
-
-	for _, setup := range c.Aerotechs {
-		ensemble := aerotech.NewEnsemble(setup.Addr, setup.Serial)
-		httper := aerotech.NewHTTPWrapper(*ensemble)
-		stems = append(stems, setup.URL)
-		httpers = append(httpers, httper)
-	}
-
 	supergraph := map[string][]string{}
 
-	// the above just collected everything from the configs
-	for idx := 0; idx < len(stems); idx++ {
-		stem := stems[idx]
-		httper := httpers[idx]
+	// for every node specified, build a submux
+	for _, node := range c.Nodes {
+		var httper server.HTTPer
+		switch strings.ToLower(node.Type) {
+
+		case "aerotech", "ensemble":
+			ensemble := aerotech.NewEnsemble(node.Addr, node.Serial)
+			httper = aerotech.NewHTTPWrapper(*ensemble)
+
+		case "cryocon":
+			cryo := cryocon.NewTemperatureMonitor(node.Addr)
+			httper = cryocon.NewHTTPWrapper(*cryo)
+
+		case "fluke", "dewk":
+			dewK := fluke.NewDewK(node.Addr, node.Serial)
+			httper = fluke.NewHTTPWrapper(*dewK)
+
+		case "convectron", "gpconvectron":
+			cv := granvillephillips.NewSensor(node.Addr, node.Serial)
+			httper = commonpressure.NewHTTPWrapper(*cv)
+
+		case "lightwave", "ldc3916", "ixl":
+			ldc := ixllightwave.NewLDC3916(node.Addr)
+			httper = ixllightwave.NewHTTPWrapper(*ldc)
+
+		// reserved for lakeshore
+
+		case "lesker", "kjc":
+			kjc := lesker.NewSensor(node.Addr, node.Serial)
+			httper = commonpressure.NewHTTPWrapper(*kjc)
+
+		case "esp", "esp300", "esp301":
+			esp := newport.NewESP301(node.Addr, node.Serial)
+			httper = newport.NewESP301HTTPWrapper(esp)
+
+		case "xps":
+			xps := newport.NewXPS(node.Addr)
+			httper = newport.NewXPSHTTPWrapper(xps)
+
+		case "nkt", "superk":
+			skE := nkt.NewSuperKExtreme(node.Addr, node.Serial)
+			skV := nkt.NewSuperKVaria(node.Addr, node.Serial)
+			httper = nkt.NewHTTPWrapper(*skE, *skV)
+
+		case "itc4000", "tl-laser-diode":
+			itc, err := thorlabs.NewITC4000()
+			if err != nil {
+				log.Fatal(err)
+			}
+			httper = generichttp.NewHTTPLaserController(itc)
+			ascii.InjectRawComm(httper, itc)
+
+		default:
+			continue // could be an empty entry in the list of nodes
+		}
+
+		// prepare the URL, "omc/nkt" => "/omc/nkt/*"
+		hndlS := server.SubMuxSanitize(node.Endpoint)
+
+		// add the endpoints to the graph
+		supergraph[hndlS] = httper.RT().Endpoints()
+
+		// add a lock interface for this node
+		lock := locker.New()
+		locker.Inject(httper, lock)
+
+		// bind to the mux
 		mux := goji.SubMux()
-		if !strings.HasPrefix(stem, "/") {
-			stem = "/" + stem
-		}
-		if !strings.HasSuffix(stem, "/") {
-			stem = stem + "/"
-		}
-		supergraph[stem] = httper.RT().Endpoints()
-		stem = stem + "*"
-		strP := pat.New(stem)
-		root.Handle(strP, mux)
 		httper.RT().Bind(mux)
+
+		// add the lock middleware
+		mux.Use(lock.Check)
+		root.Handle(pat.New(hndlS), mux)
 	}
 	root.HandleFunc(pat.Get("/endpoints"), func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

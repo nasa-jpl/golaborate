@@ -8,6 +8,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
+
+	"github.jpl.nasa.gov/HCIT/go-hcit/util"
 
 	"goji.io"
 	"goji.io/pat"
@@ -58,7 +61,7 @@ func (rt RouteTable) Endpoints() []string {
 		routes[idx] = key.String()
 		idx++
 	}
-	return routes
+	return util.UniqueString(routes)
 }
 
 // EndpointsHTTP returns a function that encodes the endpoint list to a ResponseWriter
@@ -209,4 +212,18 @@ func (hp *HumanPayload) EncodeAndRespond(w http.ResponseWriter, r *http.Request)
 		}
 
 	}
+}
+
+// SubMuxSanitize takes any string and ensures it begins with / and ends with /*
+func SubMuxSanitize(str string) string {
+	if !strings.HasPrefix(str, "/") {
+		str = "/" + str
+	}
+	if !strings.HasSuffix(str, "/") {
+		str += "/"
+	}
+	if !strings.HasSuffix(str, "*") {
+		str += "*"
+	}
+	return str
 }
