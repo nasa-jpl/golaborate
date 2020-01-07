@@ -22,7 +22,7 @@ type HTTPWrapper struct {
 func NewHTTPWrapper(dk DewK) HTTPWrapper {
 	w := HTTPWrapper{DewK: dk}
 	rt := server.RouteTable{
-		pat.Get("read"): w.Read,
+		pat.Get("/read"): w.Read,
 	}
 	w.RouteTable = rt
 	return w
