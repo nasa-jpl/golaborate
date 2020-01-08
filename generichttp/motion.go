@@ -68,7 +68,18 @@ func (h HTTPMotionController) RT() server.RouteTable {
 // SetAxisEnabled enables or disables an axis
 func (h HTTPMotionController) SetAxisEnabled(w http.ResponseWriter, r *http.Request) {
 	axis := pat.Param(r, "axis")
-	err := h.Controller.Enable(axis)
+	boolT := server.BoolT{}
+	err := json.NewDecoder(r.Body).Decode(&boolT)
+	defer r.Body.Close()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if boolT.Bool {
+		err = h.Controller.Enable(axis)
+	} else {
+		err = h.Controller.Disable(axis)
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
