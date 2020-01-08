@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.jpl.nasa.gov/HCIT/go-hcit/util"
+
 	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
 )
 
@@ -112,28 +114,27 @@ func (e *Ensemble) Disable(axis string) error {
 	return e.gCodeWriteOnly("DISABLE", axis)
 }
 
-// GetAxisEnabled gets if the given axis is enabled or not
-func (e *Ensemble) GetAxisEnabled(axis string) (bool, error) {
+// GetEnabled gets if the given axis is enabled or not
+func (e *Ensemble) GetEnabled(axis string) (bool, error) {
 	// get the status, it is a 32-bit int, which is really a bitfield
 	str := fmt.Sprintf("AXISSTATUS(%s)", axis)
 	resp, err := e.RemoteDevice.OpenSendRecvClose([]byte(str))
 	if err != nil {
 		return false, err
 	}
-	resp = resp[1:] // drop the terminator
-	if resp[0] == OKCode {
-		resp = resp[1:] // the ensemble may have a % in its write buffer still from a connection it dropped
-	}
 	if resp[0] != OKCode {
 		return false, ErrBadResponse{string(resp)}
 	}
-	i, err := strconv.Atoi(string(resp[1:]))
-	return i < 0, err
-	// bit0, most significant bit contains the sign
-	// it also contains the axis enabled value
-	// so, if the int is positive, the axis is disabled
-	// I think this depends on the endianness of the controller and the server being different
-	// either way this is pretty fragile.
+	if resp[0] == OKCode {
+		resp = resp[1:] // expected this time
+	}
+	if resp[0] == OKCode {
+		resp = resp[1:] // the ensemble may have a % in its write buffer still from a connection it dropped
+	}
+
+	lastByte := resp[len(resp)-1]
+	return util.GetBit(lastByte, 0), nil // this might actually need to be 1 on the index
+	// the very last bit in the response contains the axis enabled status
 }
 
 // Home commands the controller to home an axis
