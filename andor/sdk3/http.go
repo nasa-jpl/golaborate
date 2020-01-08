@@ -2,7 +2,6 @@ package sdk3
 
 import (
 	"encoding/json"
-	"fmt"
 	"go/types"
 	"image"
 	"image/jpeg"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	"github.com/astrogo/fitsio"
+
 	"github.jpl.nasa.gov/HCIT/go-hcit/mathx"
 	"github.jpl.nasa.gov/HCIT/go-hcit/server"
 	"github.jpl.nasa.gov/HCIT/go-hcit/util"
@@ -31,6 +31,7 @@ func NewHTTPWrapper(c *Camera) HTTPWrapper {
 	w.RouteTable = server.RouteTable{
 		// image capture
 		pat.Get("/image"): w.GetFrame,
+		pat.Get("/burst"): w.Burst,
 
 		// exposure manipulation
 		pat.Get("/exposure-time"):  w.GetExposureTime,
@@ -171,93 +172,11 @@ func (h *HTTPWrapper) GetFrame(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		png.Encode(w, im)
 	case "fits":
-		// grab all the shit we care about from the camera so we can fill out the header
-		// plow through errors, no need to bail early
-		texp, err := h.Camera.GetExposureTime()
-		sdkver, err := h.Camera.GetSDKVersion()
-		drvver, err := h.Camera.GetDriverVersion()
-		firmver, err := h.Camera.GetFirmwareVersion()
-		cammodel, err := h.Camera.GetModel()
-		camsn, err := h.Camera.GetSerialNumber()
-		fan, err := h.Camera.GetFan()
-		tsetpt, err := h.Camera.GetTemperatureSetpoint()
-		tstat, err := h.Camera.GetTemperatureStatus()
-		temp, err := h.Camera.GetTemperature()
-		bin, err := h.Camera.GetBinning()
-		binS := FormatBinning(bin)
-
-		var metaerr string
-		if err != nil {
-			metaerr = err.Error()
-		} else {
-			metaerr = ""
-		}
-
+		cards := collectHeaderMetadata3(h.Camera)
 		hdr := w.Header()
 		hdr.Set("Content-Type", "image/fits")
 		hdr.Set("Content-Disposition", "attachment; filename=image.fits")
 		w.WriteHeader(http.StatusOK)
-
-		now := time.Now()
-		ts := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d",
-			now.Year(),
-			now.Month(),
-			now.Day(),
-			now.Hour(),
-			now.Minute(),
-			now.Second())
-
-		cards := []fitsio.Card{
-			/* andor-http header format includes:
-			- header format tag
-			- go-hcit andor version
-			- sdk software version
-			- driver version
-			- camera firmware version
-
-			- camera model
-			- camera serial number
-
-			- aoi top, left, top, bottom
-			- binning
-
-			- fan on/off
-			- thermal setpoint
-			- thermal status
-			- fpa temperature
-			*/
-			// header to the header
-			fitsio.Card{Name: "HDRVER", Value: "3", Comment: "header version"},
-			fitsio.Card{Name: "WRAPVER", Value: WRAPVER, Comment: "server library code version"},
-			fitsio.Card{Name: "SDKVER", Value: sdkver, Comment: "sdk version"},
-			fitsio.Card{Name: "DRVVER", Value: drvver, Comment: "driver version"},
-			fitsio.Card{Name: "FIRMVER", Value: firmver, Comment: "camera firmware version"},
-			fitsio.Card{Name: "METAERR", Value: metaerr, Comment: "error encountered gathering metadata"},
-			fitsio.Card{Name: "CAMMODL", Value: cammodel, Comment: "camera model"},
-			fitsio.Card{Name: "CAMSN", Value: camsn, Comment: "camera serial number"},
-
-			// timestamp
-			fitsio.Card{Name: "DATE", Value: ts}, // timestamp is standard and does not require comment
-
-			// exposure parameters
-			fitsio.Card{Name: "EXPTIME", Value: texp.Seconds(), Comment: "exposure time, seconds"},
-
-			// thermal parameters
-			fitsio.Card{Name: "FAN", Value: fan, Comment: "on (true) or off"},
-			fitsio.Card{Name: "TEMPSETP", Value: tsetpt, Comment: "Temperature setpoint"},
-			fitsio.Card{Name: "TEMPSTAT", Value: tstat, Comment: "TEC status"},
-			fitsio.Card{Name: "TEMPER", Value: temp, Comment: "FPA temperature (Celcius)"},
-			// aoi parameters
-			fitsio.Card{Name: "AOIL", Value: aoi.Left, Comment: "1-based left pixel of the AOI"},
-			fitsio.Card{Name: "AOIT", Value: aoi.Top, Comment: "1-based top pixel of the AOI"},
-			fitsio.Card{Name: "AOIW", Value: aoi.Width, Comment: "AOI width, px"},
-			fitsio.Card{Name: "AOIH", Value: aoi.Height, Comment: "AOI height, px"},
-			fitsio.Card{Name: "AOIB", Value: binS, Comment: "AOI Binning, HxV"},
-
-			// needed for uint16 encoding
-			fitsio.Card{Name: "BZERO", Value: 32768},
-			fitsio.Card{Name: "BSCALE", Value: 1.0}}
-
 		err = writeFits(w, cards, img, aoi.Width, aoi.Height, 1)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -265,6 +184,43 @@ func (h *HTTPWrapper) GetFrame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+}
+
+// Burst takes a burst of N frames at M fps and returns it as a fits image cube
+func (h *HTTPWrapper) Burst(w http.ResponseWriter, r *http.Request) {
+	t := struct {
+		FPS    float64 `json:"fps"`
+		Frames int     `json:"frames"`
+	}{}
+	err := json.NewDecoder(r.Body).Decode(&t)
+	defer r.Body.Close()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	img, err := h.Camera.Burst(t.Frames, t.FPS)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	aoi, err := h.Camera.GetAOI()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	cards := collectHeaderMetadata3(h.Camera)
+	// mutate the header version because this is a burst
+	cards[0].Value = cards[0].Value.(string) + "+burst" // inject burst modifier to header version
+	cards = append(cards, fitsio.Card{Name: "fps", Value: t.FPS, Comment: "frame rate"})
+	hdr := w.Header()
+	hdr.Set("Content-Type", "image/fits")
+	hdr.Set("Content-Disposition", "attachment; filename=image.fits")
+	w.WriteHeader(http.StatusOK)
+	err = writeFits(w, cards, img, aoi.Width, aoi.Height, t.Frames)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	return
 }
 
 // GetCooling gets the cooling status and sends it back as a bool encoded in JSON
