@@ -94,7 +94,7 @@ func BuildMux(c Config) *goji.Mux {
 
 		case "aerotech", "ensemble":
 			ensemble := aerotech.NewEnsemble(node.Addr, node.Serial)
-			httper = aerotech.NewHTTPWrapper(*ensemble)
+			httper = aerotech.NewHTTPWrapper(ensemble)
 
 		case "cryocon":
 			cryo := cryocon.NewTemperatureMonitor(node.Addr)
