@@ -324,8 +324,6 @@ func (rd *RemoteDevice) SendRecv(b []byte) ([]byte, error) {
 	if rd.Conn == nil {
 		return []byte{}, ErrNotConnected
 	}
-	rd.Lock()
-	defer rd.Unlock()
 	err := rd.Send(b)
 	if err != nil {
 		return []byte{}, err
