@@ -1,6 +1,6 @@
 # go-hcit
 
-This monorepo contains a number of packages written predominantly in the Go programming language for interacting with lab hardware -- sensors, motion controllers, cameras, and deformable mirrors.  The HTTP server extensions to these packages add less than 1 ms of latency to the communication and enable a more pleasant API and thinner client libraries in any language.  The Andor server uses CGo and is less portable for that reason.  See README in the andor directory for special compilation instructions.
+This monorepo contains a number of packages written predominantly in the Go programming language for interacting with lab hardware -- sensors, motion controllers, cameras, and deformable mirrors.  These packages include HTTP server extensions that allow simple and painless communication with a server driving the hardware.  The Andor, BMC, and Thorlabs ITC code uses CGo and is less portable for that reason.
 
 It also includes some lower level libraries for allowing transparent use of serial or TCP connections to these devices and connection keep-alive behavior on either connection type, as well as graceful backoff in the event of devices rejecting connection thrashing.
 
@@ -36,7 +36,7 @@ Cameras:
 
 ## Installation and Compilation
 
-Most of these servers are written in Go.  Go has a statement of absolute compatability within the 1.x version series, so you may use any version that is recent enough for the dependencies.  At the time of writing, this is Go 1.12.  If you need to compile for XP (e.g., for a MetroPro remote server) use Go 1.9.  The dependency tree for `cmd/zygoserver` is compatible with Go 1.9 and includes several backports from newer versions of the language to facilitate this.
+Most of these servers are written in Go.  Go has a statement of absolute compatability within the 1.x version series, so you may use any version that is recent enough for the dependencies.  At the time of writing, this is Go 1.13.  If you need to compile for XP (e.g., for a MetroPro remote server) use Go 1.9.  The dependency tree for `cmd/zygoserver` is compatible with Go 1.9 and includes several backports from newer versions of the language to facilitate this.
 
 To install golang, grab the binaries from http://golang.org/dl, use your system package manager, or [brew](https://brew.sh/) on MacOS.  For brew:
 
@@ -83,7 +83,8 @@ To view the documentation for HTTP clients, you can build envsrv and visit http:
 
 | Device            | driver | server |
 | :---              | :----: |  ---:  |
-| JPL DM Controller |        |        |
+| Gen5 DM Controller|        |        |
+| MiniDM Controller |        |        |
 | BMC commercial    | X      |  X     |
 | Andor cameras     | X      |  X     |
 | other cameras (?) |        |        |
