@@ -30,7 +30,7 @@ const (
 
 	// WRAPVER is the andor wrapper code version.
 	// Incremement this when pkg sdk3 is updated.
-	WRAPVER = 3
+	WRAPVER = 4
 )
 
 // ErrFeatureNotFound is generated when a feature is looked up in the Features
@@ -104,7 +104,7 @@ var (
 		"PixelWidth":               "float",
 		"ReadoutTime":              "float",
 		"SensorTemperature":        "float",
-		// "TargetSensorTemperature":  "float", removed 2019-11-25, deprecated by Andorj
+		// "TargetSensorTemperature":  "float", removed 2019-11-25, deprecated by Andor
 
 		// enums
 		"AOIBinning":               "enum",
