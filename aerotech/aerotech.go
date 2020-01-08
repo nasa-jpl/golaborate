@@ -175,3 +175,9 @@ func (e *Ensemble) GetPos(axis string) (float64, error) {
 	str = string(resp[1:])
 	return strconv.ParseFloat(str, 64)
 }
+
+// SetVelocity sets the velocity of an axis in mm/s
+func (e *Ensemble) SetVelocity(axis string, vel float64) error {
+	str := fmt.Sprintf("MOVEINC %s 0 %sF %.9f", axis, axis, vel)
+	return e.gCodeWriteOnly(str)
+}
