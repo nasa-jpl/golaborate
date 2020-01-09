@@ -1,11 +1,14 @@
 package bmc
 
 import (
+	"net/http"
+	"encoding/json"
+
 	"github.jpl.nasa.gov/HCIT/go-hcit/server"
 )
 
 // HTTPWrapper wraps a DM in an HTTP control interface
-type HTTPWrapper(dm *DM) struct {
+type HTTPWrapper struct {
 	*DM
 
 	server.RouteTable
@@ -32,12 +35,12 @@ type single struct {
 // this is very inefficient encoding and not suitable for high speed operation,
 // but offers simplicity when speed is not paramount
 type jsonarray struct {
-	value []float64 `json:"value"`
+	Value []float64 `json:"value"`
 }
 
 // Zero zeros all actuators of the DM
 func (h HTTPWrapper) Zero(w http.ResponseWriter, r *http.Request) {
-	err := h.DM.Zero()
+	err := Zero(h.DM)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -48,7 +51,7 @@ func (h HTTPWrapper) Zero(w http.ResponseWriter, r *http.Request) {
 // SetArray writes an array to the DM driver, it takes JSON for simplicity or a buffer of doubles for speed
 func (h HTTPWrapper) SetArray(w http.ResponseWriter, r *http.Request) {
 	var data []float64
-	if r.Header["Content-Type"] == "application/json" {
+	if r.Header.Get("Content-Type") == "application/json" {
 		ja := jsonarray{}
 		err := json.NewDecoder(r.Body).Decode(&ja)
 		defer r.Body.Close()
@@ -56,7 +59,7 @@ func (h HTTPWrapper) SetArray(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		data = ja.value
+		data = ja.Value
 	} else {
 		http.Error(w, "raw buffer not yet supported", http.StatusBadRequest)
 		return
