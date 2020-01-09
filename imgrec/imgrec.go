@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"go/types"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/server"
@@ -56,7 +59,7 @@ func (r *Recorder) mkDir() (string, error) {
 // Write implements io.Writer and writes the contents of a fits file to disk
 func (r *Recorder) Write(p []byte) (n int, err error) {
 	// always update the counter and timestamp
-	defer func() { r.counter++; r.last = time.Now() }()
+	defer func() { r.last = time.Now() }()
 
 	// make sure the folder exists
 	r.updateFolder()
@@ -68,12 +71,47 @@ func (r *Recorder) Write(p []byte) (n int, err error) {
 	// now open the file and write to it
 	fn := fmt.Sprintf("%s%06d.fits", r.Prefix, r.counter)
 	fn = path.Join(fldr, fn)
-	fid, err := os.Create(fn)
+	var fid *os.File
+	fid, err = os.OpenFile(fn, os.O_APPEND|os.O_WRONLY, 0666)
+	if err != nil && os.IsNotExist(err) {
+		fid, err = os.Create(fn)
+	}
 	defer fid.Close()
 	if err != nil {
 		return 0, err
 	}
 	return fid.Write(p)
+}
+
+// Incr updates the filename counter; it scans the folder to do so.  If there is an error, the counter is not incremented
+func (r *Recorder) Incr() {
+	dn, _ := r.mkDir()
+	files, err := ioutil.ReadDir(dn)
+	if err != nil {
+		return
+	}
+	count := 0
+	for _, file := range files {
+		// skip directories, non-fits, and wrong prefix
+		if file.IsDir() {
+			continue
+		}
+		fn := file.Name()
+		if !strings.HasSuffix(fn, ".fits") || !strings.HasPrefix(fn, r.Prefix) {
+			continue
+		}
+		// guaranteed match
+		bit := strings.Split(fn, r.Prefix)[1]
+		bit = bit[:len(bit)-5] // pop fits
+		n, err := strconv.Atoi(bit)
+		if err != nil {
+			return
+		}
+		if count < n {
+			count = n
+		}
+	}
+	r.counter = count + 1
 }
 
 // HTTPWrapper is an HTTP wrapper around an image recorder that allows the folder and prefix to be changed on the fly

@@ -137,6 +137,8 @@ func pversion() {
 }
 
 func run() {
+	cfg := config{}
+	k.Unmarshal("", &cfg)
 	// load the library and see how many cameras are connected
 	err := sdk3.InitializeLibrary()
 	if err != nil {
@@ -157,7 +159,7 @@ func run() {
 
 	// now scan for the right serial number
 	// c escapes into the outer scope
-	sn := k.String("SerialNumber")
+	sn := cfg.SerialNumber
 	var (
 		c     *sdk3.Camera
 		snCam string
@@ -192,27 +194,27 @@ func run() {
 	}
 	log.Printf("connected to %s SN %s\n", model, snCam)
 
-	err = c.Configure(k.Get("BootupArgs").(map[string]interface{}))
+	err = c.Configure(cfg.BootupArgs)
 	if err != nil {
 		log.Fatal(err)
 	}
 	c.Allocate()
 	err = c.QueueBuffer()
 
-	args := k.Get("Recorder").(recorder)
+	args := cfg.Recorder
 	r := &imgrec.Recorder{Root: args.Root, Prefix: args.Prefix}
 	w := sdk3.NewHTTPWrapper(c, r)
 
 	// clean up the submux string
-	hndlrS := k.String("Root")
+	hndlrS := cfg.Root
 	hndlrS = server.SubMuxSanitize(hndlrS)
 	root := goji.NewMux()
 	mux := goji.SubMux()
 	root.Handle(pat.New(hndlrS), mux)
 	w.RT().Bind(mux)
-	addr := k.String("Addr") + k.String("Root")
+	addr := cfg.Addr + cfg.Root
 	log.Println("now listening for requests at ", addr)
-	log.Fatal(http.ListenAndServe(k.String("Addr"), root))
+	log.Fatal(http.ListenAndServe(cfg.Addr, root))
 }
 
 func main() {

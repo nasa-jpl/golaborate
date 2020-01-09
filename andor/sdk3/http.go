@@ -62,9 +62,9 @@ func NewHTTPWrapper(c *Camera, r *imgrec.Recorder) HTTPWrapper {
 		pat.Get("/aoi"):  w.GetAOI,
 		pat.Post("/aoi"): w.SetAOI,
 	}
-
 	w2 := imgrec.NewHTTPWrapper(r)
 	w2.Inject(w)
+	w.recorder = w2
 	return w
 }
 
@@ -184,6 +184,7 @@ func (h *HTTPWrapper) GetFrame(w http.ResponseWriter, r *http.Request) {
 		if h.recorder.Recorder.Root != "" {
 			// if it is "", the recorder is not to be used
 			w2 = io.MultiWriter(w, h.recorder.Recorder)
+			defer h.recorder.Recorder.Incr()
 		} else {
 			w2 = w
 		}
@@ -192,7 +193,6 @@ func (h *HTTPWrapper) GetFrame(w http.ResponseWriter, r *http.Request) {
 		hdr := w.Header()
 		hdr.Set("Content-Type", "image/fits")
 		hdr.Set("Content-Disposition", "attachment; filename=image.fits")
-		w.WriteHeader(http.StatusOK)
 		err = writeFits(w2, cards, img, aoi.Width, aoi.Height, 1)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
