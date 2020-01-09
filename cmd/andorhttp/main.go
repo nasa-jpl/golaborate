@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 
+	"github.jpl.nasa.gov/HCIT/go-hcit/imgrec"
+
 	"goji.io/pat"
 
 	"goji.io"
@@ -23,17 +25,25 @@ import (
 
 var (
 	// Version is the version number.  Typically injected via ldflags with git build
-	Version = "7"
+	Version = "8"
 
 	// ConfigFileName is what it sounds like
 	ConfigFileName = "andor-http.yml"
 	k              = koanf.New(".")
 )
 
+type recorder struct {
+	// Root is the root folder to write to
+	Root string `yaml:"Root"`
+
+	// Prefix is the filename prefix to use
+	Prefix string `yaml:"Prefix"`
+}
 type config struct {
 	Addr         string                 `yaml:"Addr"`
 	Root         string                 `yaml:"Root"`
 	SerialNumber string                 `yaml:"SerialNumber"`
+	Recorder     recorder               `yaml:"Recorder"`
 	BootupArgs   map[string]interface{} `yaml:"BootupArgs"`
 }
 
@@ -42,6 +52,7 @@ func setupconfig() {
 		Addr:         ":8000",
 		Root:         "/",
 		SerialNumber: "auto",
+		Recorder:     recorder{},
 		BootupArgs: map[string]interface{}{
 			"ElectronicShutteringMode": "Rolling",
 			"SimplePreAmpGainControl":  "16-bit (low noise & high well capacity)",
@@ -188,7 +199,9 @@ func run() {
 	c.Allocate()
 	err = c.QueueBuffer()
 
-	w := sdk3.NewHTTPWrapper(c)
+	args := k.Get("Recorder").(recorder)
+	r := &imgrec.Recorder{Root: args.Root, Prefix: args.Prefix}
+	w := sdk3.NewHTTPWrapper(c, r)
 
 	// clean up the submux string
 	hndlrS := k.String("Root")

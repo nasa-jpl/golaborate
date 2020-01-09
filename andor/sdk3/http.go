@@ -6,11 +6,13 @@ import (
 	"image"
 	"image/jpeg"
 	"image/png"
+	"io"
 	"net/http"
 	"time"
 
 	"github.com/astrogo/fitsio"
 
+	"github.jpl.nasa.gov/HCIT/go-hcit/imgrec"
 	"github.jpl.nasa.gov/HCIT/go-hcit/mathx"
 	"github.jpl.nasa.gov/HCIT/go-hcit/server"
 	"github.jpl.nasa.gov/HCIT/go-hcit/util"
@@ -23,10 +25,12 @@ type HTTPWrapper struct {
 	*Camera
 
 	RouteTable server.RouteTable
+
+	recorder imgrec.HTTPWrapper
 }
 
 // NewHTTPWrapper returns a new wrapper with the route table populated
-func NewHTTPWrapper(c *Camera) HTTPWrapper {
+func NewHTTPWrapper(c *Camera, r *imgrec.Recorder) HTTPWrapper {
 	w := HTTPWrapper{Camera: c}
 	w.RouteTable = server.RouteTable{
 		// image capture
@@ -58,6 +62,9 @@ func NewHTTPWrapper(c *Camera) HTTPWrapper {
 		pat.Get("/aoi"):  w.GetAOI,
 		pat.Post("/aoi"): w.SetAOI,
 	}
+
+	w2 := imgrec.NewHTTPWrapper(r)
+	w2.Inject(w)
 	return w
 }
 
@@ -172,12 +179,21 @@ func (h *HTTPWrapper) GetFrame(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		png.Encode(w, im)
 	case "fits":
+		// declare a writer to use to stream the file to
+		var w2 io.Writer
+		if h.recorder.Recorder.Root != "" {
+			// if it is "", the recorder is not to be used
+			w2 = io.MultiWriter(w, h.recorder.Recorder)
+		} else {
+			w2 = w
+		}
 		cards := collectHeaderMetadata3(h.Camera)
+
 		hdr := w.Header()
 		hdr.Set("Content-Type", "image/fits")
 		hdr.Set("Content-Disposition", "attachment; filename=image.fits")
 		w.WriteHeader(http.StatusOK)
-		err = writeFits(w, cards, img, aoi.Width, aoi.Height, 1)
+		err = writeFits(w2, cards, img, aoi.Width, aoi.Height, 1)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
