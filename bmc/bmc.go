@@ -3,7 +3,7 @@ package bmc
 
 /*
 #cgo CFLAGS: -I"/opt/Boston Micromachines/include"
-#cgo LDFLAGS: -L"/opt/Boston Micromachines/lib" -l libBMC
+#cgo LDFLAGS: -L"/opt/Boston Micromachines/lib" -Wl,-rpath,"/opt/Boston Micromachines/lib" -lBMC
 #include <stdlib.h>
 #include <stdio.h>
 #include <BMCApi.h>
@@ -17,22 +17,22 @@ import (
 // Error is an Error satisfying struct
 type Error struct {
 	code int
-	text string
+	txt string
 }
 
-func (err BMCError) Error() string {
+func (err Error) Error() string {
 	return fmt.Sprintf("%d - %s", err.code, err.txt)
 }
 
 // ctoGoErr converts a C error to a Go error
-func ctoGoErr(i C.int) error {
+func ctoGoErr(i C.BMCRC) error {
 	ig := int(i)
 	if ig == 0 {
 		return nil
 	}
 	cstr := C.BMCErrorString(i) // these are static and should not be freed
 	gostr := C.GoString(cstr)
-	return BMCError{code: ig, text: gostr}
+	return Error{code: ig, txt: gostr}
 }
 
 // Zero applies a zero voltage to the DM, putting it in a safe condition
@@ -58,14 +58,14 @@ func Open(sn string) (*DM, error) {
 	defer C.free(unsafe.Pointer(cstr))
 
 	// cerr is a C.int
-	err := ctoGoErr(C.BMCOpen(&raw, Cstr))
+	err := ctoGoErr(C.BMCOpen(&raw, cstr))
 	dm.raw = &raw
 	return &dm, err
 }
 
 // Close closes the connection to the DM driver
 func (dm *DM) Close() error {
-	return ctoGoErr(C.BMCClose(&dm.raw))
+	return ctoGoErr(C.BMCClose(dm.raw))
 }
 
 // LoadMap loads an actuator map, if "", loads the default profile determined by the SDK
@@ -81,18 +81,20 @@ func (dm *DM) LoadMap(path string) error {
 // GetArray queries the DM driver for the last array of values sent to it
 func (dm *DM) GetArray() ([]float64, error) {
 	ary := make([]float64, dm.Actuators())
-	err := ctoGoErr(C.BMCGetArray(dm.raw, &ary[0], C.uint32_t(len(ary))))
+	ptr := (*C.double)(&ary[0])
+	err := ctoGoErr(C.BMCGetArray(dm.raw, ptr, C.uint32_t(len(ary))))
 	return ary, err
 }
 
 // SetArray sets the value for all actuators.  values must be in the range [0,1] or they are clamped by the BMC SDK.
 func (dm *DM) SetArray(values []float64) error {
-	return ctoGoErr(C.BMCSetArray(dm.raw, &values[0], nil))
+	ptr := (*C.double)(&values[0])
+	return ctoGoErr(C.BMCSetArray(dm.raw, ptr, nil))
 }
 
 // SetSingle sets the voltage for a single actuator
 func (dm *DM) SetSingle(actidx int, value float64) error {
-	return ctoGoErr(C.BMCSetSingle(dm.raw, C.int(actidx), C.double(value)))
+	return ctoGoErr(C.BMCSetSingle(dm.raw, C.uint32_t(actidx), C.double(value)))
 }
 
 func (dm *DM) Actuators() int {
