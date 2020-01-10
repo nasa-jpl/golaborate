@@ -99,3 +99,19 @@ func UintSliceContains(slice []uint, value uint) bool {
 func AllElementsNumbers(s string) bool {
 	return !strings.ContainsAny(s, "0123456789.")
 }
+
+// Clamp limits min < input < max
+func Clamp(input, min, max float64) float64 {
+	if input < min {
+		return min
+	}
+	if input > max {
+		return max
+	}
+	return input
+}
+
+// Limit represents a basic set of min,max limits
+type Limit struct {
+	Min, Max float64
+}
