@@ -181,7 +181,7 @@ func (h *HTTPWrapper) GetFrame(w http.ResponseWriter, r *http.Request) {
 	case "fits":
 		// declare a writer to use to stream the file to
 		var w2 io.Writer
-		if h.recorder.Recorder.Root != "" {
+		if h.recorder.Enabled && h.recorder.Recorder.Root != "" {
 			// if it is "", the recorder is not to be used
 			w2 = io.MultiWriter(w, h.recorder.Recorder)
 			defer h.recorder.Recorder.Incr()

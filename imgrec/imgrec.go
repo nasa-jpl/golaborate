@@ -19,9 +19,6 @@ import (
 
 // Recorder records image sequences with incrementing filenames in yyyy-mm-dd subfolders.  It is not thread safe.
 type Recorder struct {
-	// last is the last write time
-	last time.Time
-
 	// counter is the internally incrementing counter
 	counter int
 
@@ -33,19 +30,17 @@ type Recorder struct {
 
 	// timeFldr is the subfolder with yyy-mm-dd format.
 	timeFldr string
+
+	// Enabled is a flag unused by this struct that allows consumers to disable its use in their code
+	Enabled bool
 }
 
 // updateFolder checks the current time and updates the folder and timestamp as needed
 func (r *Recorder) updateFolder() {
 	now := time.Now()
-	last := r.last
 	y, m, d := now.Year(), now.Month(), now.Day()
-	if (last.Day() == d) && (last.Month() == m) && (last.Year() == y) {
-		return
-	}
 	// otherwise, timeFldr needs to be reset
 	r.timeFldr = fmt.Sprintf("%04d-%02d-%02d", y, m, d)
-	r.counter = 0
 	return
 }
 
@@ -58,9 +53,6 @@ func (r *Recorder) mkDir() (string, error) {
 
 // Write implements io.Writer and writes the contents of a fits file to disk
 func (r *Recorder) Write(p []byte) (n int, err error) {
-	// always update the counter and timestamp
-	defer func() { r.last = time.Now() }()
-
 	// make sure the folder exists
 	r.updateFolder()
 	fldr, err := r.mkDir()
@@ -173,6 +165,26 @@ func (h HTTPWrapper) GetPrefix(w http.ResponseWriter, r *http.Request) {
 	hp.EncodeAndRespond(w, r)
 }
 
+// GetEnabled returns the Recorder's Enabled field
+func (h HTTPWrapper) GetEnabled(w http.ResponseWriter, r *http.Request) {
+	hp := server.HumanPayload{T: types.Bool, Bool: h.Recorder.Enabled}
+	hp.EncodeAndRespond(w, r)
+	return
+}
+
+// SetEnabled sets the recorder's Enabled field
+func (h HTTPWrapper) SetEnabled(w http.ResponseWriter, r *http.Request) {
+	bT := server.BoolT{}
+	err := json.NewDecoder(r.Body).Decode(&bT)
+	defer r.Body.Close()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	h.Recorder.Enabled = bT.Bool
+	return
+}
+
 // Inject adds GET and POST routes for /autorwrite/root and /autowrite/prefix to the HTTPer which manipulate this wrapper's recorder
 func (h HTTPWrapper) Inject(other server.HTTPer) {
 	rt := other.RT()
@@ -180,4 +192,6 @@ func (h HTTPWrapper) Inject(other server.HTTPer) {
 	rt[pat.Get("/autowrite/root")] = h.GetRoot
 	rt[pat.Post("/autowrite/prefix")] = h.SetPrefix
 	rt[pat.Get("/autowrite/prefix")] = h.GetPrefix
+	rt[pat.Post("/autowrite/enabled")] = h.SetEnabled
+	rt[pat.Get("/autowrite/enabled")] = h.GetEnabled
 }
