@@ -17,5 +17,6 @@ require (
 	github.com/tarm/serial v0.0.0-20180830185346-98f6abe2eb07
 	goji.io v2.0.2+incompatible
 	golang.org/x/sys v0.0.0-20191206220618-eeba5f6aabab
+	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
 	gopkg.in/yaml.v2 v2.2.7
 )
