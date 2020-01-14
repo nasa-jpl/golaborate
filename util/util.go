@@ -111,7 +111,12 @@ func Clamp(input, min, max float64) float64 {
 	return input
 }
 
-// Limit represents a basic set of min,max limits
-type Limit struct {
+// Limiter represents a basic set of min,max limits
+type Limiter struct {
 	Min, Max float64
+}
+
+// Clamp limits min < input < max
+func (l *Limiter) Clamp(input float64) float64 {
+	return Clamp(input, l.Min, l.Max)
 }

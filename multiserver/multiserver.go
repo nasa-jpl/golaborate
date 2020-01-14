@@ -10,6 +10,7 @@ import (
 	"github.jpl.nasa.gov/HCIT/go-hcit/generichttp"
 	"github.jpl.nasa.gov/HCIT/go-hcit/server/middleware/locker"
 	"github.jpl.nasa.gov/HCIT/go-hcit/thorlabs"
+	"github.jpl.nasa.gov/HCIT/go-hcit/util"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/aerotech"
 	"github.jpl.nasa.gov/HCIT/go-hcit/cryocon"
@@ -54,6 +55,9 @@ type ObjSetup struct {
 
 	// Typ is the "type" of the object, e.g. ESP301
 	Type string `yaml:"Type"`
+
+	// Args holds any arguments to pass into the constructor for the object
+	Args map[string]interface{} `yaml:"Args"`
 }
 
 // Config is a struct that holds the initialization parameters for various
@@ -93,7 +97,36 @@ func BuildMux(c Config) *goji.Mux {
 		switch strings.ToLower(node.Type) {
 
 		case "aerotech", "ensemble":
-			ensemble := aerotech.NewEnsemble(node.Addr, node.Serial)
+			/* the limits are encoded as:
+			Args:
+				Limits:
+					X:
+						Min: 0
+						Max: 1
+					Y:
+						...
+
+			So, this translates to Go:
+			Args -> map[string]interface
+			Limits -> map[string]interface
+			limit key -> map[string]float64
+			*/
+			limiters := map[string]util.Limiter{}
+			if node.Args != nil {
+				rawlimits := node.Args["Limits"].(map[string]interface{})
+				for k, v := range rawlimits {
+					limiter := util.Limiter{}
+					if min, ok := v.(map[string]interface{})["Min"]; ok {
+						limiter.Min = min.(float64)
+					}
+					if max, ok := v.(map[string]interface{})["Max"]; ok {
+						limiter.Max = max.(float64)
+					}
+					limiters[k] = limiter
+				}
+			}
+
+			ensemble := aerotech.NewEnsemble(node.Addr, node.Serial, limiters)
 			httper = aerotech.NewHTTPWrapper(ensemble)
 
 		case "cryocon":
