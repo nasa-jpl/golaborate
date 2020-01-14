@@ -595,15 +595,15 @@ func (c *Camera) GetFrame() ([]uint16, error) {
 		return []uint16{}, err
 	}
 
+	// injected here 2019-12-03, not writable on AcqStart happens because
+	// CameraAcquiring is true
+	IssueCommand(c.Handle, "AcquisitionStop") // gobble any errors from this
+
 	// do the big acquisition loop
 	err = c.QueueBuffer()
 	if err != nil {
 		return []uint16{}, err
 	}
-
-	// injected here 2019-12-03, not writable on AcqStart happens because
-	// CameraAcquiring is true
-	IssueCommand(c.Handle, "AcquisitionStop") // gobble any errors from this
 
 	err = IssueCommand(c.Handle, "AcquisitionStart")
 	if err != nil {
@@ -617,28 +617,101 @@ func (c *Camera) GetFrame() ([]uint16, error) {
 	if err != nil {
 		return []uint16{}, err
 	}
-	buf, err := c.Buffer()
-	if err != nil {
-		return []uint16{}, err
-	}
-	stride, err := c.GetAOIStride()
-	if err != nil {
-		return []uint16{}, err
-	}
-	width, err := c.GetAOIWidth()
-	if err != nil {
-		return []uint16{}, err
-	}
-	height, err := c.GetAOIHeight()
-	if err != nil {
-		return []uint16{}, err
-	}
-	buf, err = UnpadBuffer(buf, stride, width, height)
+	buf, err := c.unpadBuffer()
 	if err != nil {
 		return []uint16{}, err
 	}
 	ary := bytesToUint(buf)
 	return ary, nil
+}
+
+// Burst performs a burst by taking N images at M fps
+func (c *Camera) Burst(frames int, fps float64) ([]uint16, error) {
+	var holding []byte
+	var output []uint16
+
+	// get the previous framerate so we can reset to this like a good neighbor
+	prevFps, err := GetFloat(c.Handle, "FrameRate")
+	if err != nil {
+		return output, err
+	}
+
+	prevCycle, err := GetEnumString(c.Handle, "CycleMode")
+	if err != nil {
+		return output, err
+	}
+
+	IssueCommand(c.Handle, "AcquisitionStop")
+
+	err = c.QueueBuffer()
+	if err != nil {
+		return output, err
+	}
+	fmt.Println(GetBool(c.Handle, "CameraAcquiring"))
+	err = SetEnumString(c.Handle, "CycleMode", "Continuous")
+	if err != nil {
+		return output, err
+	}
+	// now start acq and begin handling buffers
+	err = SetFloat(c.Handle, "FrameRate", fps)
+	if err != nil {
+		return output, err
+	}
+
+	// get the exposure time so we know how long to wait for a buffer
+	expT, err := c.GetExposureTime()
+	if err != nil {
+		return output, err
+	}
+	waitT := expT + time.Second
+
+	err = IssueCommand(c.Handle, "AcquisitionStart")
+
+	for idx := 0; idx < frames; idx++ {
+		err = c.QueueBuffer()
+		if err != nil {
+			return output, err
+		}
+		err := c.WaitBuffer(waitT)
+		if err != nil {
+			return output, err
+		}
+		buf, err := c.unpadBuffer()
+		if err != nil {
+			return output, err
+		}
+		if idx == 0 { // on the first go around, allocate a big buffer to hold the cube
+			holding = make([]byte, 0, len(buf)*frames)
+		}
+		// every time, add to the buffer
+		holding = append(holding, buf...)
+	}
+	output = bytesToUint(holding)
+
+	// finally, reset the camera to how it was when we started
+	err = SetFloat(c.Handle, "FrameRate", prevFps)
+	err = SetEnumString(c.Handle, "CycleMode", prevCycle)
+	return output, err
+}
+
+func (c *Camera) unpadBuffer() ([]byte, error) {
+	buf, err := c.Buffer()
+	if err != nil {
+		return []byte{}, err
+	}
+	stride, err := c.GetAOIStride()
+	if err != nil {
+		return []byte{}, err
+	}
+	width, err := c.GetAOIWidth()
+	if err != nil {
+		return []byte{}, err
+	}
+	height, err := c.GetAOIHeight()
+	if err != nil {
+		return []byte{}, err
+	}
+	return UnpadBuffer(buf, stride, width, height)
 }
 
 // GetExposureTime gets the current exposure time as a duration
