@@ -165,6 +165,7 @@ func run() {
 		snCam string
 	)
 	for idx := 0; idx < ncam; idx++ {
+		log.Println("scanning for camera, index", idx)
 		c, err = sdk3.Open(idx)
 		if err != nil {
 			log.Fatal(err)
