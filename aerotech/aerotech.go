@@ -255,3 +255,8 @@ func (e *Ensemble) GetVelocity(axis string) (float64, error) {
 	}
 	return 0, errors.New("velocity not known for axis, use SetVelocity to make it known")
 }
+
+// Limit returns the limiter for an axis
+func (e *Ensemble) Limit(axis string) util.Limiter {
+	return e.Limits[axis]
+}

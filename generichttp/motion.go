@@ -12,6 +12,7 @@ import (
 	"strconv"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/server"
+	"github.jpl.nasa.gov/HCIT/go-hcit/util"
 	"goji.io/pat"
 )
 
@@ -225,6 +226,30 @@ func Initialize(i Initializer) http.HandlerFunc {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
+	}
+}
+
+// Limiter is an interface which exposes a copy of its limiter on an axis
+type Limiter interface {
+	Limit(string) util.Limiter
+}
+
+// HTTPLimiter adds routes for the limiter to the route table
+func HTTPLimiter(l Limiter, table server.RouteTable) {
+	table[pat.Get("/axis/:axis/limits")] = Limits(l)
+}
+
+// Limits returns an HTTP handler func that returns the limits for an axis
+func Limits(l Limiter) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		axis := pat.Param(r, "axis")
+		lim := l.Limit(axis)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		err := json.NewEncoder(w).Encode(lim)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	}
 }
 
