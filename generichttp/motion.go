@@ -165,8 +165,8 @@ type Speeder interface {
 
 // HTTPSpeed adds routes for the speeder to the route table
 func HTTPSpeed(iface Speeder, table server.RouteTable) {
-	table[pat.Post("/axis/:axis/pos")] = SetVelocity(iface)
-	table[pat.Get("/axis/:axis/pos")] = GetVelocity(iface)
+	table[pat.Post("/axis/:axis/velocity")] = SetVelocity(iface)
+	table[pat.Get("/axis/:axis/velocity")] = GetVelocity(iface)
 }
 
 // SetVelocity returns an HTTP handler func which sets the velocity setpoint on an axis
