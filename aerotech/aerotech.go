@@ -50,7 +50,7 @@ const (
 )
 
 var (
-	errClamped = errors.New("requested position violates software limits, aborted")
+	errClamped = errors.New("requested position violates software limits, aborted, is the axis enabled?")
 )
 
 // ErrBadResponse is generated when a bad response comes from the controller
