@@ -258,6 +258,7 @@ func NewHTTPMotionController(c Controller) HTTPMotionController {
 	if initializer, ok := interface{}(c).(Initializer); ok {
 		HTTPInitialize(initializer, rt)
 	}
+	w.RouteTable = rt
 	return w
 }
 
