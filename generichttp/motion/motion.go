@@ -1,4 +1,5 @@
-package generichttp
+// Package motion provides an HTTP interface to motion controllers
+package motion
 
 /*
 This file uses higher order / metaprogramming to efficiently bind the supported
