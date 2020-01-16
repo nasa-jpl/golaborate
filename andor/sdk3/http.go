@@ -114,130 +114,6 @@ func (h *HTTPWrapper) GetExposureTime(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-// GetFrame takes a picture and returns it on a GET request.
-//
-// the image format may be specified in a query parameter; default to jpg
-//
-// the exposure time may be specified as a query parameter in any time-looking
-// format, such as "25ms" or "10us".  Strictly speaking, it must be a valid
-// input to golang time.ParseDuration.
-//
-// if no unit is appended, an s (seconds) is added.
-//
-// if no exposure time is provided, it is not updated and the existing value is used.
-func (h *HTTPWrapper) GetFrame(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	texp := q.Get("exposureTime")
-	if texp != "" {
-		if util.AllElementsNumbers(texp) {
-			texp = texp + "s"
-		}
-		T, err := time.ParseDuration(texp)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		err = h.Camera.SetExposureTime(T)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-	}
-	img, err := h.Camera.GetFrame()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	format := q.Get("fmt")
-	if format == "" {
-		format = "jpg"
-	}
-
-	aoi, err := h.Camera.GetAOI()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	switch format {
-	case "jpg":
-		buf := make([]byte, len(img))
-		for idx := 0; idx < len(img); idx++ {
-			buf[idx] = byte(img[idx] / 256) // scale 16 to 8 bits
-		}
-		im := &image.Gray{Pix: buf, Stride: aoi.Width, Rect: image.Rect(0, 0, aoi.Width, aoi.Height)}
-		w.Header().Set("Content-Type", "image/jpeg")
-		w.WriteHeader(http.StatusOK)
-		jpeg.Encode(w, im, nil)
-	case "png":
-		buf := make([]byte, len(img))
-		for idx := 0; idx < len(img); idx++ {
-			buf[idx] = byte(img[idx] / 256) // scale 16 to 8 bits
-		}
-		im := &image.Gray{Pix: buf, Stride: aoi.Width, Rect: image.Rect(0, 0, aoi.Width, aoi.Height)}
-		w.Header().Set("Content-Type", "image/png")
-		w.WriteHeader(http.StatusOK)
-		png.Encode(w, im)
-	case "fits":
-		// declare a writer to use to stream the file to
-		var w2 io.Writer
-		if h.recorder.Enabled && h.recorder.Recorder.Root != "" {
-			// if it is "", the recorder is not to be used
-			w2 = io.MultiWriter(w, h.recorder.Recorder)
-			defer h.recorder.Recorder.Incr()
-		} else {
-			w2 = w
-		}
-		cards := collectHeaderMetadata3(h.Camera)
-
-		hdr := w.Header()
-		hdr.Set("Content-Type", "image/fits")
-		hdr.Set("Content-Disposition", "attachment; filename=image.fits")
-		err = writeFits(w2, cards, img, aoi.Width, aoi.Height, 1)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-		return
-	}
-
-}
-
-// Burst takes a burst of N frames at M fps and returns it as a fits image cube
-func (h *HTTPWrapper) Burst(w http.ResponseWriter, r *http.Request) {
-	t := struct {
-		FPS    float64 `json:"fps"`
-		Frames int     `json:"frames"`
-	}{}
-	err := json.NewDecoder(r.Body).Decode(&t)
-	defer r.Body.Close()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	img, err := h.Camera.Burst(t.Frames, t.FPS)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	aoi, err := h.Camera.GetAOI()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	cards := collectHeaderMetadata3(h.Camera)
-	// mutate the header version because this is a burst
-	cards[0].Value = cards[0].Value.(string) + "+burst" // inject burst modifier to header version
-	cards = append(cards, fitsio.Card{Name: "fps", Value: t.FPS, Comment: "frame rate"})
-	hdr := w.Header()
-	hdr.Set("Content-Type", "image/fits")
-	hdr.Set("Content-Disposition", "attachment; filename=image.fits")
-	w.WriteHeader(http.StatusOK)
-	err = writeFits(w, cards, img, aoi.Width, aoi.Height, t.Frames)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-	return
-}
 
 // GetCooling gets the cooling status and sends it back as a bool encoded in JSON
 func (h *HTTPWrapper) GetCooling(w http.ResponseWriter, r *http.Request) {
@@ -532,7 +408,7 @@ func (h *HTTPWrapper) SetFeature(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		defer r.Body.Close()
-		tNs := time.Duration(int(mathx.Round(f.F64*1e9, 1))) * time.Nanosecond
+		tNs := time.Duration(int(math.Round(f.F64*1e9))) * time.Nanosecond
 		err = h.Camera.SetExposureTime(tNs)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
