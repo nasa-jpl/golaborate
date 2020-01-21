@@ -53,6 +53,9 @@ type ThermalManager interface {
 	// GetTemperature gets the current focal plane temperature in Celcius
 	GetTemperature() (float64, error)
 
+	// GetTemperatureSetpoints returns the valid temperature setpoints.  Could return a discrete list, or min/max
+	GetTemperatureSetpoints() ([]string, error)
+
 	// GetTemperatureSetpoint gets the temperature setpoint, as a string for andor SDK3 compatibility
 	GetTemperatureSetpoint() (string, error)
 
@@ -69,10 +72,174 @@ type ThermalManager interface {
 	SetFan(bool) error
 }
 
+// HTTPThermalManager binds routes for thermal amangement on the table
+func HTTPThermalManager(t ThermalManager, table server.RouteTable) {
+	table[pat.Get("/fan")] = GetFan(t)
+	table[pat.Post("/fan")] = SetFan(t)
+	table[pat.Get("/sensor-cooling")] = GetCooling(t)
+	table[pat.Post("/sensor-cooling")] = SetCooling(t)
+	table[pat.Get("/temperature")] = GetTemperature(t)
+	table[pat.Get("/temperature-setpoint-options")] = GetTemperatureSetpoints(t)
+	table[pat.Get("/temperature-setpoint")] = GetTemperatureSetpoint(t)
+	table[pat.Post("/temperature-setpoint")] = SetTemperatureSetpoint(t)
+	table[pat.Get("/temperature-status")] = GetTemperatureStatus(t)
+}
+
+// GetCooling returns an HTTP handler func that returns the cooling status of the camera
+func GetCooling(t ThermalManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		cool, err := t.GetCooling()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		hp := server.HumanPayload{T: types.Bool, Bool: cool}
+		hp.EncodeAndRespond(w, r)
+		return
+	}
+}
+
+// SetCooling returns an HTTP handler func that turns the fan on or off over HTTP
+func SetCooling(t ThermalManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		b := server.BoolT{}
+		err := json.NewDecoder(r.Body).Decode(&b)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer r.Body.Close()
+		err = t.SetCooling(b.Bool)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+}
+
+// GetTemperature returns an HTTP handler func that returns the temperature over HTTP
+func GetTemperature(t ThermalManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		t, err := t.GetTemperature()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		hp := server.HumanPayload{T: types.Float64, Float: t}
+		hp.EncodeAndRespond(w, r)
+		return
+	}
+}
+
+// GetTemperatureSetpoint returns an HTTP handler func that returns the temperature setpoint over HTTP
+func GetTemperatureSetpoint(t ThermalManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		setpt, err := t.GetTemperatureSetpoint()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		hp := server.HumanPayload{T: types.String, String: setpt}
+		hp.EncodeAndRespond(w, r)
+		return
+	}
+}
+
+// GetTemperatureSetpoints returns an HTTP handler func that returns the temperature setpoint over HTTP
+func GetTemperatureSetpoints(t ThermalManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		opts, err := t.GetTemperatureSetpoints()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		err = json.NewEncoder(w).Encode(opts)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+}
+
+// SetTemperatureSetpoint returns an HTTP handler func that sets the temperature setpoint over HTTP
+func SetTemperatureSetpoint(t ThermalManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		str := server.StrT{}
+		err := json.NewDecoder(r.Body).Decode(&str)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer r.Body.Close()
+		err = t.SetTemperatureSetpoint(str.Str)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+}
+
+// GetTemperatureStatus returns an HTTP handler func that returns the cooling status over HTTP
+func GetTemperatureStatus(t ThermalManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		stat, err := t.GetTemperatureStatus()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		hp := server.HumanPayload{T: types.String, String: stat}
+		hp.EncodeAndRespond(w, r)
+		return
+	}
+}
+
+// GetFan returns an HTTP handler func that returns the fan status over HTTP
+func GetFan(t ThermalManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		on, err := t.GetFan()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		hp := server.HumanPayload{T: types.Bool, Bool: on}
+		hp.EncodeAndRespond(w, r)
+		return
+	}
+}
+
+// SetFan returns an HTTP handler func that sets the fan status over hTTP
+func SetFan(t ThermalManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		b := server.BoolT{}
+		err := json.NewDecoder(r.Body).Decode(&b)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer r.Body.Close()
+		err = t.SetFan(b.Bool)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+}
+
 // PictureTaker describes an interface to a camera which can capture images
 type PictureTaker interface {
 	// GetFrame triggers capture of a frame and returns the strided image data as 16-bit integers
 	GetFrame() ([]uint16, error)
+
+	//GetFrameSize returns the image (width, height)
+	GetFrameSize() (int, int, error)
 
 	// Burst takes N frames at a certain framerate and returns the contiguous strided buffer for the 3D array
 	Burst(int, float64) ([]uint16, error)
@@ -82,18 +249,6 @@ type PictureTaker interface {
 
 	// GetExposureTime gets the exposure time
 	GetExposureTime() (time.Duration, error)
-
-	// SetAOI allows the AOI to be set
-	SetAOI(AOI) error
-
-	// GetAOI retrieves the current AOI
-	GetAOI() (AOI, error)
-
-	// SetBinning sets the binning option of the camera
-	SetBinning(Binning) error
-
-	// GetBinning returns the binning option of the camera
-	GetBinning() (Binning, error)
 }
 
 // MetadataMaker can produce an array of FITS cards
@@ -106,6 +261,8 @@ type MetadataMaker interface {
 func HTTPPicture(p PictureTaker, table server.RouteTable, rec *imgrec.Recorder) {
 	table[pat.Get("/exposure-time")] = GetExposureTime(p)
 	table[pat.Post("/exposure-time")] = SetExposureTime(p)
+	table[pat.Get("/image")] = GetFrame(p, rec)
+	table[pat.Get("/burst")] = Burst(p, rec)
 }
 
 // SetExposureTime sets the exposure time on a POST request.
@@ -164,23 +321,25 @@ func GetExposureTime(p PictureTaker) http.HandlerFunc {
 // if no unit is appended, an s (seconds) is added.
 //
 // if no exposure time is provided, it is not updated and the existing value is used.
-func GetFrame(p PictureTaker, rec *imgrec.Recorder) http.HandlerFunc {
+func GetFrame(p Camera, rec *imgrec.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		texp := q.Get("exposureTime")
-		if texp != "" {
-			if util.AllElementsNumbers(texp) {
-				texp = texp + "s"
-			}
-			T, err := time.ParseDuration(texp)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			err = p.SetExposureTime(T)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
+		if pictureTaker, ok := interface{}(p).(PictureTaker); ok {
+			texp := q.Get("exposureTime")
+			if texp != "" {
+				if util.AllElementsNumbers(texp) {
+					texp = texp + "s"
+				}
+				T, err := time.ParseDuration(texp)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				err = pictureTaker.SetExposureTime(T)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
 			}
 		}
 		img, err := p.GetFrame()
@@ -194,7 +353,7 @@ func GetFrame(p PictureTaker, rec *imgrec.Recorder) http.HandlerFunc {
 			format = "jpg"
 		}
 
-		aoi, err := p.GetAOI()
+		width, height, err := p.GetFrameSize()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -205,7 +364,7 @@ func GetFrame(p PictureTaker, rec *imgrec.Recorder) http.HandlerFunc {
 			for idx := 0; idx < len(img); idx++ {
 				buf[idx] = byte(img[idx] / 256) // scale 16 to 8 bits
 			}
-			im := &image.Gray{Pix: buf, Stride: aoi.Width, Rect: image.Rect(0, 0, aoi.Width, aoi.Height)}
+			im := &image.Gray{Pix: buf, Stride: width, Rect: image.Rect(0, 0, width, height)}
 			w.Header().Set("Content-Type", "image/jpeg")
 			w.WriteHeader(http.StatusOK)
 			jpeg.Encode(w, im, nil)
@@ -214,7 +373,7 @@ func GetFrame(p PictureTaker, rec *imgrec.Recorder) http.HandlerFunc {
 			for idx := 0; idx < len(img); idx++ {
 				buf[idx] = byte(img[idx] / 256) // scale 16 to 8 bits
 			}
-			im := &image.Gray{Pix: buf, Stride: aoi.Width, Rect: image.Rect(0, 0, aoi.Width, aoi.Height)}
+			im := &image.Gray{Pix: buf, Stride: width, Rect: image.Rect(0, 0, width, height)}
 			w.Header().Set("Content-Type", "image/png")
 			w.WriteHeader(http.StatusOK)
 			png.Encode(w, im)
@@ -247,18 +406,17 @@ func GetFrame(p PictureTaker, rec *imgrec.Recorder) http.HandlerFunc {
 			hdr := w.Header()
 			hdr.Set("Content-Type", "image/fits")
 			hdr.Set("Content-Disposition", "attachment; filename=image.fits")
-			err = writeFits(w2, cards, img, aoi.Width, aoi.Height, 1)
+			err = writeFits(w2, cards, img, width, height, 1)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 			}
 			return
 		}
-
 	}
 }
 
 // Burst takes a burst of N frames at M fps and returns it as a fits image cube
-func Burst(p PictureTaker) http.HandlerFunc {
+func Burst(p PictureTaker, rec *imgrec.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		t := struct {
 			FPS    float64 `json:"fps"`
@@ -275,20 +433,34 @@ func Burst(p PictureTaker) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		aoi, err := p.GetAOI()
+		width, height, err := p.GetFrameSize()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		cards := collectHeaderMetadata3(p)
-		// mutate the header version because this is a burst
+		cards := []fitsio.Card{}
+		if carder, ok := interface{}(p).(MetadataMaker); ok {
+			cards = carder.CollectHeaderMetadata()
+		}
+		// mutate the header version because this is a burst.
+		// Opportunity for a bug here if the first card isn't a header version tag,
+		// but we wouldn't violate that design, would we?
 		cards[0].Value = cards[0].Value.(string) + "+burst" // inject burst modifier to header version
 		cards = append(cards, fitsio.Card{Name: "fps", Value: t.FPS, Comment: "frame rate"})
+
+		var w2 io.Writer
+		if rec != nil && rec.Enabled && rec.Root != "" {
+			// if it is "", the recorder is not to be used
+			w2 = io.MultiWriter(w, rec)
+			defer rec.Incr()
+		} else {
+			w2 = w
+		}
 		hdr := w.Header()
 		hdr.Set("Content-Type", "image/fits")
 		hdr.Set("Content-Disposition", "attachment; filename=image.fits")
 		w.WriteHeader(http.StatusOK)
-		err = writeFits(w, cards, img, aoi.Width, aoi.Height, t.Frames)
+		err = writeFits(w2, cards, img, width, height, t.Frames)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
@@ -296,6 +468,100 @@ func Burst(p PictureTaker) http.HandlerFunc {
 	}
 }
 
-// AOIManipulator describes an interface to a camera which has a configurable area of interest
+// AOIManipulator is an interface to a camera's AOI manipulating factures
 type AOIManipulator interface {
+	// SetAOI allows the AOI to be set
+	SetAOI(AOI) error
+
+	// GetAOI retrieves the current AOI
+	GetAOI() (AOI, error)
+
+	// SetBinning sets the binning option of the camera
+	SetBinning(Binning) error
+
+	// GetBinning returns the binning option of the camera
+	GetBinning() (Binning, error)
+}
+
+// HTTPAOIManipulator injects routes to manipulate the AOI of a camera
+// into a route table
+func HTTPAOIManipulator(a AOIManipulator, table server.RouteTable) {
+	table[pat.Get("/aoi")] = GetAOI(a)
+	table[pat.Post("/aoi")] = SetAOI(a)
+}
+
+// SetAOI returns an HTTP handler func that sets the AOI of the camera
+func SetAOI(a AOIManipulator) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		aoi := AOI{}
+		err := json.NewDecoder(r.Body).Decode(&aoi)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		err = a.SetAOI(aoi)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+}
+
+// GetAOI returns an HTTP handler func that gets the AOI of the camera
+func GetAOI(a AOIManipulator) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		aoi, err := a.GetAOI()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		err = json.NewEncoder(w).Encode(aoi)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+}
+
+// FeatureManager describes an interface which can manage its features
+type FeatureManager interface {
+	// Configure adjusts several features of the camera at once
+	Configure(map[string]interface{}) error
+}
+
+// Camera describes the most basic camera possible
+type Camera interface {
+	// GetFrame returns a frame from the device as a strided array
+	GetFrame() ([]uint16, error)
+
+	//GetFrameSize gets the (W, H) of a frame
+	GetFrameSize() (int, int, error)
+}
+
+// HTTPCamera is a camera which exposes an HTTP interface to itself
+type HTTPCamera struct {
+	PictureTaker
+
+	RouteTable server.RouteTable
+}
+
+// NewHTTPCamera returns a new HTTP wrapper around a camera
+func NewHTTPCamera(p PictureTaker, rec *imgrec.Recorder) HTTPCamera {
+	w := HTTPCamera{PictureTaker: p}
+	rt := server.RouteTable{}
+	HTTPPicture(p, rt, rec)
+	if thermal, ok := interface{}(p).(ThermalManager); ok {
+		HTTPThermalManager(thermal, rt)
+	}
+	if aoi, ok := interface{}(p).(AOIManipulator); ok {
+		HTTPAOIManipulator(aoi, rt)
+	}
+
+	w.RouteTable = rt
+	return w
 }

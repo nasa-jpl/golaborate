@@ -31,218 +31,21 @@ type HTTPWrapper struct {
 
 // NewHTTPWrapper returns a new wrapper with the route table populated
 func NewHTTPWrapper(c *Camera, r *imgrec.Recorder) HTTPWrapper {
-	w := HTTPWrapper{Camera: c}
-	w.RouteTable = server.RouteTable{
-		// image capture
-		pat.Get("/image"): w.GetFrame,
-		pat.Get("/burst"): w.Burst,
-
-		// exposure manipulation
-		pat.Get("/exposure-time"):  w.GetExposureTime,
-		pat.Post("/exposure-time"): w.SetExposureTime,
-
-		// thermals
-		pat.Get("/fan"):                          w.GetFan,
-		pat.Post("/fan"):                         w.SetFan,
-		pat.Get("/sensor-cooling"):               w.GetCooling,
-		pat.Post("/sensor-cooling"):              w.SetCooling,
-		pat.Get("/temperature"):                  w.GetTemperature,
-		pat.Get("/temperature-setpoint-options"): w.GetTemperatureSetpoints,
-		pat.Get("/temperature-setpoint"):         w.GetTemperatureSetpoint,
-		pat.Post("/temperature-setpoint"):        w.SetTemperatureSetpoint,
-		pat.Get("/temperature-status"):           w.GetTemperatureStatus,
-
-		// generic
-		pat.Get("/feature"):                  w.GetFeatures,
-		pat.Get("/feature/:feature"):         w.GetFeature,
-		pat.Get("/feature/:feature/options"): w.GetFeatureInfo,
-		pat.Post("/feature/:feature"):        w.SetFeature,
-
-		// AOI
-		pat.Get("/aoi"):  w.GetAOI,
-		pat.Post("/aoi"): w.SetAOI,
-	}
+	g := camera.NewHTTPCamera(c, r)
+	w := HTTPWrapper{Camera: c, recorder: r}
+	// things not part of the generic wrapper (yet?)
+	g.RouteTable[pat.Get("/feature")] =                  w.GetFeatures
+	g.RouteTable[pat.Get("/feature/:feature")] =         w.GetFeature
+	g.RouteTable[pat.Get("/feature/:feature/options")] = w.GetFeatureInfo
+	g.RouteTable[pat.Post("/feature/:feature")] =        w.SetFeature
 	w2 := imgrec.NewHTTPWrapper(r)
 	w2.Inject(w)
-	w.recorder = w2
 	return w
 }
 
 // RT yields the route table and implements the server.HTTPer interface
 func (h HTTPWrapper) RT() server.RouteTable {
 	return h.RouteTable
-}
-
-// SetExposureTime sets the exposure time on a POST request.
-// it can be provided either as a query parameter exposureTime, formatted in a
-// way that is parseable by golang/time.ParseDuration, or a json payload with
-// key f64, holding the exposure time in seconds.
-func (h *HTTPWrapper) SetExposureTime(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	texp := q.Get("exposureTime")
-	var d time.Duration
-	var err error
-	if texp == "" {
-		f := server.FloatT{}
-		err = json.NewDecoder(r.Body).Decode(&f)
-		d = time.Duration(int(f.F64*1e9)) * time.Nanosecond // 1e9 s => ns
-	} else {
-		d, err = time.ParseDuration(texp)
-	}
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	err = h.Camera.SetExposureTime(d)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-	return
-}
-
-// GetExposureTime gets the exposure time on a GET request
-func (h *HTTPWrapper) GetExposureTime(w http.ResponseWriter, r *http.Request) {
-	f, err := h.Camera.GetExposureTime()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	hp := server.HumanPayload{T: types.Float64, Float: f.Seconds()}
-	hp.EncodeAndRespond(w, r)
-	return
-}
-
-
-// GetCooling gets the cooling status and sends it back as a bool encoded in JSON
-func (h *HTTPWrapper) GetCooling(w http.ResponseWriter, r *http.Request) {
-	cool, err := h.Camera.GetCooling()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	hp := server.HumanPayload{T: types.Bool, Bool: cool}
-	hp.EncodeAndRespond(w, r)
-	return
-}
-
-// SetCooling sets the cooling status over HTTP
-func (h *HTTPWrapper) SetCooling(w http.ResponseWriter, r *http.Request) {
-	b := server.BoolT{}
-	err := json.NewDecoder(r.Body).Decode(&b)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer r.Body.Close()
-	err = h.Camera.SetCooling(b.Bool)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-	return
-}
-
-// GetTemperature gets the temperature and sends it over HTTP
-func (h *HTTPWrapper) GetTemperature(w http.ResponseWriter, r *http.Request) {
-	t, err := h.Camera.GetTemperature()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	hp := server.HumanPayload{T: types.Float64, Float: t}
-	hp.EncodeAndRespond(w, r)
-	return
-}
-
-// GetTemperatureSetpoints gets the current temperature Setpoints
-func (h *HTTPWrapper) GetTemperatureSetpoints(w http.ResponseWriter, r *http.Request) {
-	opts, err := h.Camera.GetTemperatureSetpoints()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	err = json.NewEncoder(w).Encode(opts)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-	return
-}
-
-// GetTemperatureSetpoint gets the temp setpoint and returns it as JSON
-func (h *HTTPWrapper) GetTemperatureSetpoint(w http.ResponseWriter, r *http.Request) {
-	setpt, err := h.Camera.GetTemperatureSetpoint()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	hp := server.HumanPayload{T: types.String, String: setpt}
-	hp.EncodeAndRespond(w, r)
-	return
-}
-
-// SetTemperatureSetpoint sets the temp setpoint from JSON
-func (h *HTTPWrapper) SetTemperatureSetpoint(w http.ResponseWriter, r *http.Request) {
-	str := server.StrT{}
-	err := json.NewDecoder(r.Body).Decode(&str)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer r.Body.Close()
-	err = h.Camera.SetTemperatureSetpoint(str.Str)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-	return
-}
-
-// GetTemperatureStatus gets the current temperature status as a string and returns as JSON
-func (h *HTTPWrapper) GetTemperatureStatus(w http.ResponseWriter, r *http.Request) {
-	stat, err := h.Camera.GetTemperatureStatus()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	hp := server.HumanPayload{T: types.String, String: stat}
-	hp.EncodeAndRespond(w, r)
-	return
-}
-
-// GetFan gets if the fan is currently running over HTTP
-func (h *HTTPWrapper) GetFan(w http.ResponseWriter, r *http.Request) {
-	on, err := h.Camera.GetFan()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	hp := server.HumanPayload{T: types.Bool, Bool: on}
-	hp.EncodeAndRespond(w, r)
-	return
-}
-
-// SetFan sets the fan operation over HTTP
-func (h *HTTPWrapper) SetFan(w http.ResponseWriter, r *http.Request) {
-	b := server.BoolT{}
-	err := json.NewDecoder(r.Body).Decode(&b)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer r.Body.Close()
-	err = h.Camera.SetFan(b.Bool)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-	return
 }
 
 // GetFeatures gets all of the possible features, mapped by their
@@ -528,37 +331,4 @@ func (h *HTTPWrapper) SetFeature(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-}
-
-// GetAOI gets the AOI and returns it as json over the wire
-func (h *HTTPWrapper) GetAOI(w http.ResponseWriter, r *http.Request) {
-	aoi, err := h.Camera.GetAOI()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	err = json.NewEncoder(w).Encode(aoi)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-	return
-}
-
-// SetAOI sets the AOI over HTTP via json
-func (h *HTTPWrapper) SetAOI(w http.ResponseWriter, r *http.Request) {
-	aoi := AOI{}
-	err := json.NewDecoder(r.Body).Decode(&aoi)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	err = h.Camera.SetAOI(aoi)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-	return
 }
