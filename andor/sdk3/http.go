@@ -20,13 +20,12 @@ type HTTPWrapper struct {
 
 	RouteTable server.RouteTable
 
-	recorder imgrec.HTTPWrapper
+	recorder *imgrec.Recorder
 }
 
 // NewHTTPWrapper returns a new wrapper with the route table populated
 func NewHTTPWrapper(c *Camera, r *imgrec.Recorder) HTTPWrapper {
 	g := camera.NewHTTPCamera(c, r)
-	r2 := imgrec.NewHTTPWrapper(r)
 	w := HTTPWrapper{Camera: c, recorder: r}
 	// things not part of the generic wrapper (yet?)
 	g.RouteTable[pat.Get("/feature")] = w.GetFeatures

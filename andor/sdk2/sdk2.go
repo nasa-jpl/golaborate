@@ -72,157 +72,86 @@ package sdk2
 */
 import "C"
 import (
-	"log"
+	"errors"
 	"fmt"
-	"time"
+	"log"
 	"strconv"
+	"time"
 	"unsafe"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/util"
 )
 
-// AcquisitionMode represents a mode of acquisition to the camera.
-type AcquisitionMode int
+// Enum behaves a bit like a C enum
+type Enum map[string]int
 
-const (
-	// AcquisitionSingleScan is the single-scan acq. mode
-	AcquisitionSingleScan AcquisitionMode = iota + 1
+var (
+	// ErrBadEnumIndex is generated when an unknown enum index is used
+	ErrBadEnumIndex = errors.New("index not found in enum")
 
-	// AcquisitionAccumulate is a continuous acquisition mode
-	AcquisitionAccumulate
+	// ErrParameterNotSet is generated when a parameter is Gotten before it is set
+	ErrParameterNotSet = errors.New("parameter not set and not queryable from SDK, set to learn in wrapper")
 
-	// AcquisitionKinetic is Andor's Kinetic acq. mode
-	AcquisitionKinetic
+	// AcquisitionMode maps names to the values used by the SDK
+	AcquisitionMode = Enum{
+		"SingleScan":    1,
+		"Accumulate":    2,
+		"Kinetic":       3,
+		"FastKinetic":   4,
+		"RunUntilAbort": 5,
+	}
 
-	// AcquisitionFastKinetic is Andor's fast kinetic acq. mode
-	AcquisitionFastKinetic
+	// ReadoutMode maps names to the values used by the SDK
+	ReadoutMode = Enum{
+		"FullVerticalBinning": 0,
+		"MultiTrack":          1,
+		"RandomTrack":         2,
+		"SingleTrack":         3,
+		"Image":               4,
+	}
 
-	// AcquisitionRunUntilAbort acquires until acquisition is aborted
-	AcquisitionRunUntilAbort
-)
+	// TriggerMode maps names to the values used by the SDK
+	TriggerMode = Enum{
+		"Internal":                 0,
+		"External":                 1,
+		"ExternalStart":            6,
+		"External Exposure (Bulb)": 7,
+		"External FVB EM":          9,
+		"Software":                 10,
+	}
 
-// ReadoutMode represents a readout mode of the camera.
-type ReadoutMode int
+	// FilterMode maps names to the values used by the SDK
+	FilterMode = Enum{
+		"No Filter":           0,
+		"Median":              1,
+		"Level Above":         2,
+		"Interquartile Range": 3,
+		"Noise Threshold":     4,
+	}
 
-const (
-	// ReadoutFullVerticalBinning reads out as if the sensor were a line array
-	ReadoutFullVerticalBinning ReadoutMode = iota + 1
+	// ShutterMode maps names to the values used by the SDK
+	ShutterMode = Enum{
+		"Auto":  0,
+		"Open":  1,
+		"Close": 2,
+	}
 
-	// ReadoutMultiTrack is like an array of ReadoutSingleTrack
-	ReadoutMultiTrack
+	// VerticalClockVoltage maps names to the values used by the SDK
+	VerticalClockVoltage = Enum{
+		"Normal": 0,
+		"+1":     1,
+		"+2":     2,
+		"+3":     3,
+		"+4":     4,
+	}
 
-	// ReadoutRandomTrack is like MultiTrack, but the camera sets the positions itself
-	ReadoutRandomTrack
-
-	// ReadoutSingleTrack is like FulLVerticalBinning, but for a certain
-	// row index and track height
-	ReadoutSingleTrack
-
-	// ReadoutImage is the mode you probably want to operate your camera in
-	ReadoutImage
-)
-
-// TriggerMode represents a mode of triggering the camera
-type TriggerMode uint
-
-const (
-	// TriggerInternal uses internal triggering
-	TriggerInternal TriggerMode = iota
-
-	// TriggerExternal uses external triggering
-	TriggerExternal
-
-	_
-	_
-	_
-	_
-
-	// TriggerExternalStart uses rising edges from an external trigger and falling edges from an internal one
-	TriggerExternalStart
-
-	// TriggerExternalExposure is used for bulb exposure operation
-	TriggerExternalExposure
-
-	_
-
-	// TriggerExternalFVBEM is a special mode we don't use
-	TriggerExternalFVBEM
-
-	// TriggerSoftware uses pure software triggering
-	TriggerSoftware
-)
-
-// FilterMode represents a mode of filtering the data
-type FilterMode uint
-
-const (
-	// FilterNoFilter defeats filtering
-	FilterNoFilter FilterMode = iota
-
-	// FilterMedian uses median filtering
-	FilterMedian
-
-	// FilterLevelAbove uses a basic threshold filter
-	FilterLevelAbove
-
-	// FilterInterquartileRange uses a sophistocated IQ range filter
-	FilterInterquartileRange
-
-	// FilterNoiseThreshold uses a filter referenced to the noise level
-	FilterNoiseThreshold
-)
-
-// ShutterMode represents a mode of operating the shutter
-type ShutterMode int
-
-const (
-	// ShutterAuto operates the shutter as a regular camera would
-	ShutterAuto ShutterMode = iota
-
-	// ShutterOpen locks the shutter open
-	ShutterOpen
-
-	// ShutterClosed locks the shutter closed
-	ShutterClosed
-)
-
-// VerticalClockVoltage represents the a discrete voltage level determined by
-// Andor for the vertical shift register
-type VerticalClockVoltage uint
-
-const (
-	// VerticalClockNormal is the normal / base vertical shift register voltage
-	VerticalClockNormal VerticalClockVoltage = iota
-
-	//VerticalClockPlusOne increases the voltage by one step
-	VerticalClockPlusOne
-
-	//VerticalClockPlusTwo increases the voltage by two steps
-	VerticalClockPlusTwo
-
-	//VerticalClockPlusThree increases the voltage by three steps
-	VerticalClockPlusThree
-
-	//VerticalClockPlusFour increases the voltage by four steps
-	VerticalClockPlusFour
-)
-
-// EMGainMode represents one of the electron multiplying gain modes
-// supported by Andor EMCCD cameras
-type EMGainMode uint
-
-const (
-	// EMGainDefault has EM gain controlled by DAC settings in the range of 0-255
-	EMGainDefault EMGainMode = iota
-
-	// EMGainExtended has EM gain controlled by DAC settings in the range of 0-4095
-	EMGainExtended
-
-	// EMGainLinear has EM gain TODO: finish this docstring
-	EMGainLinear
-
-	// EMGainReal has EM gain TODO: finish this docstring
-	EMGainReal
+	// EMGainMode maps names ot the values used by the SDK
+	EMGainMode = Enum{
+		"Default":  0,
+		"Extended": 1,
+		"Linear":   2,
+		"Real":     3,
+	}
 )
 
 // HardwareVersion is a struct holding hardware versions
@@ -307,15 +236,12 @@ const (
 
 // Camera represents an Andor camera
 type Camera struct {
-	// lastTempSetpointChange is the last time
-	// the temperature setpoint was adjusted.
-	// used to clamp the temperature setpoint slewrate
-	lastTempSetpointChange time.Time
+	// nil values cause get functions to bounce
+	// tempSetpoint is the temperature the TEC is set to
+	tempSetpoint *int
 
-	// lastTempSetpoint is the last commanded temperature setpoint
-	// a pointer is used to differentiate zero (OK) from uninitialized
-	// (nil pointer)
-	TempSetpoint *int
+	// exposureTime is the length of time the exposure is set to
+	exposureTime *time.Duration
 }
 
 var (
@@ -541,8 +467,12 @@ func (c *Camera) SetVSSpeed(idx int) error { // need another argument type
 }
 
 // SetVSAmplitude sets the vertical shift register voltage
-func (c *Camera) SetVSAmplitude(vcv VerticalClockVoltage) error {
-	cint := C.int(vcv)
+func (c *Camera) SetVSAmplitude(vcv string) error {
+	i, ok := VerticalClockVoltage[vcv]
+	if !ok {
+		return ErrBadEnumIndex
+	}
+	cint := C.int(i)
 	errCode := uint(C.SetVSAmplitude(cint))
 	return Error(errCode)
 }
@@ -650,8 +580,7 @@ func (c *Camera) setTemperature(t int) error {
 	errCode := uint(C.SetTemperature(C.int(t)))
 	err := Error(errCode)
 	if err == nil {
-		c.TempSetpoint = &t
-		c.lastTempSetpointChange = time.Now()
+		c.tempSetpoint = &t
 	}
 	return err
 }
@@ -675,21 +604,20 @@ func (c *Camera) SetTemperatureSetpoint(t string) error {
 	}
 
 	// fix any zero values
-	if c.TempSetpoint == nil {
+	if c.tempSetpoint == nil {
 		// 20 is room temperature which is probably the default
 		// ...
 		DEFAULT := int(20)
-		c.TempSetpoint = &DEFAULT
-		c.lastTempSetpointChange = time.Now()
+		c.tempSetpoint = &DEFAULT
 	}
-	
+
 	// now wind up the loop
 	// tI = -100, c.TemPSetpoint = 20
 	// -120 - 20 -> -140
 	// -> 140 delta
-	dT := tI - *c.TempSetpoint
+	dT := tI - *c.tempSetpoint
 	var step int
-	if dT < 0  {
+	if dT < 0 {
 		step = -STEP
 	} else {
 		step = STEP
@@ -698,7 +626,7 @@ func (c *Camera) SetTemperatureSetpoint(t string) error {
 	// truncated / rounded down, so we will handle the final step specially
 	steps := (dT / STEP)
 	log.Println(tI, dT, steps)
-	for idx := 0; idx < steps; idx ++ {
+	for idx := 0; idx < steps; idx++ {
 		// compute the next step
 		next := *c.TempSetpoint + step
 		log.Println(idx, next)
@@ -743,27 +671,39 @@ func (c *Camera) SetFan(on bool) error {
  */
 
 // SetAcquisitionMode sets the acquisition mode of the camera
-func (c *Camera) SetAcquisitionMode(am AcquisitionMode) error {
-	errCode := uint(C.SetAcquisitionMode(C.int(am)))
+func (c *Camera) SetAcquisitionMode(am string) error {
+	i, ok := AcquisitionMode[am]
+	if !ok {
+		return ErrBadEnumIndex
+	}
+	errCode := uint(C.SetAcquisitionMode(C.int(i)))
 	return Error(errCode)
 }
 
 // SetReadoutMode sets the readout mode of the camera.  We rename this from SetReadMode in the actual driver
-func (c *Camera) SetReadoutMode(rm ReadoutMode) error {
-	errCode := uint(C.SetReadMode(C.int(rm)))
+func (c *Camera) SetReadoutMode(rm string) error {
+	i, ok := ReadoutMode[rm]
+	if !ok {
+		return ErrBadEnumIndex
+	}
+	errCode := uint(C.SetReadMode(C.int(i)))
 	return Error(errCode)
 }
 
 // SetShutter sets the shutter parameters of the camera.
 // ttlHi sends output TTL high signal to open shutter, else sends TTL low signal
-func (c *Camera) SetShutter(ttlHi bool, mode ShutterMode, opening, closing time.Duration) error {
-	ot := opening.Nanoseconds() / 1e6 // do this ourselves, really wish we could use go 1.13 to do it with .Milliseconds()
-	ct := closing.Nanoseconds() / 1e6
+func (c *Camera) SetShutter(ttlHi bool, mode string, opening, closing time.Duration) error {
+	i, ok := ShutterMode[mode]
+	if !ok {
+		return ErrBadEnumIndex
+	}
+	ot := opening.Milliseconds()
+	ct := closing.Milliseconds()
 	ttl := 0
 	if ttlHi {
 		ttl = 1
 	}
-	errCode := uint(C.SetShutter(C.int(ttl), C.int(mode), C.int(ot), C.int(ct)))
+	errCode := uint(C.SetShutter(C.int(ttl), C.int(i), C.int(ot), C.int(ct)))
 	return Error(errCode)
 }
 
@@ -771,12 +711,28 @@ func (c *Camera) SetShutter(ttlHi bool, mode ShutterMode, opening, closing time.
 func (c *Camera) SetExposureTime(t time.Duration) error {
 	tS := t.Seconds()
 	errCode := uint(C.SetExposureTime(C.float(tS)))
-	return Error(errCode)
+	err := Error(errCode)
+	if err == nil {
+		c.exposureTime = &t
+	}
+	return err
+}
+
+// GetExposureTime returns the current exposure time
+func (c *Camera) GetExposureTime() (time.Duration, error) {
+	if c.exposureTime == nil {
+		return 0, ErrParameterNotSet
+	}
+	return *c.exposureTime, nil
 }
 
 // SetTriggerMode sets the trigger mode of the camera
-func (c *Camera) SetTriggerMode(tm TriggerMode) error {
-	errCode := uint(C.SetTriggerMode(C.int(tm)))
+func (c *Camera) SetTriggerMode(tm string) error {
+	i, ok := TriggerMode[tm]
+	if !ok {
+		return ErrBadEnumIndex
+	}
+	errCode := uint(C.SetTriggerMode(C.int(i)))
 	return Error(errCode)
 }
 
@@ -832,7 +788,7 @@ func (c *Camera) GetStatus() (Status, error) {
 //
 // Implementing a 32-bit function is left for the future
 func (c *Camera) GetAcquiredData() ([]int32, error) {
-	elements := 1024*1024
+	elements := 1024 * 1024
 	buf := make([]int32, elements)
 	ptr := (*C.int)(unsafe.Pointer(&buf[0]))
 	errCode := uint(C.GetAcquiredData(ptr, C.uint(1024*1024)))
@@ -885,13 +841,17 @@ func (c *Camera) GetMaximumExposure() (float64, error) {
 // GetMaximumBinning returns the maximum binning factor usable.
 // if horizontal is true, the returned value is for the horizontal dimension.
 // if horizontal is false, the returned value is for the vertical dimension.
-func (c *Camera) GetMaximumBinning(rm ReadoutMode, horizontal bool) (int, error) {
+func (c *Camera) GetMaximumBinning(rm string, horizontal bool) (int, error) {
+	i, ok := ReadoutMode[rm]
+	if !ok {
+		return 0, ErrBadEnumIndex
+	}
 	var maxbin C.int
 	horz := 1
 	if horizontal {
 		horz = 0
 	}
-	errCode := uint(C.GetMaximumBinning(C.int(rm), C.int(horz), &maxbin))
+	errCode := uint(C.GetMaximumBinning(C.int(i), C.int(horz), &maxbin))
 	return int(maxbin), Error(errCode)
 }
 
@@ -900,8 +860,12 @@ func (c *Camera) GetMaximumBinning(rm ReadoutMode, horizontal bool) (int, error)
  */
 
 // FilterSetMode sets the filtering mode of the camera
-func (c *Camera) FilterSetMode(fm FilterMode) error {
-	errCode := uint(C.Filter_SetMode(C.uint(fm)))
+func (c *Camera) FilterSetMode(fm string) error {
+	i, ok := FilterMode[fm]
+	if !ok {
+		return ErrBadEnumIndex
+	}
+	errCode := uint(C.Filter_SetMode(C.uint(i)))
 	return Error(errCode)
 }
 
@@ -920,7 +884,7 @@ func (c *Camera) SetBaselineClamp(b bool) error {
  */
 
 // GetEMCCDGain gets the current EMCCD gain
-func (c *Camera) GetEMCCDGain() (int, error) { // need another return type
+func (c *Camera) GetEMCCDGain() (int, error) {
 	var mult C.int
 	errCode := uint(C.GetEMCCDGain(&mult))
 	return int(mult), Error(errCode)
@@ -942,8 +906,12 @@ func (c *Camera) GetEMGainRange() (int, int, error) {
 }
 
 // SetEMGainMode sets the current EMCCD gain mode
-func (c *Camera) SetEMGainMode(gm EMGainMode) error {
-	errCode := uint(C.SetEMGainMode(C.int(gm)))
+func (c *Camera) SetEMGainMode(gm string) error {
+	i, ok := EMGainMode[gm]
+	if !ok {
+		return ErrBadEnumIndex
+	}
+	errCode := uint(C.SetEMGainMode(C.int(i)))
 	return Error(errCode)
 }
 
@@ -957,4 +925,9 @@ func (c *Camera) SetEMAdvanced(b bool) error {
 	}
 	errCode := uint(C.SetEMAdvanced(C.int(enabled)))
 	return Error(errCode)
+}
+
+// Burst takes a chunk of pictures and returns them as one contiguous buffer
+func (c *Camera) Burst(frames int, fps float64) ([]uint16, error) {
+	return []uint16{}, fmt.Errorf("not implemented")
 }
