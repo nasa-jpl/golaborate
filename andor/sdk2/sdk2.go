@@ -72,7 +72,6 @@ package sdk2
 */
 import "C"
 import (
-	"log"
 	"fmt"
 	"time"
 	"strconv"
@@ -307,15 +306,6 @@ const (
 
 // Camera represents an Andor camera
 type Camera struct {
-	// lastTempSetpointChange is the last time
-	// the temperature setpoint was adjusted.
-	// used to clamp the temperature setpoint slewrate
-	lastTempSetpointChange time.Time
-
-	// lastTempSetpoint is the last commanded temperature setpoint
-	// a pointer is used to differentiate zero (OK) from uninitialized
-	// (nil pointer)
-	TempSetpoint *int
 }
 
 var (
@@ -644,84 +634,15 @@ func (c *Camera) GetTemperature() (int, error) {
 	return int(temp), Error(errCode)
 }
 
-// setTemperature sets the temperature setpoint in degrees celcius
-// this is a 1:1 wrapper around SDK2
-func (c *Camera) setTemperature(t int) error {
-	errCode := uint(C.SetTemperature(C.int(t)))
-	err := Error(errCode)
-	if err == nil {
-		c.TempSetpoint = &t
-		c.lastTempSetpointChange = time.Now()
-	}
-	return err
-}
-
-// SetTemperatureSetpoint is an SDK3-compatible
-// and EMCCD saving shim over setTemperature
-//
-// it uses a string for SDK3 compatibility, where
-// t is an integer number of degrees celcius
-// e.g. t="-60"
-//
-// it internally walks the temperature from its current value
-// to the setpoint at a slew rate of 5C/min
-// and thus may take a long time to execute
-func (c *Camera) SetTemperatureSetpoint(t string) error {
-	STEP := 5 // the "step" size to use
-	// convert SDK3 to SDK2 flavor
+// SetTemperature sets the temperature setpoint in degrees celcius
+// this is a 1:1 wrapper around SDK2 with an Atoi in between
+func (c *Camera) SetTemperature(t string) error {
 	tI, err := strconv.Atoi(t)
 	if err != nil {
 		return err
 	}
-
-	// fix any zero values
-	if c.TempSetpoint == nil {
-		// 20 is room temperature which is probably the default
-		// ...
-		DEFAULT := int(20)
-		c.TempSetpoint = &DEFAULT
-		c.lastTempSetpointChange = time.Now()
-	}
-	
-	// now wind up the loop
-	// tI = -100, c.TemPSetpoint = 20
-	// -120 - 20 -> -140
-	// -> 140 delta
-	dT := tI - *c.TempSetpoint
-	var step int
-	if dT < 0  {
-		step = -STEP
-	} else {
-		step = STEP
-	}
-	dT = absInt(dT)
-	// truncated / rounded down, so we will handle the final step specially
-	steps := (dT / STEP)
-	log.Println(tI, dT, steps)
-	for idx := 0; idx < steps; idx ++ {
-		// compute the next step
-		next := *c.TempSetpoint + step
-		log.Println(idx, next)
-		// sleep if it hasn't been long enough
-		dt := time.Now().Sub(c.lastTempSetpointChange)
-		if dt < time.Minute {
-			time.Sleep(time.Minute - dt)
-		}
-		// then make the next step
-		err := c.setTemperature(next)
-		if !BeneignThermal(err) {
-			return err
-		}
-	}
-	// the final step is done manually
-	return c.setTemperature(tI)
-}
-
-func absInt(i int) int {
-	if i < 0 {
-		return -i
-	}
-	return i
+	errCode := uint(C.SetTemperature(C.int(tI)))
+	return Error(errCode)
 }
 
 // SetFan allows the fan to be turned on or off.
