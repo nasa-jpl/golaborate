@@ -72,8 +72,10 @@ package sdk2
 */
 import "C"
 import (
+	"log"
 	"fmt"
 	"time"
+	"strconv"
 	"unsafe"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/util"
@@ -84,7 +86,7 @@ type AcquisitionMode int
 
 const (
 	// AcquisitionSingleScan is the single-scan acq. mode
-	AcquisitionSingleScan AcquisitionMode = iota
+	AcquisitionSingleScan AcquisitionMode = iota + 1
 
 	// AcquisitionAccumulate is a continuous acquisition mode
 	AcquisitionAccumulate
@@ -104,7 +106,7 @@ type ReadoutMode int
 
 const (
 	// ReadoutFullVerticalBinning reads out as if the sensor were a line array
-	ReadoutFullVerticalBinning ReadoutMode = iota
+	ReadoutFullVerticalBinning ReadoutMode = iota + 1
 
 	// ReadoutMultiTrack is like an array of ReadoutSingleTrack
 	ReadoutMultiTrack
@@ -305,9 +307,15 @@ const (
 
 // Camera represents an Andor camera
 type Camera struct {
-	// Resolution is the (HxW) of the camera in pixels
-	// following numpy/C array ordering convention
-	Resolution [2]int
+	// lastTempSetpointChange is the last time
+	// the temperature setpoint was adjusted.
+	// used to clamp the temperature setpoint slewrate
+	lastTempSetpointChange time.Time
+
+	// lastTempSetpoint is the last commanded temperature setpoint
+	// a pointer is used to differentiate zero (OK) from uninitialized
+	// (nil pointer)
+	TempSetpoint *int
 }
 
 var (
@@ -433,12 +441,26 @@ func Error(code uint) error {
 	return DRVError(code)
 }
 
+// BeneignThermal returns true if the status code is a beneign thermal one
+func BeneignThermal(err error) bool {
+	if err == nil {
+		return true
+	}
+	if drv, ok := err.(DRVError); ok {
+		if (20033 < drv) && (20041 > drv) {
+			return true
+		}
+		return false
+	}
+	return false
+}
+
 /* this block contains functions which deal with camera initialization
 
  */
 
 // Initialize initializes the camera connection with the driver library
-func (c *Camera) Initialize(iniPath string) error {
+func Initialize(iniPath string) error {
 	cstr := C.CString(iniPath)
 	defer C.free(unsafe.Pointer(cstr))
 	errCode := uint(C.Initialize(cstr))
@@ -526,15 +548,16 @@ func (c *Camera) SetVSAmplitude(vcv VerticalClockVoltage) error {
 }
 
 // GetNumberHSSpeeds gets the number of horizontal shift register speeds available
-func (c *Camera) GetNumberHSSpeeds(ch int, emMode bool) (int, error) { // need another return type
-	var emint int
-	if emMode {
-		emint = 0
-	} else {
-		emint = 1
-	}
+func (c *Camera) GetNumberHSSpeeds(ch int) (int, error) { // need another return type
+	// var emint int
+	// if emMode {
+	// 	emint = 0
+	// } else {
+	// 	emint = 1
+	// }
+	// commented out, mode 1 never applies?
 	cch := C.int(ch)
-	ctyp := C.int(emint)
+	ctyp := C.int(0)
 	var ret C.int
 
 	errCode := uint(C.GetNumberHSSpeeds(cch, ctyp, &ret))
@@ -542,15 +565,16 @@ func (c *Camera) GetNumberHSSpeeds(ch int, emMode bool) (int, error) { // need a
 }
 
 // GetHSSpeed gets the horizontal shift speed
-func (c *Camera) GetHSSpeed(ch int, emMode bool, idx int) (float64, error) { // need another return type
-	var emint int
-	if emMode {
-		emint = 0
-	} else {
-		emint = 1
-	}
+func (c *Camera) GetHSSpeed(ch int, idx int) (float64, error) { // need another return type
+	// var emint int
+	// if emMode {
+	// 	emint = 0
+	// } else {
+	// 	emint = 1
+	// }
+	// commented out, mode 1 never applies?
 	cch := C.int(ch)
-	ctyp := C.int(emint)
+	ctyp := C.int(0)
 	cidx := C.int(idx)
 	var ret C.float
 
@@ -559,14 +583,15 @@ func (c *Camera) GetHSSpeed(ch int, emMode bool, idx int) (float64, error) { // 
 }
 
 // SetHSSpeed sets the horizontal shift speed
-func (c *Camera) SetHSSpeed(emMode bool, idx int) error { // need another argument type
-	var emint int
-	if emMode {
-		emint = 0
-	} else {
-		emint = 1
-	}
-	ctyp := C.int(emint)
+func (c *Camera) SetHSSpeed(idx int) error { // need another argument type
+	// var emint int
+	// if emMode {
+	// 	emint = 0
+	// } else {
+	// 	emint = 1
+	// }
+	// commented out -- seems we are always using 0 / are not in NIR (for 1)
+	ctyp := C.int(0)
 	cidx := C.int(idx)
 
 	errCode := uint(C.SetHSSpeed(ctyp, cidx))
@@ -619,9 +644,97 @@ func (c *Camera) GetTemperature() (int, error) {
 	return int(temp), Error(errCode)
 }
 
-// SetTemperature sets the temperature setpoint in degrees celcius
-func (c *Camera) SetTemperature(t int) error {
+// setTemperature sets the temperature setpoint in degrees celcius
+// this is a 1:1 wrapper around SDK2
+func (c *Camera) setTemperature(t int) error {
 	errCode := uint(C.SetTemperature(C.int(t)))
+	err := Error(errCode)
+	if err == nil {
+		c.TempSetpoint = &t
+		c.lastTempSetpointChange = time.Now()
+	}
+	return err
+}
+
+// SetTemperatureSetpoint is an SDK3-compatible
+// and EMCCD saving shim over setTemperature
+//
+// it uses a string for SDK3 compatibility, where
+// t is an integer number of degrees celcius
+// e.g. t="-60"
+//
+// it internally walks the temperature from its current value
+// to the setpoint at a slew rate of 5C/min
+// and thus may take a long time to execute
+func (c *Camera) SetTemperatureSetpoint(t string) error {
+	STEP := 5 // the "step" size to use
+	// convert SDK3 to SDK2 flavor
+	tI, err := strconv.Atoi(t)
+	if err != nil {
+		return err
+	}
+
+	// fix any zero values
+	if c.TempSetpoint == nil {
+		// 20 is room temperature which is probably the default
+		// ...
+		DEFAULT := int(20)
+		c.TempSetpoint = &DEFAULT
+		c.lastTempSetpointChange = time.Now()
+	}
+	
+	// now wind up the loop
+	// tI = -100, c.TemPSetpoint = 20
+	// -120 - 20 -> -140
+	// -> 140 delta
+	dT := tI - *c.TempSetpoint
+	var step int
+	if dT < 0  {
+		step = -STEP
+	} else {
+		step = STEP
+	}
+	dT = absInt(dT)
+	// truncated / rounded down, so we will handle the final step specially
+	steps := (dT / STEP)
+	log.Println(tI, dT, steps)
+	for idx := 0; idx < steps; idx ++ {
+		// compute the next step
+		next := *c.TempSetpoint + step
+		log.Println(idx, next)
+		// sleep if it hasn't been long enough
+		dt := time.Now().Sub(c.lastTempSetpointChange)
+		if dt < time.Minute {
+			time.Sleep(time.Minute - dt)
+		}
+		// then make the next step
+		err := c.setTemperature(next)
+		if !BeneignThermal(err) {
+			return err
+		}
+	}
+	// the final step is done manually
+	return c.setTemperature(tI)
+}
+
+func absInt(i int) int {
+	if i < 0 {
+		return -i
+	}
+	return i
+}
+
+// SetFan allows the fan to be turned on or off.
+// this is not a 1:1 mimic of SDk2, since it is binary
+// on (HIGH) or off (OFF)
+func (c *Camera) SetFan(on bool) error {
+	var in C.int
+	if on {
+		in = C.int(0)
+	} else {
+		in = C.int(2)
+	}
+	errCode := uint(C.SetFanMode(in))
 	return Error(errCode)
 }
 
@@ -655,8 +768,9 @@ func (c *Camera) SetShutter(ttlHi bool, mode ShutterMode, opening, closing time.
 }
 
 // SetExposureTime sets the exposure time of the camera in seconds
-func (c *Camera) SetExposureTime(t float64) error {
-	errCode := uint(C.SetExposureTime(C.float(t)))
+func (c *Camera) SetExposureTime(t time.Duration) error {
+	tS := t.Seconds()
+	errCode := uint(C.SetExposureTime(C.float(tS)))
 	return Error(errCode)
 }
 
@@ -717,11 +831,11 @@ func (c *Camera) GetStatus() (Status, error) {
 // GetAcquiredData gets the acquired data / frame
 //
 // Implementing a 32-bit function is left for the future
-func (c *Camera) GetAcquiredData(pixels uint32) ([]int32, error) {
-	elements := c.Resolution[0] * c.Resolution[1]
+func (c *Camera) GetAcquiredData() ([]int32, error) {
+	elements := 1024*1024
 	buf := make([]int32, elements)
 	ptr := (*C.int)(unsafe.Pointer(&buf[0]))
-	errCode := uint(C.GetAcquiredData(ptr, C.uint(pixels)))
+	errCode := uint(C.GetAcquiredData(ptr, C.uint(1024*1024)))
 	return buf, Error(errCode)
 }
 
@@ -734,7 +848,7 @@ func (c *Camera) AbortAcquisition() error {
 // WaitForAcquisition sleeps while waiting for the acquisition completed signal
 // from the SDK
 func (c *Camera) WaitForAcquisition(t time.Duration) error {
-	i64 := t.Nanoseconds() * 1e6 // .Milliseconds added in 1.13, Nanoseconds * 1e6 to convert
+	i64 := t.Milliseconds()
 	errCode := uint(C.WaitForAcquisitionTimeOut(C.int(i64)))
 	return Error(errCode)
 }
