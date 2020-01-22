@@ -13,13 +13,14 @@ package sdk3
 import "C"
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
 	"unsafe"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/mathx"
+	"github.com/astrogo/fitsio"
 )
 
 const (
@@ -824,8 +825,14 @@ func (c *Camera) Command(cmd string) error {
 	return IssueCommand(c.Handle, cmd)
 }
 
+// GetFrameSize returns the AOI W, H
+func (c *Camera) GetFrameSize() (int, int, error) {
+	aoi, err := c.GetAOI()
+	return aoi.Width, aoi.Height, err
+}
+
 // CollectHeaderMetadata satisfies generichttp/camera and makes a stack of FITS cards
-func (c *Camera) CollectHeaderMetadata(c *Camera) []fitsio.Card {
+func (c *Camera) CollectHeaderMetadata() []fitsio.Card {
 	// grab all the shit we care about from the camera so we can fill out the header
 	// plow through errors, no need to bail early
 	aoi, err := c.GetAOI()

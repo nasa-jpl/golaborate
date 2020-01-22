@@ -565,3 +565,8 @@ func NewHTTPCamera(p PictureTaker, rec *imgrec.Recorder) HTTPCamera {
 	w.RouteTable = rt
 	return w
 }
+
+// RT satisfies server.HTTPer
+func (h HTTPCamera) RT() server.RouteTable {
+	return h.RouteTable
+}
