@@ -3,19 +3,13 @@ package sdk3
 import (
 	"encoding/json"
 	"go/types"
-	"image"
-	"image/jpeg"
-	"image/png"
-	"io"
+	"math"
 	"net/http"
 	"time"
 
-	"github.com/astrogo/fitsio"
-
+	"github.jpl.nasa.gov/HCIT/go-hcit/generichttp/camera"
 	"github.jpl.nasa.gov/HCIT/go-hcit/imgrec"
-	"github.jpl.nasa.gov/HCIT/go-hcit/mathx"
 	"github.jpl.nasa.gov/HCIT/go-hcit/server"
-	"github.jpl.nasa.gov/HCIT/go-hcit/util"
 	"goji.io/pat"
 )
 
@@ -32,12 +26,13 @@ type HTTPWrapper struct {
 // NewHTTPWrapper returns a new wrapper with the route table populated
 func NewHTTPWrapper(c *Camera, r *imgrec.Recorder) HTTPWrapper {
 	g := camera.NewHTTPCamera(c, r)
+	r2 := imgrec.NewHTTPWrapper(r)
 	w := HTTPWrapper{Camera: c, recorder: r}
 	// things not part of the generic wrapper (yet?)
-	g.RouteTable[pat.Get("/feature")] =                  w.GetFeatures
-	g.RouteTable[pat.Get("/feature/:feature")] =         w.GetFeature
+	g.RouteTable[pat.Get("/feature")] = w.GetFeatures
+	g.RouteTable[pat.Get("/feature/:feature")] = w.GetFeature
 	g.RouteTable[pat.Get("/feature/:feature/options")] = w.GetFeatureInfo
-	g.RouteTable[pat.Post("/feature/:feature")] =        w.SetFeature
+	g.RouteTable[pat.Post("/feature/:feature")] = w.SetFeature
 	w2 := imgrec.NewHTTPWrapper(r)
 	w2.Inject(w)
 	return w

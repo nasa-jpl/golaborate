@@ -18,8 +18,6 @@ import (
 	"strings"
 	"time"
 	"unsafe"
-
-	"github.jpl.nasa.gov/HCIT/go-hcit/mathx"
 )
 
 const (
