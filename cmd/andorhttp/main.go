@@ -102,7 +102,13 @@ If for some reason there is an error during server bootup, it may be that a feat
 Modify the BootupArgs portion of the config to remove the offending parameters.
 
 serialNumber 'auto' causes the server to scan the available cameras and pick the first one
-which is not a software simulation camera.`
+which is not a software simulation camera.
+
+If the files and folders created do not have the permissions you want on linux,
+your umask is likely to blame  andor-http makes them with permission 666, but your
+umask is probably the default of 0022 which knocks them down to 444.  Set your
+umask to 0000 before running andor-http to solve this.
+`
 	fmt.Println(str)
 }
 

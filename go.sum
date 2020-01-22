@@ -3,6 +3,7 @@ github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/astrogo/fitsio v0.1.0 h1:lJtA14sbCDPqPc0j6sA6pejFCDGugcb/BD36TOQVrNU=
 github.com/astrogo/fitsio v0.1.0/go.mod h1:AMazbBDPn8fcAglKAWIR5+5iDBnBv78pf6UHmTKSCbE=
+github.com/brandondube/ringo v0.0.0-20191101055019-b47799cc6c64 h1:d5GUepJWBxz7JA/AjfO5IPp0tYkD8dEY+h1aHGzulxs=
 github.com/brandondube/ringo v0.0.0-20191101055019-b47799cc6c64/go.mod h1:qC8pfzt4Vf+ygOrpdV6VZFuTvF3s56/A8a/e1jCQOJ4=
 github.com/cenkalti/backoff v1.1.1-0.20190506075156-2146c9339422 h1:8eZxmY1yvxGHzdzTEhI09npjMVGzNAdrqzruTX6jcK4=
 github.com/cenkalti/backoff v1.1.1-0.20190506075156-2146c9339422/go.mod h1:b6Nc7NRH5C4aCISLry0tLnTjcuTEvoiqcWDdsU0sOGM=

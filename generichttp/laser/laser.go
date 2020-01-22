@@ -1,4 +1,5 @@
-package generichttp
+// Package laser exposes control of laser controllers over HTTP
+package laser
 
 import (
 	"encoding/json"
@@ -9,8 +10,8 @@ import (
 	"goji.io/pat"
 )
 
-// LaserController is a basic interface for laser controllers
-type LaserController interface {
+// Controller is a basic interface for laser controllers
+type Controller interface {
 	EmissionOn() error
 	EmissionOff() error
 	EmissionIsOn() (bool, error)
@@ -21,7 +22,7 @@ type LaserController interface {
 // HTTPLaserController wraps a LaserController in an HTTP route table
 type HTTPLaserController struct {
 	// Ctl is the underlying laser controller
-	Ctl LaserController
+	Ctl Controller
 
 	// RouteTable maps URLs to functions
 	RouteTable server.RouteTable

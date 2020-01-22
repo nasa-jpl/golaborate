@@ -7,7 +7,6 @@ import (
 	"os"
 	"strings"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/generichttp"
 	"github.jpl.nasa.gov/HCIT/go-hcit/server/middleware/locker"
 	"github.jpl.nasa.gov/HCIT/go-hcit/thorlabs"
 	"github.jpl.nasa.gov/HCIT/go-hcit/util"
@@ -30,6 +29,8 @@ import (
 	"github.jpl.nasa.gov/HCIT/go-hcit/server"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/generichttp/ascii"
+	"github.jpl.nasa.gov/HCIT/go-hcit/generichttp/laser"
+	"github.jpl.nasa.gov/HCIT/go-hcit/generichttp/motion"
 
 	"github.com/go-yaml/yaml"
 	"goji.io"
@@ -127,7 +128,7 @@ func BuildMux(c Config) *goji.Mux {
 			}
 
 			ensemble := aerotech.NewEnsemble(node.Addr, node.Serial, limiters)
-			httper = aerotech.NewHTTPWrapper(ensemble)
+			httper = motion.NewHTTPMotionController(ensemble)
 
 		case "cryocon":
 			cryo := cryocon.NewTemperatureMonitor(node.Addr)
@@ -157,7 +158,7 @@ func BuildMux(c Config) *goji.Mux {
 
 		case "xps":
 			xps := newport.NewXPS(node.Addr)
-			httper = newport.NewXPSHTTPWrapper(xps)
+			httper = motion.NewHTTPMotionController(xps)
 
 		case "nkt", "superk":
 			skE := nkt.NewSuperKExtreme(node.Addr, node.Serial)
@@ -169,7 +170,7 @@ func BuildMux(c Config) *goji.Mux {
 			if err != nil {
 				log.Fatal(err)
 			}
-			httper = generichttp.NewHTTPLaserController(itc)
+			httper = laser.NewHTTPLaserController(itc)
 			ascii.InjectRawComm(httper, itc)
 
 		default:

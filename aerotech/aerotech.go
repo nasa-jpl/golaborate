@@ -50,7 +50,7 @@ const (
 )
 
 var (
-	errClamped = errors.New("requested position violates software limits, aborted")
+	errClamped = errors.New("requested position violates software limits, aborted, is the axis enabled?")
 )
 
 // ErrBadResponse is generated when a bad response comes from the controller
@@ -219,11 +219,12 @@ func (e *Ensemble) SetVelocity(axis string, vel float64) error {
 // clampPos clamps an input if there is a limit set, otherwise does not modulate it
 func (e *Ensemble) clampPos(axis string, input float64, relative bool) (float64, error) {
 	var (
-		output float64
-		err    error = nil
+		current float64
+		output  float64
+		err     error = nil
 	)
 	if relative { // the input needs to be translated to an absolute to apply the limit.
-		current, err := e.GetPos(axis)
+		current, err = e.GetPos(axis)
 		if err != nil {
 			return input, err
 		}
@@ -240,6 +241,9 @@ func (e *Ensemble) clampPos(axis string, input float64, relative bool) (float64,
 	} else {
 		output = input
 	}
+	if relative {
+		output -= current
+	}
 	// if not relative, current is zero anyway, so can always subtract it
 	return output, err
 }
@@ -250,4 +254,9 @@ func (e *Ensemble) GetVelocity(axis string) (float64, error) {
 		return vel, nil
 	}
 	return 0, errors.New("velocity not known for axis, use SetVelocity to make it known")
+}
+
+// Limit returns the limiter for an axis
+func (e *Ensemble) Limit(axis string) util.Limiter {
+	return e.Limits[axis]
 }

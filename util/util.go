@@ -113,7 +113,11 @@ func Clamp(input, min, max float64) float64 {
 
 // Limiter represents a basic set of min,max limits
 type Limiter struct {
-	Min, Max float64
+	// Min is the minimum value
+	Min float64 `json:"min"`
+
+	// Max is the maximum value
+	Max float64 `json:"max"`
 }
 
 // Clamp limits min < input < max
