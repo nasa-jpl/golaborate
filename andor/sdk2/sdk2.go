@@ -74,7 +74,7 @@ import "C"
 import (
 	"errors"
 	"fmt"
-	"log"
+	"os"
 	"strconv"
 	"time"
 	"unsafe"
@@ -585,21 +585,6 @@ func (c *Camera) setTemperature(t int) error {
 	return err
 }
 
-// SetTemperatureSetpoint is an SDK3-compatible
-// and EMCCD saving shim over setTemperature
-//
-// it uses a string for SDK3 compatibility, where
-// t is an integer number of degrees celcius
-// e.g. t="-60"
-//
-// it internally walks the temperature from its current value
-// to the setpoint at a slew rate of 5C/min
-// and thus may take a long time to execute
-func (c *Camera) SetTemperatureSetpoint(t string) error {
-	STEP := 5 // the "step" size to use
-	// convert SDK3 to SDK2 flavor
-// SetTemperature sets the temperature setpoint in degrees celcius
-// this is a 1:1 wrapper around SDK2 with an Atoi in between
 func (c *Camera) SetTemperature(t string) error {
 	tI, err := strconv.Atoi(t)
 	if err != nil {
@@ -882,6 +867,38 @@ func (c *Camera) SetEMAdvanced(b bool) error {
 	}
 	errCode := uint(C.SetEMAdvanced(C.int(enabled)))
 	return Error(errCode)
+}
+
+// GetFrameSize gets the W, H of a frame as recorded in the strided buffer
+func (c *Camera) GetFrameSize() (int, int, error) {
+	return 1024, 1024, nil // TODO: actual impl
+}
+
+// GetFrame returns a frame from the camera as a strided buffer
+func (c *Camera) GetFrame() ([]uint16, error) {
+	err := c.StartAcquisition()
+	if err != nil {
+		return []uint16{}, err
+	}
+	tExp, err := c.GetExposureTime()
+	if err != nil {
+		return []uint16{}, err
+	}
+	err = c.WaitForAcquisition(tExp + time.Second)
+	if err != nil {
+		return []uint16{}, err
+	}
+	buf, err := c.GetAcquiredData()
+	f, err := os.Create("data.csv")
+	defer f.Close()
+	if err != nil {
+		return []uint16{}, err
+	}
+	for v := range buf {
+		fmt.Fprintf(f, "%d,", v)
+	}
+	return []uint16{}, nil
+
 }
 
 // Burst takes a chunk of pictures and returns them as one contiguous buffer
