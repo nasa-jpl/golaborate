@@ -238,10 +238,13 @@ const (
 type Camera struct {
 	// nil values cause get functions to bounce
 	// tempSetpoint is the temperature the TEC is set to
-	tempSetpoint *int
+	tempSetpoint *string
 
 	// exposureTime is the length of time the exposure is set to
 	exposureTime *time.Duration
+
+	// fanOn holds the status of the fan
+	fanOn *bool
 }
 
 var (
@@ -532,7 +535,7 @@ func (c *Camera) SetHSSpeed(idx int) error { // need another argument type
 
  */
 
-// SetCoolerActive toggles the cooler on (true) or off (false)
+// SetCooling toggles the cooler on (true) or off (false)
 // NOTE:
 // 1. When the temperature control is switched off, the temperature of the
 //    sensor is gradually raised to 0C to ensure no thermal stresses are
@@ -541,7 +544,7 @@ func (c *Camera) SetHSSpeed(idx int) error { // need another argument type
 //    temperature of the detector is above -20C, otherwise calling ShutDown
 //    while the detector is still cooled will cause the temperature to rise
 //    faster than certified.
-func (c *Camera) SetCoolerActive(b bool) error {
+func (c *Camera) SetCooling(b bool) error {
 	var cerr C.uint
 	if b {
 		cerr = C.CoolerON()
@@ -551,8 +554,8 @@ func (c *Camera) SetCoolerActive(b bool) error {
 	return Error(uint(cerr))
 }
 
-// GetCoolerActive gets if the cooler is currently engaged
-func (c *Camera) GetCoolerActive() (bool, error) {
+// GetCooling gets if the cooler is currently engaged
+func (c *Camera) GetCooling() (bool, error) {
 	var ret C.int
 	errCode := uint(C.IsCoolerOn(&ret))
 	return int(ret) == 1, Error(errCode)
@@ -567,11 +570,11 @@ func (c *Camera) GetTemperatureRange() (int, int, error) { // need another retur
 	return int(min), int(max), Error(errCode)
 }
 
-// GetTemperature gets the current temperature in degrees celcius
-func (c *Camera) GetTemperature() (int, error) {
+// GetTemperature gets the current temperature in degrees celcius.  The real type is int, but we use float for SD3 compatibility
+func (c *Camera) GetTemperature() (float64, error) {
 	var temp C.int
 	errCode := uint(C.GetTemperature(&temp))
-	return int(temp), Error(errCode)
+	return float64(int(temp)), Error(errCode) // TODO: there may be a potential optimization float64 directly
 }
 
 // SetTemperatureSetpoint assigns a setpoint to the camera's TEC
@@ -581,11 +584,39 @@ func (c *Camera) SetTemperatureSetpoint(t string) error {
 		return err
 	}
 	errCode := uint(C.SetTemperature(C.int(tI)))
-	err := Error(errCode)
+	err = Error(errCode)
 	if err == nil {
 		c.tempSetpoint = &t
 	}
 	return err
+}
+
+// GetTemperatureSetpoint returns the setpoint of the camera's TEC
+func (c *Camera) GetTemperatureSetpoint() (string, error) {
+	if c.tempSetpoint == nil {
+		return "", ErrParameterNotSet
+	}
+	return *c.tempSetpoint, nil
+}
+
+// GetTemperatureSetpoints returns an array of the MIN and MAX temperatures.
+// Any integer intermediate is valid
+func (c *Camera) GetTemperatureSetpoints() ([]string, error) {
+	min, max, err := c.GetTemperatureRange()
+	if err != nil {
+		return []string{}, err
+	}
+	minS := strconv.Itoa(min) // if one errors, assume the other would too,
+	maxS := strconv.Itoa(max) // skip one error check
+	return []string{minS, maxS}, nil
+}
+
+// GetTemperatureStatus gets the status of the TEC subsystem on the camera
+func (c *Camera) GetTemperatureStatus() (string, error) {
+	// this is pasted from the GetTemperature function with minor modification
+	var temp C.int
+	errCode := uint(C.GetTemperature(&temp))
+	return ErrCodes[DRVError(errCode)], Error(errCode)
 }
 
 // SetFan allows the fan to be turned on or off.
@@ -599,7 +630,21 @@ func (c *Camera) SetFan(on bool) error {
 		in = C.int(2)
 	}
 	errCode := uint(C.SetFanMode(in))
-	return Error(errCode)
+	err := Error(errCode)
+	if err == nil {
+		c.fanOn = &on
+	}
+	return err
+}
+
+// GetFan returns if the fan is turned on or not, as commanded
+// the SDK may override and make the return not a true mimic of reality
+// even if the value is false.  A true value should always mimic reality.
+func (c *Camera) GetFan() (bool, error) {
+	if c.fanOn == nil {
+		return false, ErrParameterNotSet
+	}
+	return *c.fanOn, nil
 }
 
 /* the above deals with thermal management, the below deals with acquisition programming
@@ -774,6 +819,7 @@ func (c *Camera) GetMaximumExposure() (float64, error) {
 	return float64(f), Error(errCode)
 }
 
+// SetImage wraps the SDK exactly and controls AoI and binning
 func (c *Camera) SetImage(hbin, vbin, hstart, hend, vstart, vend int) error {
 	errCode := uint(C.SetImage(C.int(hbin), C.int(vbin), C.int(hstart), C.int(hend), C.int(vstart), C.int(vend)))
 	return Error(errCode)
