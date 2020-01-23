@@ -534,6 +534,119 @@ type FeatureManager interface {
 	Configure(map[string]interface{}) error
 }
 
+type EMGainManager interface {
+	// GetEMGainMode returns how the EM gain is applied in the camera
+	GetEMGainMode() (string, error)
+
+	// SetEMGainMode changes how the EM gain is applied in the camera
+	SetEMGainMode(string) error
+
+	// GetEMGainRange returns the lower, upper limits on EM gain
+	GetEMGainRange() (int, int, error)
+
+	// GetEMGain returns the current EM gain setting
+	GetEMGain() (int, error)
+
+	// SetEMGain sets the current EM gain setting
+	SetEMGain(int) error
+}
+
+// GetEMGainMode returns the EM gain mode over HTTP as JSON
+func GetEMGainMode(e EMGainManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		mode, err := e.GetEMGainMode()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		hp := server.HumanPayload{T: types.String, String: mode}
+		hp.EncodeAndRespond(w, r)
+		return
+	}
+}
+
+// SetEMGainMode sets the EM gain mode over HTTP as JSON
+func SetEMGainMode(e EMGainManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		str := server.StrT{}
+		err := json.NewDecoder(r.Body).Decode(&str)
+		defer r.Body.Close()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		err = e.SetEMGainMode(str.Str)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+// GetEMGainRange returns the min/max EM gain over HTTP as JSON
+func GetEMGainRange(e EMGainManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		min, max, err := e.GetEMGainRange()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		ret := struct {
+			Min int `json:"min"`
+			Max int `json:"max"`
+		}{Min: min, Max: max}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		err = json.NewEncoder(w).Encode(ret)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+}
+
+// GetEMGain gets the EM gain over HTTP as JSON
+func GetEMGain(e EMGainManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		i, err := e.GetEMGain()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		hp := server.HumanPayload{T: types.Int, Int: i}
+		hp.EncodeAndRespond(w, r)
+		return
+	}
+}
+
+// SetEMGain sets the EM gain over HTTP as JSON
+func SetEMGain(e EMGainManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		iT := server.IntT{}
+		err := json.NewDecoder(r.Body).Decode(&iT)
+		defer r.Body.Close()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		err = e.SetEMGain(iT.Int)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+}
+
+// HTTPEMGainManager binds routes that control EM gain to the table
+func HTTPEMGainManager(e EMGainManager, table server.RouteTable) {
+	table[pat.Get("/em-gain")] = GetEMGain(e)
+	table[pat.Post("/em-gain")] = SetEMGain(e)
+	table[pat.Get("/em-gain-mode")] = GetEMGainMode(e)
+	table[pat.Post("/em-gain-mode")] = SetEMGainMode(e)
+	table[pat.Get("/em-gain-range")] = GetEMGainRange(e)
+}
+
 // Camera describes the most basic camera possible
 type Camera interface {
 	// GetFrame returns a frame from the device as a strided array
