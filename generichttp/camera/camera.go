@@ -647,6 +647,54 @@ func HTTPEMGainManager(e EMGainManager, table server.RouteTable) {
 	table[pat.Get("/em-gain-range")] = GetEMGainRange(e)
 }
 
+// ShutterController describes an interface to a camera which may manipulate its shutter
+type ShutterController interface {
+	// SetShutter sets the shutter to be open or closed
+	SetShutter(bool) error
+
+	// GetShutter returns if the shutter is open or closed
+	GetShutter() (bool, error)
+}
+
+// SetShutter opens or closes the shutter over HTTP as JSON
+func SetShutter(s ShutterController) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		b := server.BoolT{}
+		err := json.NewDecoder(r.Body).Decode(&b)
+		defer r.Body.Close()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		err = s.SetShutter(b.Bool)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+// GetShutter returns if the shutter is currently open over HTTP as JSON
+func GetShutter(s ShutterController) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		open, err := s.GetShutter()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		hp := server.HumanPayload{T: types.Bool, Bool: open}
+		hp.EncodeAndRespond(w, r)
+		return
+	}
+}
+
+// HTTPShutterController binds routes to control the shutter to a route table
+func HTTPShutterController(s ShutterController, table server.RouteTable) {
+	table[pat.Get("/shutter")] = GetShutter(s)
+	table[pat.Post("/shutter")] = SetShutter(s)
+}
+
 // Camera describes the most basic camera possible
 type Camera interface {
 	// GetFrame returns a frame from the device as a strided array
@@ -673,6 +721,12 @@ func NewHTTPCamera(p PictureTaker, rec *imgrec.Recorder) HTTPCamera {
 	}
 	if aoi, ok := interface{}(p).(AOIManipulator); ok {
 		HTTPAOIManipulator(aoi, rt)
+	}
+	if em, ok := interface{}(p).(EMGainManager); ok {
+		HTTPEMGainManager(em, rt)
+	}
+	if sh, ok := interface{}(p).(ShutterController); ok {
+		HTTPShutterController(sh, rt)
 	}
 
 	w.RouteTable = rt
