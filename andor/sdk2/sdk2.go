@@ -726,7 +726,7 @@ func (c *Camera) GetStatus() (Status, error) {
 func (c *Camera) GetAcquiredData() ([]int32, error) {
 	elements := 1024 * 1024
 	buf := make([]int32, elements)
-	ptr := (*C.int)(unsafe.Pointer(&buf[0]))
+	ptr := (*C.at_32)(unsafe.Pointer(&buf[0]))
 	errCode := uint(C.GetAcquiredData(ptr, C.uint(1024*1024)))
 	return buf, Error(errCode)
 }
@@ -772,6 +772,11 @@ func (c *Camera) GetMaximumExposure() (float64, error) {
 	var f C.float
 	errCode := uint(C.GetMaximumExposure(&f))
 	return float64(f), Error(errCode)
+}
+
+func (c *Camera) SetImage(hbin, vbin, hstart, hend, vstart, vend int) error {
+	errCode := uint(C.SetImage(C.int(hbin), C.int(vbin), C.int(hstart), C.int(hend), C.int(vstart), C.int(vend)))
+	return Error(errCode)
 }
 
 // GetMaximumBinning returns the maximum binning factor usable.
@@ -888,7 +893,7 @@ func (c *Camera) GetFrame() ([]uint16, error) {
 	if err != nil {
 		return []uint16{}, err
 	}
-	for v := range buf {
+	for _, v := range buf {
 		fmt.Fprintf(f, "%d,", v)
 	}
 	return []uint16{}, nil
