@@ -574,24 +574,18 @@ func (c *Camera) GetTemperature() (int, error) {
 	return int(temp), Error(errCode)
 }
 
-// setTemperature sets the temperature setpoint in degrees celcius
-// this is a 1:1 wrapper around SDK2
-func (c *Camera) setTemperature(t int) error {
-	errCode := uint(C.SetTemperature(C.int(t)))
-	err := Error(errCode)
-	if err == nil {
-		c.tempSetpoint = &t
-	}
-	return err
-}
-
-func (c *Camera) SetTemperature(t string) error {
+// SetTemperatureSetpoint assigns a setpoint to the camera's TEC
+func (c *Camera) SetTemperatureSetpoint(t string) error {
 	tI, err := strconv.Atoi(t)
 	if err != nil {
 		return err
 	}
 	errCode := uint(C.SetTemperature(C.int(tI)))
-	return Error(errCode)
+	err := Error(errCode)
+	if err == nil {
+		c.tempSetpoint = &t
+	}
+	return err
 }
 
 // SetFan allows the fan to be turned on or off.
