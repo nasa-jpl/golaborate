@@ -74,11 +74,11 @@ import "C"
 import (
 	"errors"
 	"fmt"
-	"os"
 	"strconv"
 	"time"
 	"unsafe"
 
+	"github.jpl.nasa.gov/HCIT/go-hcit/generichttp/camera"
 	"github.jpl.nasa.gov/HCIT/go-hcit/util"
 )
 
@@ -245,6 +245,12 @@ type Camera struct {
 
 	// fanOn holds the status of the fan
 	fanOn *bool
+
+	// aoi holds the AOI parameters
+	aoi *camera.AOI
+
+	// binning holds the binning parameters
+	binning *camera.Binning
 }
 
 var (
@@ -822,7 +828,46 @@ func (c *Camera) GetMaximumExposure() (float64, error) {
 // SetImage wraps the SDK exactly and controls AoI and binning
 func (c *Camera) SetImage(hbin, vbin, hstart, hend, vstart, vend int) error {
 	errCode := uint(C.SetImage(C.int(hbin), C.int(vbin), C.int(hstart), C.int(hend), C.int(vstart), C.int(vend)))
-	return Error(errCode)
+	err := Error(errCode)
+	if err == nil {
+		c.bin = &camera.Binning{H: hbin, V: vbin}
+		c.aoi = &camera.AOI{Left: hstart, Top: vstart, Width: hend - hstart, Height: vend - vstart}
+	}
+	return err
+}
+
+// GetAOI returns the current AOI in use by the camera
+func (c *Camera) GetAOI() (camera.AOI, error) {
+	if c.aoi == nil {
+		return camera.AOI{}, ErrParameterNotSet
+	}
+	return *c.aoi, nil
+}
+
+// GetBinning returns the current binning used by the camera
+func (c *Camera) GetBinning() (camera.Binning, error) {
+	if c.bin == nil {
+		return camera.Binning{}, ErrParameterNotSet
+	}
+	return *c.bin, nil
+}
+
+// SetBinning sets the binning used by the camera
+func (c *Camera) SetBinning(b camera.Binning) error {
+	aoi, err := c.GetAOI() // trigger error if we have no knowledge
+	if err != nil {
+		return err
+	}
+	return c.SetImage(b.H, b.V, aoi.Left, aoi.Right(), aoi.Top, aoi.Bottom())
+}
+
+// SetAOI sets the AoI used by the camera
+func (c *Camera) SetAOI(a AOI) error {
+	bin, err := c.GetBinning() // trigger error if we have no knowledge
+	if err != nil {
+		return err
+	}
+	return c.SetImage(bin.H, bin.V, a.Left, a.Right(), a.Top, a.Bottom())
 }
 
 // GetMaximumBinning returns the maximum binning factor usable.
@@ -934,16 +979,12 @@ func (c *Camera) GetFrame() ([]uint16, error) {
 		return []uint16{}, err
 	}
 	buf, err := c.GetAcquiredData()
-	f, err := os.Create("data.csv")
-	defer f.Close()
-	if err != nil {
-		return []uint16{}, err
+	b2 := make([]uint16, len(buf))
+	l := len(buf)
+	for idx := 0; idx < l; idx++ {
+		b2[idx] = uint16(buf[idx])
 	}
-	for _, v := range buf {
-		fmt.Fprintf(f, "%d,", v)
-	}
-	return []uint16{}, nil
-
+	return b2, nil
 }
 
 // Burst takes a chunk of pictures and returns them as one contiguous buffer
