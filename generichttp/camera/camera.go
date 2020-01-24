@@ -3,6 +3,7 @@ package camera
 
 import (
 	"encoding/json"
+	"fmt"
 	"go/types"
 	"image"
 	"image/jpeg"
@@ -50,6 +51,11 @@ type Binning struct {
 
 	// V is the vertical binning factor
 	V int `json:"v"`
+}
+
+// HxV is a shorthand for "{h}x{v}", e.g. b.H, b.V = 1,1 => "1x1" or 3,3 => "3x3"
+func (b Binning) HxV() string {
+	return fmt.Sprintf("%dx%d", b.H, b.V)
 }
 
 // ThermalManager describes an interface to a camera which can manage its thermal performance
