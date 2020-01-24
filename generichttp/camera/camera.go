@@ -33,6 +33,16 @@ type AOI struct {
 	Height int `json:"height"`
 }
 
+// Right is shorthand for a.Left+a.Width
+func (a AOI) Right() int {
+	return a.Left + a.Width
+}
+
+// Bottom is shorthand for a.Top+a.Height
+func (a AOI) Bottom() int {
+	return a.Top + a.Height
+}
+
 // Binning encapsulates information about pixel addition on camera
 type Binning struct {
 	// H is the horizontal binning factor
