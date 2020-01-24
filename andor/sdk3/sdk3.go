@@ -841,7 +841,7 @@ func (c *Camera) CollectHeaderMetadata() []fitsio.Card {
 		- fpa temperature
 		*/
 		// header to the header
-		fitsio.Card{Name: "HDRVER", Value: "3", Comment: "header version"},
+		fitsio.Card{Name: "HDRVER", Value: "sCMOS-4", Comment: "header version"},
 		fitsio.Card{Name: "WRAPVER", Value: WRAPVER, Comment: "server library code version"},
 		fitsio.Card{Name: "SDKVER", Value: sdkver, Comment: "sdk version"},
 		fitsio.Card{Name: "DRVVER", Value: drvver, Comment: "driver version"},

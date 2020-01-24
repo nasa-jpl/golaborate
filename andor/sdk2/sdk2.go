@@ -10,56 +10,8 @@ that has some gussied up in and output types.  We mostly duplicate the API from
 the C/C++ shared library, with the exception of a few grammatical cleanups.
 
 Users are encouraged to write packages that build on this driver to build more
-complex functionality.  A basic recipe for the library's usage during a session
-is as follows (duplicated from the SDK manual):
-
- // initialize the camera
- cam := andor.Camera{...} // you need to provide some data here
- cam.Initialize()
- cam.GetDetector()
- cam.GetHardwareVersion()
- cam.GetSoftwareVersion()
- cam.GetNumberVSSpeeds()
- cam.GetVSSpeed()
- cam.GetNumberHSSpeeds()
- cam.GetHSSpeed()
-
- // achieve thermal stability
- cam.GetTemperatureRange()
- cam.SetTemperature()
- cam.CoolerActive(true)
- for tempNotInRange := true; tempNotInRange {
-	 cam.GetTemperature()
- }
-
- // program exposure
- cam.SetAcquisitionMode()
- cam.SetReadoutMode()
- cam.SetShutter()
- cam.SetExposureTime()
- cam.SetTriggerMode()
- cam.SetAccumulationCycleTime()
- cam.SetNumberAccumulations()
- cam.SetNumberKinetics()
- cam.SetKineticCycleTime()
- cam.GetAcquisitionTimings()
- cam.SetHSSpeed()
- cam.SetVSSpeed()
-
- // take frames
- cam.StartAcquisition()
- cam.GetStatus() // TODO: replace with waitfor
- cam.GetAcquiredData()
-
- // shutdown
- // Note you will want to use the temperature control loop on the camera
- // to bring it back to ambient temperature at an acceptable slew rate of < 10C/min
- // and not just perform a hard shutdown to avoid damaging the camera.
- cam.ShutDown()
-
-We do not explicitly write the parameters here, or handle returns or errors.
-This is obviously long and granular and may motivate your writing an extension
-library.
+complex functionality.  An example of this is in the same go-hcit repository,
+cmd/andorhttp2, which wraps the camera in an HTTP server.
 
 */
 package sdk2
@@ -78,6 +30,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/astrogo/fitsio"
 	"github.jpl.nasa.gov/HCIT/go-hcit/generichttp/camera"
 	"github.jpl.nasa.gov/HCIT/go-hcit/util"
 )
@@ -209,6 +162,9 @@ type AcquisitionTimings struct {
 type Status uint
 
 const (
+	// WRAPVER is the wrapper version around andor SDK v2
+	WRAPVER = 2
+
 	// StatusIdle is IDLE waiting on instructions
 	StatusIdle Status = 20073
 
@@ -961,7 +917,8 @@ func (c *Camera) SetEMAdvanced(b bool) error {
 
 // GetFrameSize gets the W, H of a frame as recorded in the strided buffer
 func (c *Camera) GetFrameSize() (int, int, error) {
-	return 1024, 1024, nil // TODO: actual impl
+	aoi, err := c.GetAOI()
+	return aoi.Width, aoi.Height, err
 }
 
 // GetFrame returns a frame from the camera as a strided buffer
@@ -990,4 +947,91 @@ func (c *Camera) GetFrame() ([]uint16, error) {
 // Burst takes a chunk of pictures and returns them as one contiguous buffer
 func (c *Camera) Burst(frames int, fps float64) ([]uint16, error) {
 	return []uint16{}, fmt.Errorf("not implemented")
+}
+
+// GetSerialNumber returns the serial number as an integer
+func (c *Camera) GetSerialNumber() (int, error) {
+	var i C.int
+	errCode := uint(C.GetCameraSerialNumber(&i))
+	return int(i), Error(errCode)
+}
+
+// CollectHeaderMetadata satisfies generichttp/camera and makes a stack of FITS cards
+func (c *Camera) CollectHeaderMetadata() []fitsio.Card {
+	// grab all the shit we care about from the camera so we can fill out the header
+	// plow through errors, no need to bail early
+	aoi, err := c.GetAOI()
+	texp, err := c.GetExposureTime()
+	camsn, err := c.GetSerialNumber()
+	fan, err := c.GetFan()
+	tsetpt, err := c.GetTemperatureSetpoint()
+	tstat, err := c.GetTemperatureStatus()
+	temp, err := c.GetTemperature()
+	bin, err := c.GetBinning()
+	binS := bin.HxV()
+
+	var metaerr string
+	if err != nil {
+		metaerr = err.Error()
+	} else {
+		metaerr = ""
+	}
+	now := time.Now()
+	ts := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d",
+		now.Year(),
+		now.Month(),
+		now.Day(),
+		now.Hour(),
+		now.Minute(),
+		now.Second())
+
+	return []fitsio.Card{
+		/* andor-http header format includes:
+		- header format tag
+		- go-hcit andor version
+		- sdk software version
+		- driver version
+		- camera firmware version
+
+		- camera model
+		- camera serial number
+
+		- aoi top, left, top, bottom
+		- binning
+
+		- fan on/off
+		- thermal setpoint
+		- thermal status
+		- fpa temperature
+		*/
+		// header to the header
+		fitsio.Card{Name: "HDRVER", Value: "EMCCD-1", Comment: "header version"},
+		fitsio.Card{Name: "WRAPVER", Value: WRAPVER, Comment: "server library code version"},
+		fitsio.Card{Name: "SDKVER", Value: sdkver, Comment: "sdk version"},
+		fitsio.Card{Name: "METAERR", Value: metaerr, Comment: "error encountered gathering metadata"},
+		fitsio.Card{Name: "CAMMODL", Value: "Andor iXon Ultra 888", Comment: "camera model"},
+		fitsio.Card{Name: "CAMSN", Value: sn, Comment: "camera serial number"},
+		fitsio.Card{Name: "BITDEPTH", Value: 14, Comment: "2^BITDEPTH is the maximum possible DN"}
+
+		// timestamp
+		fitsio.Card{Name: "DATE", Value: ts}, // timestamp is standard and does not require comment
+
+		// exposure parameters
+		fitsio.Card{Name: "EXPTIME", Value: texp.Seconds(), Comment: "exposure time, seconds"},
+
+		// thermal parameters
+		fitsio.Card{Name: "FAN", Value: fan, Comment: "on (true) or off"},
+		fitsio.Card{Name: "TEMPSETP", Value: tsetpt, Comment: "Temperature setpoint"},
+		fitsio.Card{Name: "TEMPSTAT", Value: tstat, Comment: "TEC status"},
+		fitsio.Card{Name: "TEMPER", Value: temp, Comment: "FPA temperature (Celcius)"},
+		// aoi parameters
+		fitsio.Card{Name: "AOIL", Value: aoi.Left, Comment: "1-based left pixel of the AOI"},
+		fitsio.Card{Name: "AOIT", Value: aoi.Top, Comment: "1-based top pixel of the AOI"},
+		fitsio.Card{Name: "AOIW", Value: aoi.Width, Comment: "AOI width, px"},
+		fitsio.Card{Name: "AOIH", Value: aoi.Height, Comment: "AOI height, px"},
+		fitsio.Card{Name: "AOIB", Value: binS, Comment: "AOI Binning, HxV"},
+
+		// needed for uint16 encoding
+		fitsio.Card{Name: "BZERO", Value: 32768},
+		fitsio.Card{Name: "BSCALE", Value: 1.0}}
 }
