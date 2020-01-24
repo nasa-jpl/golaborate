@@ -15,12 +15,12 @@ import (
 	"fmt"
 	"math"
 	"reflect"
-	"strconv"
 	"strings"
 	"time"
 	"unsafe"
 
 	"github.com/astrogo/fitsio"
+	"github.jpl.nasa.gov/HCIT/go-hcit/generichttp/camera"
 )
 
 const (
@@ -132,49 +132,6 @@ var (
 	}
 )
 
-// Binning encapsulates information about
-type Binning struct {
-	// H is the horizontal binning factor
-	H int `json:"h"`
-
-	// V is the vertical binning factor
-	V int `json:"v"`
-}
-
-// FormatBinning converts a binning object to the SDK3 enum style.  Will
-// cause an error inside the SDK if b.H != b.V, or if 0 <= b.H <= 4
-func FormatBinning(b Binning) string {
-	return fmt.Sprintf("%dx%d", b.H, b.V)
-}
-
-// ParseBinning converts an "HxV" string from the SDK into a binning object
-func ParseBinning(sdkValue string) Binning {
-	b := Binning{}
-	chunks := strings.Split(sdkValue, "x")
-	if len(chunks) != 2 {
-		return b
-	}
-	// impossible for this to panic, since len must == 2
-	b.H, _ = strconv.Atoi(chunks[0])
-	b.V, _ = strconv.Atoi(chunks[1])
-	return b
-}
-
-// AOI describes an area of interest on the camera
-type AOI struct {
-	// Left is the left pixel index.  1-based
-	Left int `json:"left"`
-
-	// Top is the top pixel index.  1-based
-	Top int `json:"top"`
-
-	// Width is the width in pixels
-	Width int `json:"width"`
-
-	// Height is the height in pixels
-	Height int `json:"height"`
-}
-
 // Camera represents a camera from SDK3
 type Camera struct {
 	// buffer is written to by the SDK.
@@ -216,7 +173,7 @@ type Camera struct {
 	aoiTop int
 
 	// binning is a cross-compatible representation of AOIBinning
-	binning Binning
+	binning camera.Binning
 
 	// imageSizeBytes is the size of the image buffer in bytes
 	imageSizeBytes int
@@ -474,25 +431,25 @@ func (c *Camera) GetSDKVersion() (string, error) {
 }
 
 // GetBinning gets the binning
-func (c *Camera) GetBinning() (Binning, error) {
+func (c *Camera) GetBinning() (camera.Binning, error) {
 	if c.binning.H == 0 {
-		b := Binning{}
+		b := camera.Binning{}
 		// uninitialized, fetch from SDK
 		s, err := GetString(c.Handle, "AOIBinning")
 		if err != nil {
 			return b, err
 		}
-		b = ParseBinning(s)
+		b = camera.HxVToBinning(s)
 		c.binning = b
 	}
 	return c.binning, nil
 }
 
 // SetBinning sets the AOIBinning feature
-func (c *Camera) SetBinning(b Binning) error {
+func (c *Camera) SetBinning(b camera.Binning) error {
 	// blow the image size cache
 	c.imageSizeBytes = 0
-	str := FormatBinning(b)
+	str := b.HxV()
 	err := enrich(SetString(c.Handle, "AOIBinning", str), "AOIBinning")
 	if err != nil {
 		return err
@@ -847,7 +804,7 @@ func (c *Camera) CollectHeaderMetadata() []fitsio.Card {
 	tstat, err := c.GetTemperatureStatus()
 	temp, err := c.GetTemperature()
 	bin, err := c.GetBinning()
-	binS := FormatBinning(bin)
+	binS := bin.HxV()
 
 	var metaerr string
 	if err != nil {
