@@ -1011,7 +1011,7 @@ func (c *Camera) CollectHeaderMetadata() []fitsio.Card {
 		fitsio.Card{Name: "METAERR", Value: metaerr, Comment: "error encountered gathering metadata"},
 		fitsio.Card{Name: "CAMMODL", Value: "Andor iXon Ultra 888", Comment: "camera model"},
 		fitsio.Card{Name: "CAMSN", Value: sn, Comment: "camera serial number"},
-		fitsio.Card{Name: "BITDEPTH", Value: 14, Comment: "2^BITDEPTH is the maximum possible DN"}
+		fitsio.Card{Name: "BITDEPTH", Value: 14, Comment: "2^BITDEPTH is the maximum possible DN"},
 
 		// timestamp
 		fitsio.Card{Name: "DATE", Value: ts}, // timestamp is standard and does not require comment
