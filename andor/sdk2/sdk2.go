@@ -206,7 +206,13 @@ type Camera struct {
 	aoi *camera.AOI
 
 	// binning holds the binning parameters
-	binning *camera.Binning
+	bin *camera.Binning
+
+	// emgainmode holds the EM gain mode
+	emgainMode *string
+
+	// shutter holds if the shutter is currently open
+	shutter *bool
 }
 
 var (
@@ -635,7 +641,7 @@ func (c *Camera) SetReadoutMode(rm string) error {
 
 // SetShutter sets the shutter parameters of the camera.
 // ttlHi sends output TTL high signal to open shutter, else sends TTL low signal
-func (c *Camera) SetShutter(ttlHi bool, mode string, opening, closing time.Duration) error {
+func (c *Camera) setShutter(ttlHi bool, mode string, opening, closing time.Duration) error {
 	i, ok := ShutterMode[mode]
 	if !ok {
 		return ErrBadEnumIndex
@@ -818,7 +824,7 @@ func (c *Camera) SetBinning(b camera.Binning) error {
 }
 
 // SetAOI sets the AoI used by the camera
-func (c *Camera) SetAOI(a AOI) error {
+func (c *Camera) SetAOI(a camera.AOI) error {
 	bin, err := c.GetBinning() // trigger error if we have no knowledge
 	if err != nil {
 		return err
@@ -871,16 +877,16 @@ func (c *Camera) SetBaselineClamp(b bool) error {
 
  */
 
-// GetEMCCDGain gets the current EMCCD gain
-func (c *Camera) GetEMCCDGain() (int, error) {
+// GetEMGain gets the current EMCCD gain
+func (c *Camera) GetEMGain() (int, error) {
 	var mult C.int
 	errCode := uint(C.GetEMCCDGain(&mult))
 	return int(mult), Error(errCode)
 }
 
-// SetEMCCDGain sets the EMCCD gain.  The precise behavior depends on the current
+// SetEMGain sets the EMCCD gain.  The precise behavior depends on the current
 // gain mode, see SetEMGainMode, GetEMGainMode
-func (c *Camera) SetEMCCDGain(fctr int) error {
+func (c *Camera) SetEMGain(fctr int) error {
 	errCode := uint(C.SetEMCCDGain(C.int(fctr)))
 	return Error(errCode)
 }
@@ -900,7 +906,19 @@ func (c *Camera) SetEMGainMode(gm string) error {
 		return ErrBadEnumIndex
 	}
 	errCode := uint(C.SetEMGainMode(C.int(i)))
-	return Error(errCode)
+	err := Error(errCode)
+	if err == nil {
+		c.emgainMode = &gm
+	}
+	return err
+}
+
+// GetEMGainMode returns the current EM gain mode
+func (c *Camera) GetEMGainMode() (string, error) {
+	if c.emgainMode == nil {
+		return "", ErrParameterNotSet
+	}
+	return *c.emgainMode, nil
 }
 
 // SetEMAdvanced allows setting of the EM gain setting to values higher than
@@ -956,6 +974,29 @@ func (c *Camera) GetSerialNumber() (int, error) {
 	return int(i), Error(errCode)
 }
 
+// SetShutter opens the shutter (true) or closes it (false)
+func (c *Camera) SetShutter(b bool) error {
+	var inp string
+	if b {
+		inp = "Open"
+	} else {
+		inp = "Close"
+	}
+	err := c.setShutter(true, inp, time.Millisecond, time.Millisecond)
+	if err == nil {
+		c.shutter = &b
+	}
+	return err
+}
+
+// GetShutter returns true if the shutter is currently open
+func (c *Camera) GetShutter() (bool, error) {
+	if c.shutter == nil {
+		return false, ErrParameterNotSet
+	}
+	return *c.shutter, nil
+}
+
 // CollectHeaderMetadata satisfies generichttp/camera and makes a stack of FITS cards
 func (c *Camera) CollectHeaderMetadata() []fitsio.Card {
 	// grab all the shit we care about from the camera so we can fill out the header
@@ -1007,10 +1048,9 @@ func (c *Camera) CollectHeaderMetadata() []fitsio.Card {
 		// header to the header
 		fitsio.Card{Name: "HDRVER", Value: "EMCCD-1", Comment: "header version"},
 		fitsio.Card{Name: "WRAPVER", Value: WRAPVER, Comment: "server library code version"},
-		fitsio.Card{Name: "SDKVER", Value: sdkver, Comment: "sdk version"},
 		fitsio.Card{Name: "METAERR", Value: metaerr, Comment: "error encountered gathering metadata"},
 		fitsio.Card{Name: "CAMMODL", Value: "Andor iXon Ultra 888", Comment: "camera model"},
-		fitsio.Card{Name: "CAMSN", Value: sn, Comment: "camera serial number"},
+		fitsio.Card{Name: "CAMSN", Value: camsn, Comment: "camera serial number"},
 		fitsio.Card{Name: "BITDEPTH", Value: 14, Comment: "2^BITDEPTH is the maximum possible DN"},
 
 		// timestamp
