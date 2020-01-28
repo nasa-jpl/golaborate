@@ -1,4 +1,4 @@
-![koanf](https://user-images.githubusercontent.com/547147/59548139-fb2dd880-8f67-11e9-9af5-2fe2629a8fa6.png)
+![koanf](https://user-images.githubusercontent.com/547147/72681838-6981dd00-3aed-11ea-8f5d-310816c70c08.png)
 
 **koanf** (pronounced _conf_; a play on the Japanese _Koan_) is a library for reading configuration from different sources in different formats in Go applications. It is a cleaner, lighter [alternative to spf13/viper](#alternative-to-viper) with better abstractions and extensibility and fewer dependencies.
 
@@ -225,6 +225,21 @@ func main() {
 	}), nil)
 
 	fmt.Println("name is = ", k.String("parent1.child1.name"))
+}
+```
+
+### Reading from an S3 bucket
+
+```go
+// Load JSON config from s3.
+if err := k.Load(s3.Provider(s3.Config{
+	AccessKey: os.Getenv("AWS_S3_ACCESS_KEY"),
+	SecretKey: os.Getenv("AWS_S3_SECRET_KEY"),
+	Region:    os.Getenv("AWS_S3_REGION"),
+	Bucket:    os.Getenv("AWS_S3_BUCKET"),
+	ObjectKey: "dir/config.json",
+}), json.Parser()); err != nil {
+	log.Fatalf("error loading config: %v", err)
 }
 ```
 
@@ -497,6 +512,7 @@ Writing Providers and Parsers are easy. See the bundled implementations in the `
 | providers/env       | `env.Provider(prefix, delim string, f func(s string) string)` | Takes an optional prefix to filter env variables by, an optional function that takes and returns a string to transform env variables, and returns a nested config map based on delim. |
 | providers/confmap   | `confmap.Provider(mp map[string]interface{}, delim string)`   | Takes a premade `map[string]interface{}` conf map. If delim is provided, the keys are assumed to be flattened, thus unflattened using delim.                                          |
 | providers/structs   | `structs.Provider(s interface{}, tag string)`                 | Takes a struct and struct tag.                                           |
+| providers/s3   | `s3.Provider(s3.S3Config{})`                 | Takes a s3 config struct.                                           |
 | providers/rawbytes  | `rawbytes.Provider(b []byte)`                                 | Takes a raw `[]byte` slice to be parsed with a koanf.Parser                                                                                                                           |
 
 ### Bundled parsers

@@ -45,34 +45,34 @@
 			"revisionTime": "2019-08-12T19:38:32Z"
 		},
 		{
-			"checksumSHA1": "4ymI38LnFF9HeOU1LJqzlQJPrKU=",
+			"checksumSHA1": "pJkSh1XZwoaoI6wiSaRj54tdubc=",
 			"path": "github.com/knadh/koanf",
-			"revision": "a1272d0c07ad8ab89903a1394b97f20b5e8df35c",
-			"revisionTime": "2019-11-26T06:31:31Z"
+			"revision": "697804e03c61735e5e5fe01a505774a27322c02e",
+			"revisionTime": "2020-01-27T11:46:28Z"
 		},
 		{
 			"checksumSHA1": "73M1vXok5EfkSFOonlilyt33Dw4=",
 			"path": "github.com/knadh/koanf/maps",
-			"revision": "a1272d0c07ad8ab89903a1394b97f20b5e8df35c",
-			"revisionTime": "2019-11-26T06:31:31Z"
+			"revision": "697804e03c61735e5e5fe01a505774a27322c02e",
+			"revisionTime": "2020-01-27T11:46:28Z"
 		},
 		{
-			"checksumSHA1": "M9eXk3BNQHpzHZA2imK4tPO94co=",
+			"checksumSHA1": "k+FsSZwLDKbYfuxIj3nVGNyzNVg=",
 			"path": "github.com/knadh/koanf/parsers/yaml",
-			"revision": "a1272d0c07ad8ab89903a1394b97f20b5e8df35c",
-			"revisionTime": "2019-11-26T06:31:31Z"
+			"revision": "697804e03c61735e5e5fe01a505774a27322c02e",
+			"revisionTime": "2020-01-27T11:46:28Z"
 		},
 		{
-			"checksumSHA1": "VnKaxnbGU0icBpQ0THIDRmJ/1aQ=",
+			"checksumSHA1": "llBGPjtC1uHZUBkW4Xd6WSUJOOc=",
 			"path": "github.com/knadh/koanf/providers/file",
-			"revision": "a1272d0c07ad8ab89903a1394b97f20b5e8df35c",
-			"revisionTime": "2019-11-26T06:31:31Z"
+			"revision": "697804e03c61735e5e5fe01a505774a27322c02e",
+			"revisionTime": "2020-01-27T11:46:28Z"
 		},
 		{
 			"checksumSHA1": "rrEajExd6FPlJKTG4Sm0LwZXb9Y=",
 			"path": "github.com/knadh/koanf/providers/structs",
-			"revision": "a1272d0c07ad8ab89903a1394b97f20b5e8df35c",
-			"revisionTime": "2019-11-26T06:31:31Z"
+			"revision": "697804e03c61735e5e5fe01a505774a27322c02e",
+			"revisionTime": "2020-01-27T11:46:28Z"
 		},
 		{
 			"checksumSHA1": "HPsbCWOru49tAl7sT4DZ9JKQ/YY=",
