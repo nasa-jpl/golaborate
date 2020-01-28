@@ -3,12 +3,15 @@ package camera
 
 import (
 	"encoding/json"
+	"fmt"
 	"go/types"
 	"image"
 	"image/jpeg"
 	"image/png"
 	"io"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/astrogo/fitsio"
@@ -33,6 +36,16 @@ type AOI struct {
 	Height int `json:"height"`
 }
 
+// Right is shorthand for a.Left+a.Width
+func (a AOI) Right() int {
+	return a.Left + a.Width
+}
+
+// Bottom is shorthand for a.Top+a.Height
+func (a AOI) Bottom() int {
+	return a.Top + a.Height
+}
+
 // Binning encapsulates information about pixel addition on camera
 type Binning struct {
 	// H is the horizontal binning factor
@@ -40,6 +53,24 @@ type Binning struct {
 
 	// V is the vertical binning factor
 	V int `json:"v"`
+}
+
+// HxV is a shorthand for "{h}x{v}", e.g. b.H, b.V = 1,1 => "1x1" or 3,3 => "3x3"
+func (b Binning) HxV() string {
+	return fmt.Sprintf("%dx%d", b.H, b.V)
+}
+
+// HxVToBin converts a string like "3x3" => Binning{3,3}
+func HxVToBin(hxv string) Binning {
+	b := Binning{}
+	chunks := strings.Split(hxv, "x")
+	if len(chunks) != 2 {
+		return b
+	}
+	// impossible for this to panic, since len must == 2
+	b.H, _ = strconv.Atoi(chunks[0])
+	b.V, _ = strconv.Atoi(chunks[1])
+	return b
 }
 
 // ThermalManager describes an interface to a camera which can manage its thermal performance
