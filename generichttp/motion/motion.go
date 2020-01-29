@@ -281,6 +281,9 @@ func NewHTTPMotionController(c Controller) HTTPMotionController {
 	if speeder, ok := interface{}(c).(Speeder); ok {
 		HTTPSpeed(speeder, rt)
 	}
+	if Limiter, ok := interface{}(c).(Limiter); ok {
+		HTTPLimiter(Limiter, rt)
+	}
 	if initializer, ok := interface{}(c).(Initializer); ok {
 		HTTPInitialize(initializer, rt)
 	}
