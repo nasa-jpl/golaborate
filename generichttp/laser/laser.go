@@ -12,10 +12,19 @@ import (
 
 // Controller is a basic interface for laser controllers
 type Controller interface {
+	// EmissionOn turns emission On
 	EmissionOn() error
+
+	// EmissionOff turns emission Off
 	EmissionOff() error
+
+	// EmissionIsOne returns if the laser is emitting
 	EmissionIsOn() (bool, error)
+
+	// SetCurrent sets the output current setpoint of the controller
 	SetCurrent(float64) error
+
+	// GetCurrent retrieves the output current setpoint of the controller
 	GetCurrent() (float64, error)
 }
 
@@ -29,7 +38,7 @@ type HTTPLaserController struct {
 }
 
 // NewHTTPLaserController returns a new HTTP wrapper around an existing laser controller
-func NewHTTPLaserController(ctl LaserController) HTTPLaserController {
+func NewHTTPLaserController(ctl Controller) HTTPLaserController {
 	h := HTTPLaserController{Ctl: ctl}
 	rt := server.RouteTable{
 		pat.Get("/emission"):  h.GetEmission,
