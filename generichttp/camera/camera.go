@@ -507,6 +507,8 @@ type AOIManipulator interface {
 func HTTPAOIManipulator(a AOIManipulator, table server.RouteTable) {
 	table[pat.Get("/aoi")] = GetAOI(a)
 	table[pat.Post("/aoi")] = SetAOI(a)
+	table[pat.Get("/binning")] = GetBinning(a)
+	table[pat.Post("/binning")] = SetBinning(a)
 }
 
 // SetAOI returns an HTTP handler func that sets the AOI of the camera
@@ -540,6 +542,43 @@ func GetAOI(a AOIManipulator) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		err = json.NewEncoder(w).Encode(aoi)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+}
+
+// SetBinning sets the binning over HTTP as JSON
+func SetBinning(a AOIManipulator) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		b := Binning{}
+		err := json.NewDecoder(r.Body).Decode(&b)
+		defer r.Body.Close()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		err = a.SetBinning(b)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+// Getbinning gets the binning over HTTP as JSON
+func GetBinning(a AOIManipulator) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		b, err := a.GetBinning()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		err = json.NewEncoder(w).Encode(b)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
