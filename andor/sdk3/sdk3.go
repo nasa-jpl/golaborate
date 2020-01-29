@@ -360,14 +360,12 @@ func (c *Camera) SetAOI(aoi camera.AOI) error {
 	if err != nil {
 		return err
 	}
-	c.aoiTop = aoi.Top
 
 	// left
 	err = SetInt(c.Handle, "AOILeft", int64(aoi.Left))
 	if err != nil {
 		return err
 	}
-	c.aoiLeft = aoi.Left
 
 	width := aoi.Width
 	if width == 0 { // if the width is zero, the width will span from left~end of chip
@@ -381,7 +379,6 @@ func (c *Camera) SetAOI(aoi camera.AOI) error {
 	if err != nil {
 		return err
 	}
-	c.aoiWidth = width
 
 	height := aoi.Height
 	if height == 0 { // if the height is zero, the height will span from top~end of chip
@@ -395,10 +392,14 @@ func (c *Camera) SetAOI(aoi camera.AOI) error {
 	if err != nil {
 		return err
 	}
-	c.aoiHeight = height
 
-	// blow the image size cache
+	// blow the cached values
 	c.imageSizeBytes = 0
+	c.aoiTop = 0
+	c.aoiLeft = 0
+	c.aoiWidth = 0
+	c.aoiHeight = 0
+	c.aoiStride = 0
 	err = c.Allocate()
 	if err != nil {
 		return err
@@ -437,7 +438,7 @@ func (c *Camera) GetBinning() (camera.Binning, error) {
 	if c.binning.H == 0 {
 		b := camera.Binning{}
 		// uninitialized, fetch from SDK
-		s, err := GetString(c.Handle, "AOIBinning")
+		s, err := GetEnumString(c.Handle, "AOIBinning")
 		if err != nil {
 			return b, err
 		}
@@ -452,10 +453,14 @@ func (c *Camera) SetBinning(b camera.Binning) error {
 	// blow the image size cache
 	c.imageSizeBytes = 0
 	str := b.HxV()
-	err := enrich(SetString(c.Handle, "AOIBinning", str), "AOIBinning")
+	err := enrich(SetEnumString(c.Handle, "AOIBinning", str), "AOIBinning")
 	if err != nil {
 		return err
 	}
+	// blow the cache on some AoI parameters
+	c.aoiWidth = 0
+	c.aoiHeight = 0
+	c.aoiStride = 0
 	return c.Allocate()
 }
 
@@ -804,7 +809,7 @@ func (c *Camera) CollectHeaderMetadata() []fitsio.Card {
 		fitsio.Card{Name: "DATE", Value: ts}, // timestamp is standard and does not require comment
 
 		// orientation
-		fitsio.Card{Name: "ORIENT", Value: 0, Comment: "cw rotation from origin centered on array, +y increasing index, +x increasing index"}
+		fitsio.Card{Name: "ORIENT", Value: 0, Comment: "cw rotation from origin index +row +col"},
 
 		// exposure parameters
 		fitsio.Card{Name: "EXPTIME", Value: texp.Seconds(), Comment: "exposure time, seconds"},
@@ -870,6 +875,7 @@ func UnpadBuffer(buf []byte, aoistride, aoiwidth, aoiheight int) ([]byte, error)
 	// can improve performance a little bit by changing this
 	out := make([]byte, 0, len(buf))
 
+	// stride is in bytes, while width is in pixels
 	// TODO: generalize this to other modes besides 16-bit
 	bidx := 0                       // byte index
 	bpp := 2                        // bytes per pixel
