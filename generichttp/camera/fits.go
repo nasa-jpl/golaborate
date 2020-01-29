@@ -1,13 +1,19 @@
 package camera
 
 import (
+	"image"
 	"io"
+	"reflect"
+	"unsafe"
 
 	"github.com/astrogo/fitsio"
 )
 
 // writeFits streams a fits file to w
-func writeFits(w io.Writer, metadata []fitsio.Card, buffer []uint16, width, height, nframes int) error {
+func WriteFits(w io.Writer, metadata []fitsio.Card, imgs []image.Image) error {
+	nframes := len(imgs)
+	b := imgs[0].Bounds()
+	width, height := b.Dx(), b.Dy()
 	fits, err := fitsio.Create(w)
 	if err != nil {
 		return err
@@ -24,16 +30,27 @@ func writeFits(w io.Writer, metadata []fitsio.Card, buffer []uint16, width, heig
 		return err
 	}
 
-	// investigated on the playground, this can't be done with slice dtype hacking
-	// https://play.golang.org/p/HvR74t5sbbd
-	// so the alloc and underflow is necessary, unfortunate since for a big cube it could mean a multi-GB alloc
-	bufOut := make([]int16, len(buffer))
-	for idx := 0; idx < len(buffer); idx++ {
-		bufOut[idx] = int16(buffer[idx] - 32768)
-	}
-	err = im.Write(bufOut)
-	if err != nil {
-		return err
+	for _, img := range imgs {
+		imgConcrete := (img).(*image.Gray16)
+		uints := bytesToUint(imgConcrete.Pix)
+		l := len(uints)
+		ints := make([]int16, l)
+		for idx := 0; idx < l; idx++ {
+			ints[idx] = int16(uints[idx] - 32768)
+		}
+		err = im.Write(ints)
+		if err != nil {
+			return err
+		}
 	}
 	return fits.Write(im)
+}
+
+func bytesToUint(b []byte) []uint16 {
+	ary := []uint16{}
+	hdr := (*reflect.SliceHeader)(unsafe.Pointer(&ary))
+	hdr.Data = uintptr(unsafe.Pointer(&b[0]))
+	hdr.Len = len(b) / 2
+	hdr.Cap = cap(b) / 2
+	return ary
 }
