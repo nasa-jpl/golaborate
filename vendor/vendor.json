@@ -27,6 +27,12 @@
 			"revisionTime": "2019-05-06T07:51:56Z"
 		},
 		{
+			"checksumSHA1": "sxYypdu7FnWdqY/XL9ynFllz3kk=",
+			"path": "github.com/disintegration/gift",
+			"revision": "ca2a91a6d4b5ca7484655f89fa43a4c4f956947b",
+			"revisionTime": "2019-08-24T13:28:37Z"
+		},
+		{
 			"checksumSHA1": "Ps2Bsd1OjhSmAv4uVA2ZIZx7w7k=",
 			"path": "github.com/fatih/structs",
 			"revision": "878a968ab22548362a09bdb3322f98b00f470d46",
