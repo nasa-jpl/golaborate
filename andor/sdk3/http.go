@@ -18,7 +18,7 @@ type HTTPWrapper struct {
 	// Camera is the camera object being wrapped
 	*Camera
 
-	RouteTable server.RouteTable
+	w camera.HTTPCamera
 
 	recorder *imgrec.Recorder
 }
@@ -26,12 +26,14 @@ type HTTPWrapper struct {
 // NewHTTPWrapper returns a new wrapper with the route table populated
 func NewHTTPWrapper(c *Camera, r *imgrec.Recorder) HTTPWrapper {
 	g := camera.NewHTTPCamera(c, r)
-	w := HTTPWrapper{Camera: c, recorder: r}
+	w := HTTPWrapper{Camera: c, w: g, recorder: r}
+
+	rt := g.RT()
 	// things not part of the generic wrapper (yet?)
-	g.RouteTable[pat.Get("/feature")] = w.GetFeatures
-	g.RouteTable[pat.Get("/feature/:feature")] = w.GetFeature
-	g.RouteTable[pat.Get("/feature/:feature/options")] = w.GetFeatureInfo
-	g.RouteTable[pat.Post("/feature/:feature")] = w.SetFeature
+	rt[pat.Get("/feature")] = w.GetFeatures
+	rt[pat.Get("/feature/:feature")] = w.GetFeature
+	rt[pat.Get("/feature/:feature/options")] = w.GetFeatureInfo
+	rt[pat.Post("/feature/:feature")] = w.SetFeature
 	w2 := imgrec.NewHTTPWrapper(r)
 	w2.Inject(w)
 	return w
@@ -39,7 +41,7 @@ func NewHTTPWrapper(c *Camera, r *imgrec.Recorder) HTTPWrapper {
 
 // RT yields the route table and implements the server.HTTPer interface
 func (h HTTPWrapper) RT() server.RouteTable {
-	return h.RouteTable
+	return h.w.RT()
 }
 
 // GetFeatures gets all of the possible features, mapped by their
@@ -221,7 +223,7 @@ func (h *HTTPWrapper) SetFeature(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		defer r.Body.Close()
-		aoi := AOI{}
+		aoi := camera.AOI{}
 		switch feature {
 		case "AOIWidth":
 			aoi.Width = i.Int
@@ -245,7 +247,7 @@ func (h *HTTPWrapper) SetFeature(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		b := ParseBinning(s.Str)
+		b := camera.HxVToBin(s.Str)
 		err = h.Camera.SetBinning(b)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
