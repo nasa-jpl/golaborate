@@ -323,16 +323,14 @@ func (esp *ESP301) GetPos(axis string) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	fmt.Println(resp)
-	return 0, nil
+	return strconv.ParseFloat(resp, 64)
 }
 
 // MoveAbs sets the absolute position of an axis in controller units (usually mm)
 func (esp *ESP301) MoveAbs(axis string, pos float64) error {
 	c, _ := commandFromAlias("move-abs")
 	tele := makeTelegram(c, axis, true, pos)
-	resp, err := esp.RawCommand(tele)
-	fmt.Println(resp)
+	_, err := esp.RawCommand(tele)
 	return err
 }
 
@@ -340,8 +338,7 @@ func (esp *ESP301) MoveAbs(axis string, pos float64) error {
 func (esp *ESP301) MoveRel(axis string, pos float64) error {
 	c, _ := commandFromAlias("move-rel")
 	tele := makeTelegram(c, axis, true, pos)
-	resp, err := esp.RawCommand(tele)
-	fmt.Println(resp)
+	_, err := esp.RawCommand(tele)
 	return err
 }
 
@@ -352,8 +349,7 @@ func (esp *ESP301) MoveRel(axis string, pos float64) error {
 func (esp *ESP301) Home(axis string) error {
 	cmd, _ := commandFromAlias("origin-search")
 	tele := makeTelegram(cmd, axis, true, 1)
-	resp, err := esp.RawCommand(tele)
-	fmt.Println(resp)
+	_, err := esp.RawCommand(tele)
 	return err
 }
 
