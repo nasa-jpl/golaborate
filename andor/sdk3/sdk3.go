@@ -594,7 +594,7 @@ func (c *Camera) GetFrame() (image.Image, error) {
 
 	im := &image.Gray16{Pix: buf, Stride: aoi.Height * 2, Rect: image.Rect(0, 0, aoi.Height, aoi.Width)} // swap W, H -- still in detector coordinates
 	g := gift.New(
-		gift.Rotate270(),
+		gift.Rotate90(),
 	)
 	rect := g.Bounds(im.Bounds())
 	dst := image.NewGray16(rect)

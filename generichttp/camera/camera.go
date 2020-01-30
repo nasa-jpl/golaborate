@@ -429,6 +429,7 @@ func GetFrame(p Camera, rec *imgrec.Recorder) http.HandlerFunc {
 			err = WriteFits(w2, cards, []image.Image{img})
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
 			}
 			return
 		}
