@@ -51,6 +51,8 @@ var (
 		{Cmd: "VA", Alias: "set-velocity-linear", Description: "set velocity for linear motors", UsesAxis: true},
 		{Cmd: "VB", Alias: "set-velocity-stepper", Description: "set velocity for stepper motors", UsesAxis: true},
 		{Cmd: "VU", Alias: "set-max-speed", Description: "set maximum speed", UsesAxis: true},
+		{Cmd: "MO", Alias: "enable-axis", Description: "Turn the motor on for an axis", UsesAxis: true},
+		{Cmd: "MF", Alias: "disable-axis", Description: "turn the motor off for an axis", UsesAxis: true},
 
 		// Not implemented:
 		// - General mode selection,
@@ -235,12 +237,18 @@ func makeSerConf(addr string) *serial.Config {
 // ESP301 represents an ESP301 motion controller.
 type ESP301 struct {
 	*comm.RemoteDevice
+
+	enabled map[string]bool
 }
 
 // NewESP301 makes a new ESP301 motion controller instance
 func NewESP301(addr string, serial bool) *ESP301 {
-	rd := comm.NewRemoteDevice(addr, serial, nil, makeSerConf(addr))
-	return &ESP301{RemoteDevice: &rd}
+	rd := comm.NewRemoteDevice(addr, serial, &comm.Terminators{
+		Rx: '\r',
+		Tx: '\r',
+	}, makeSerConf(addr))
+	rd.Timeout = 5 * time.Minute
+	return &ESP301{RemoteDevice: &rd, enabled: map[string]bool{}}
 }
 
 // RawCommand sends a command directly to the motion controller (with EOT appended) and returns the response as-is
@@ -256,6 +264,55 @@ func (esp *ESP301) RawCommand(cmd string) (string, error) {
 	}
 	return string(r), nil
 
+}
+
+// Enable enables an axis
+func (esp *ESP301) Enable(axis string) error {
+	cmd := fmt.Sprintf("%sMO", axis)
+	_, err := esp.RawCommand(cmd)
+	if err == nil {
+		esp.enabled[axis] = true
+	}
+	return err
+}
+
+// Disable disables an axis
+func (esp *ESP301) Disable(axis string) error {
+	cmd := fmt.Sprintf("%sMF", axis)
+	_, err := esp.RawCommand(cmd)
+	if err == nil {
+		esp.enabled[axis] = false
+	}
+	return err
+}
+
+// GetEnabled returns if an axis is enabled.  This may not be truthy if the controller
+// threw an error, check the errors if you get disabled errors and this reports true
+func (esp *ESP301) GetEnabled(axis string) (bool, error) {
+	val, ok := esp.enabled[axis]
+	if !ok {
+		return false, fmt.Errorf("enabled not known, enable or disable to teach the server the status.")
+	}
+	return val, nil
+}
+
+// SetVelocity sets the velocity setpoint for an axis
+func (esp *ESP301) SetVelocity(axis string, vel float64) error {
+	c, _ := commandFromAlias("set-velocity-linear")
+	tele := makeTelegram(c, axis, true, vel)
+	_, err := esp.RawCommand(tele)
+	return err
+}
+
+// GetVelocity returns the velocity setpoint for an axis
+func (esp *ESP301) GetVelocity(axis string) (float64, error) {
+	c, _ := commandFromAlias("set-velocity-linear")
+	tele := makeTelegram(c, axis, false, 0)
+	resp, err := esp.RawCommand(tele)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseFloat(resp, 64)
 }
 
 // GetPos gets the absolute position of an axis in controller units (usually mm)
