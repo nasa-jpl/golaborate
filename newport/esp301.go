@@ -199,10 +199,10 @@ func commandFromCmdOrAlias(cmdAlias string) (Command, error) {
 	return cmd, err
 }
 
-func makeTelegram(c Command, axis int, write bool, data float64) string {
+func makeTelegram(c Command, axis string, write bool, data float64) string {
 	pieces := []string{}
 	if c.UsesAxis {
-		pieces = append(pieces, strconv.Itoa(axis))
+		pieces = append(pieces, axis)
 	}
 	pieces = append(pieces, c.Cmd)
 	if c.IsReadOnly || !write {
@@ -213,7 +213,7 @@ func makeTelegram(c Command, axis int, write bool, data float64) string {
 	return strings.Join(pieces, "")
 }
 
-func makeTelegramPlural(c []Command, axes []int, write []bool, data []float64) string {
+func makeTelegramPlural(c []Command, axes []string, write []bool, data []float64) string {
 	telegrams := make([]string, 0, len(c))
 	for idx, c := range c {
 		telegrams = append(telegrams, makeTelegram(c, axes[idx], write[idx], data[idx]))
@@ -259,7 +259,7 @@ func (esp *ESP301) RawCommand(cmd string) (string, error) {
 }
 
 // GetPos gets the absolute position of an axis in controller units (usually mm)
-func (esp *ESP301) GetPos(axis int) (float64, error) {
+func (esp *ESP301) GetPos(axis string) (float64, error) {
 	c, _ := commandFromAlias("get-position")
 	tele := makeTelegram(c, axis, false, 0)
 	resp, err := esp.RawCommand(tele)
@@ -270,9 +270,18 @@ func (esp *ESP301) GetPos(axis int) (float64, error) {
 	return 0, nil
 }
 
-// SetPosAbs sets the absolute position of an axis in controller units (usually mm)
-func (esp *ESP301) SetPosAbs(axis int, pos float64) error {
+// MoveAbs sets the absolute position of an axis in controller units (usually mm)
+func (esp *ESP301) MoveAbs(axis string, pos float64) error {
 	c, _ := commandFromAlias("move-abs")
+	tele := makeTelegram(c, axis, true, pos)
+	resp, err := esp.RawCommand(tele)
+	fmt.Println(resp)
+	return err
+}
+
+// MoveRel triggers a relative motion of an axis in controller units
+func (esp *ESP301) MoveRel(axis string, pos float64) error {
+	c, _ := commandFromAlias("move-rel")
 	tele := makeTelegram(c, axis, true, pos)
 	resp, err := esp.RawCommand(tele)
 	fmt.Println(resp)
@@ -283,7 +292,7 @@ func (esp *ESP301) SetPosAbs(axis int, pos float64) error {
 // We use a mode 1 home forcibly, which does "Find Home and Index Signal."  This
 // This 'fully' homes either linear or rotary axes. Use RawCommand if you want
 // to do a different kind of homing
-func (esp *ESP301) Home(axis int) error {
+func (esp *ESP301) Home(axis string) error {
 	cmd, _ := commandFromAlias("origin-search")
 	tele := makeTelegram(cmd, axis, true, 1)
 	resp, err := esp.RawCommand(tele)
@@ -292,7 +301,7 @@ func (esp *ESP301) Home(axis int) error {
 }
 
 // Wait waits for motion to cease and then returns nil
-func (esp *ESP301) Wait(axis int) error {
+func (esp *ESP301) Wait(axis string) error {
 	cmd, _ := commandFromAlias("wait")
 	tele := makeTelegram(cmd, axis, true, 0)
 	fmt.Println(tele)
@@ -300,7 +309,7 @@ func (esp *ESP301) Wait(axis int) error {
 }
 
 // SetFollowingErrorConfiguration sets the "following error" configuration
-func (esp *ESP301) SetFollowingErrorConfiguration(axis int, enableChecking, disableMotorPowerOnError, abortMotionOnError bool) error {
+func (esp *ESP301) SetFollowingErrorConfiguration(axis string, enableChecking, disableMotorPowerOnError, abortMotionOnError bool) error {
 	// this could be cleaner, but it is rare we need to pack bits into bytes
 	bits := [8]bool{enableChecking, disableMotorPowerOnError, abortMotionOnError, false, false, false, false, false}
 	b := byte(0)
@@ -309,7 +318,7 @@ func (esp *ESP301) SetFollowingErrorConfiguration(axis int, enableChecking, disa
 			b |= 1 << idx
 		}
 	}
-	msg := fmt.Sprintf("%dZF0%XH", axis, b)
+	msg := fmt.Sprintf("%sZF0%XH", axis, b)
 	resp, err := esp.RawCommand(msg)
 	fmt.Println(resp)
 	return err

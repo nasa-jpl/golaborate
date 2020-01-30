@@ -154,7 +154,7 @@ func BuildMux(c Config) *goji.Mux {
 
 		case "esp", "esp300", "esp301":
 			esp := newport.NewESP301(node.Addr, node.Serial)
-			httper = newport.NewESP301HTTPWrapper(esp)
+			httper = motion.NewHTTPMotionController(esp)
 
 		case "xps":
 			xps := newport.NewXPS(node.Addr)
