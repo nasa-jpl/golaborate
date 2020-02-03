@@ -146,16 +146,6 @@ type Command struct {
 	IsReadOnly  bool   `json:"isReadOnly"`
 }
 
-// JSONCommand is a primitive describing a command sent as JSON.
-// CMD may either be a command (Command.Cmd) or an alias (Command.Alias)
-// if Write is true, the data (F64) will be used.  If false, it will be ignored.
-type JSONCommand struct {
-	Axis  int     `json:"axis"`
-	Cmd   string  `json:"cmd"`
-	F64   float64 `json:"f64"`
-	Write bool    `json:"write"`
-}
-
 // ErrCommandNotFound is generated when a command is unknown to the newport module
 type ErrCommandNotFound struct {
 	Cmd string
@@ -237,8 +227,6 @@ func makeSerConf(addr string) *serial.Config {
 // ESP301 represents an ESP301 motion controller.
 type ESP301 struct {
 	*comm.RemoteDevice
-
-	enabled map[string]bool
 }
 
 // NewESP301 makes a new ESP301 motion controller instance
@@ -247,8 +235,8 @@ func NewESP301(addr string, serial bool) *ESP301 {
 		Rx: '\r',
 		Tx: '\r',
 	}, makeSerConf(addr))
-	rd.Timeout = 5 * time.Minute
-	return &ESP301{RemoteDevice: &rd, enabled: map[string]bool{}}
+	rd.Timeout = 10 * time.Minute
+	return &ESP301{RemoteDevice: &rd}
 }
 
 // RawCommand sends a command directly to the motion controller (with EOT appended) and returns the response as-is
@@ -258,21 +246,20 @@ func (esp *ESP301) RawCommand(cmd string) (string, error) {
 		return "", err
 	}
 	defer esp.CloseEventually()
-	r, err := esp.SendRecv([]byte(cmd))
-	if err != nil {
-		return "", err
+	if strings.Contains(cmd, "?") {
+		r, err := esp.SendRecv([]byte(cmd))
+		if err != nil {
+			return "", err
+		}
+		return string(r), nil
 	}
-	return string(r), nil
-
+	return "", esp.Send([]byte(cmd))
 }
 
 // Enable enables an axis
 func (esp *ESP301) Enable(axis string) error {
 	cmd := fmt.Sprintf("%sMO", axis)
 	_, err := esp.RawCommand(cmd)
-	if err == nil {
-		esp.enabled[axis] = true
-	}
 	return err
 }
 
@@ -280,20 +267,19 @@ func (esp *ESP301) Enable(axis string) error {
 func (esp *ESP301) Disable(axis string) error {
 	cmd := fmt.Sprintf("%sMF", axis)
 	_, err := esp.RawCommand(cmd)
-	if err == nil {
-		esp.enabled[axis] = false
-	}
 	return err
 }
 
 // GetEnabled returns if an axis is enabled.  This may not be truthy if the controller
 // threw an error, check the errors if you get disabled errors and this reports true
 func (esp *ESP301) GetEnabled(axis string) (bool, error) {
-	val, ok := esp.enabled[axis]
-	if !ok {
-		return false, fmt.Errorf("enabled not known, enable or disable to teach the server the status.")
+	cmd, _ := commandFromAlias("enable-axis")
+	tele := makeTelegram(cmd, axis, false, 0)
+	resp, err := esp.RawCommand(tele)
+	if err != nil {
+		return false, err
 	}
-	return val, nil
+	return strconv.ParseBool(resp)
 }
 
 // SetVelocity sets the velocity setpoint for an axis
@@ -343,9 +329,7 @@ func (esp *ESP301) MoveRel(axis string, pos float64) error {
 }
 
 // Home homes an axis.
-// We use a mode 1 home forcibly, which does "Find Home and Index Signal."  This
-// This 'fully' homes either linear or rotary axes. Use RawCommand if you want
-// to do a different kind of homing
+// mode 6, negative limit switch + home mark
 func (esp *ESP301) Home(axis string) error {
 	cmd, _ := commandFromAlias("origin-search")
 	tele := makeTelegram(cmd, axis, true, 1)
