@@ -16,13 +16,13 @@ import (
 	"image"
 	"math"
 	"reflect"
-	"strings"
 	"time"
 	"unsafe"
-``
+
 	"github.com/astrogo/fitsio"
 	"github.com/disintegration/gift"
 	"github.jpl.nasa.gov/HCIT/go-hcit/generichttp/camera"
+	"github.jpl.nasa.gov/HCIT/go-hcit/util"
 )
 
 const (
