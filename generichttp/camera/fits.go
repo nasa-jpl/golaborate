@@ -9,7 +9,7 @@ import (
 	"github.com/astrogo/fitsio"
 )
 
-// writeFits streams a fits file to w
+// WriteFits streams a fits file to w
 func WriteFits(w io.Writer, metadata []fitsio.Card, imgs []image.Image) error {
 	nframes := len(imgs)
 	b := imgs[0].Bounds()

@@ -569,7 +569,7 @@ func SetBinning(a AOIManipulator) http.HandlerFunc {
 	}
 }
 
-// Getbinning gets the binning over HTTP as JSON
+// GetBinning gets the binning over HTTP as JSON
 func GetBinning(a AOIManipulator) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		b, err := a.GetBinning()
@@ -593,6 +593,7 @@ type FeatureManager interface {
 	Configure(map[string]interface{}) error
 }
 
+// EMGainManager describes an interface that can manage its electron multiplying gain
 type EMGainManager interface {
 	// GetEMGainMode returns how the EM gain is applied in the camera
 	GetEMGainMode() (string, error)
