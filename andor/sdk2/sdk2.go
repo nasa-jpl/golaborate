@@ -27,6 +27,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"reflect"
 	"strconv"
 	"time"
 	"unsafe"
@@ -543,7 +544,12 @@ func (c *Camera) GetTemperatureRange() (int, int, error) { // need another retur
 func (c *Camera) GetTemperature() (float64, error) {
 	var temp C.int
 	errCode := uint(C.GetTemperature(&temp))
-	return float64(int(temp)), Error(errCode) // TODO: there may be a potential optimization float64 directly
+	err := Error(errCode)
+	ret := float64(int(temp))
+	if BeneignThermal(err) {
+		return ret, nil
+	}
+	return ret, err
 }
 
 // SetTemperatureSetpoint assigns a setpoint to the camera's TEC
@@ -585,7 +591,11 @@ func (c *Camera) GetTemperatureStatus() (string, error) {
 	// this is pasted from the GetTemperature function with minor modification
 	var temp C.int
 	errCode := uint(C.GetTemperature(&temp))
-	return ErrCodes[DRVError(errCode)], Error(errCode)
+	err := Error(errCode)
+	if BeneignThermal(err) {
+		return ErrCodes[DRVError(errCode)], nil
+	}
+	return "", err
 }
 
 // SetFan allows the fan to be turned on or off.
@@ -794,7 +804,7 @@ func (c *Camera) SetImage(hbin, vbin, hstart, hend, vstart, vend int) error {
 	err := Error(errCode)
 	if err == nil {
 		c.bin = &camera.Binning{H: hbin, V: vbin}
-		c.aoi = &camera.AOI{Left: hstart, Top: vstart, Width: hend - hstart, Height: vend - vstart}
+		c.aoi = &camera.AOI{Left: hstart, Top: vstart, Width: hend - hstart + 1, Height: vend - vstart + 1}
 	}
 	return err
 }
@@ -941,45 +951,45 @@ func (c *Camera) GetFrameSize() (int, int, error) {
 }
 
 // GetFrame returns a frame from the camera as a strided buffer
-func (c *Camera) GetFrame() ([]uint16, error) {
-	fmt.Printf("%+v\n", c)
+func (c *Camera) GetFrame() (image.Image, error) {
+	ret := &image.Gray16{}
 	c.AbortAcquisition() // always clear out in case of dangling acq
 
 	tExp, err := c.GetExposureTime()
-	fmt.Println(tExp, err)
 	if err != nil {
-		return []uint16{}, err
+		return ret, err
+	}
+
+	w, h, err := c.GetFrameSize()
+	if err != nil {
+		return ret, err
 	}
 
 	err = c.StartAcquisition()
 	if err != nil {
-		return []uint16{}, err
+		return ret, err
 	}
 
 	err = c.WaitForAcquisition(tExp + 3*time.Second)
-	fmt.Println("wait", err)
 	if err != nil {
-		return []uint16{}, err
+		return ret, err
 	}
 	stat, err := c.GetStatus()
 	// sometimes the SDK frees you from sleep even though the camera is still in acq
 	// this block will spam the camera for if it is acquiring for up (tExp + 5 seconds)
 	// to "guarantee" we aren't trapped in a bad state.
-	fmt.Println(stat)
 	if stat == StatusAcquiring {
 		deadline := time.Now().Add(tExp + 15*time.Second)
 		tSleep := 1 * time.Millisecond
 		for stat == StatusAcquiring && time.Now().Before(deadline) {
 			stat, err = c.GetStatus()
-			fmt.Println(stat)
 			time.Sleep(tSleep)
 			tSleep *= 2
 		}
 	}
 	buf, err := c.GetAcquiredData()
-	fmt.Println("gad", err)
 	if err != nil {
-		return []uint16{}, err
+		return ret, err
 	}
 
 	l := len(buf)
@@ -987,13 +997,22 @@ func (c *Camera) GetFrame() ([]uint16, error) {
 	for idx := 0; idx < l; idx++ {
 		b2[idx] = uint16(buf[idx])
 	}
+	b3 := []byte{}
+	hdr := (*reflect.SliceHeader)(unsafe.Pointer(&b3))
+	hdr.Data = uintptr(unsafe.Pointer(&b2[0]))
+	hdr.Len = len(b2) * 2
+	hdr.Cap = cap(b2) * 2
+
+	ret.Pix = b3
+	ret.Stride = w * 2
+	ret.Rect = image.Rect(0, 0, w, h)
 	err = c.AbortAcquisition()
-	return b2, err
+	return ret, err
 }
 
 // Burst takes a chunk of pictures and returns them as one contiguous buffer
 func (c *Camera) Burst(frames int, fps float64) ([]image.Image, error) {
-	return []uint16{}, fmt.Errorf("not implemented")
+	return []image.Image{}, fmt.Errorf("not implemented")
 }
 
 // GetSerialNumber returns the serial number as an integer
