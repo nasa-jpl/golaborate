@@ -55,7 +55,7 @@ func setupconfig() {
 		SerialNumber: "auto",
 		Recorder:     recorder{},
 		BootupArgs: map[string]interface{}{
-			"VSAmplitude": "Normal",
+			// "VSAmplitude": "Normal",
 			// "VSSpeed":             "1Hz",
 			// "HSSpeed":             "TBD",
 			"AcquisitionMode":     "SingleScan",
@@ -144,22 +144,39 @@ func pversion() {
 func run() {
 	cfg := config{}
 	k.Unmarshal("", &cfg)
-	fmt.Println("made conf")
+	log.Println("initializing SDK, andor's code can deadlock here.")
+	log.Println("Power cycle the camera if this is stuck.")
 	// load the library and see how many cameras are connected
 	err := sdk2.Initialize("/usr/local/etc/andor")
 	if err != nil {
 		log.Fatal(err)
 	}
 	c := &sdk2.Camera{}
-	fmt.Println("initialized sdk2")
+	defer c.ShutDown()
+
+	err = c.SetFan(true)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	hwv, err := c.GetHardwareVersion()
 	swv, err := c.GetSoftwareVersion()
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("connected to camera with hardware %+v hwv\n", hwv)
-	log.Printf("software %+v\n", swv)
+	log.Println("connected to camera with hardware")
+	log.Printf("%+v hwv\n", hwv)
+	log.Println("software")
+	log.Printf("%+v\n", swv)
+
+	width, height, err := c.GetDetector()
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = c.SetImage(1, 1, 1, width, 1, height)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	err = c.Configure(cfg.BootupArgs)
 	if err != nil {
