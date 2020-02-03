@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 	"unsafe"
-
+``
 	"github.com/astrogo/fitsio"
 	"github.jpl.nasa.gov/HCIT/go-hcit/generichttp/camera"
 )
@@ -897,18 +897,7 @@ func (c *Camera) Configure(settings map[string]interface{}) error {
 		}
 		errs = append(errs, err)
 	}
-	strs := []string{}
-	for idx := 0; idx < len(errs); idx++ {
-		err := errs[idx]
-		if err != nil {
-			strs = append(strs, err.Error())
-		}
-	}
-	err := fmt.Errorf(strings.Join(strs, "\n"))
-	if err.Error() == "" {
-		return nil
-	}
-	return err
+	return util.MergeErrors(errs)
 }
 
 // UnpadBuffer strips padding bytes from a buffer

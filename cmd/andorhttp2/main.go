@@ -55,17 +55,13 @@ func setupconfig() {
 		SerialNumber: "auto",
 		Recorder:     recorder{},
 		BootupArgs: map[string]interface{}{
-			"VSAmplitude":         "Normal",
-			"VSSpeed":             "1Hz",
-			"HSSpeed":             "TBD",
+			"VSAmplitude": "Normal",
+			// "VSSpeed":             "1Hz",
+			// "HSSpeed":             "TBD",
 			"AcquisitionMode":     "SingleScan",
 			"ReadoutMode":         "Image",
 			"TemperatureSetpoint": "-15",
-			"SensorCooling":       true,
-			"FanSpeed":            "Low",
-			"PixelReadoutRate":    "280 MHz",
-			"SpuriousNoiseFilter": false,
-			"BaselineClamp":       false}}, "koanf"), nil)
+			"SensorCooling":       true}}, "koanf"), nil)
 	if err := k.Load(file.Provider(ConfigFileName), yaml.Parser()); err != nil {
 		errtxt := err.Error()
 		if !strings.Contains(errtxt, "no such") { // file missing, who cares
@@ -148,12 +144,14 @@ func pversion() {
 func run() {
 	cfg := config{}
 	k.Unmarshal("", &cfg)
+	fmt.Println("made conf")
 	// load the library and see how many cameras are connected
 	err := sdk2.Initialize("/usr/local/etc/andor")
 	if err != nil {
 		log.Fatal(err)
 	}
 	c := &sdk2.Camera{}
+	fmt.Println("initialized sdk2")
 
 	hwv, err := c.GetHardwareVersion()
 	swv, err := c.GetSoftwareVersion()
@@ -162,6 +160,11 @@ func run() {
 	}
 	log.Printf("connected to camera with hardware %+v hwv\n", hwv)
 	log.Printf("software %+v\n", swv)
+
+	err = c.Configure(cfg.BootupArgs)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	args := cfg.Recorder
 	r := &imgrec.Recorder{Root: args.Root, Prefix: args.Prefix}

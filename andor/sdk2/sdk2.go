@@ -720,6 +720,12 @@ func (c *Camera) GetAcquisitionTimings() (AcquisitionTimings, error) {
 	return at, Error(errCode)
 }
 
+// AbortAcquisition aborts the current acquisition if one is active
+func (c *Camera) AbortAcquisition() error {
+	errCode := uint(C.AbortAcquisition())
+	return Error(errCode)
+}
+
 // StartAcquisition starts the camera acquiring charge for an image
 func (c *Camera) StartAcquisition() error {
 	errCode := uint(C.StartAcquisition())
@@ -742,12 +748,6 @@ func (c *Camera) GetAcquiredData() ([]int32, error) {
 	ptr := (*C.at_32)(unsafe.Pointer(&buf[0]))
 	errCode := uint(C.GetAcquiredData(ptr, C.uint(1024*1024)))
 	return buf, Error(errCode)
-}
-
-// AbortAcquisition aborts the current acquisition if one is active
-func (c *Camera) AbortAcquisition() error {
-	errCode := uint(C.AbortAcquisition())
-	return Error(errCode)
 }
 
 // WaitForAcquisition sleeps while waiting for the acquisition completed signal
@@ -941,25 +941,53 @@ func (c *Camera) GetFrameSize() (int, int, error) {
 
 // GetFrame returns a frame from the camera as a strided buffer
 func (c *Camera) GetFrame() ([]uint16, error) {
-	err := c.StartAcquisition()
-	if err != nil {
-		return []uint16{}, err
-	}
+	fmt.Printf("%+v\n", c)
+	c.AbortAcquisition() // always clear out in case of dangling acq
+
 	tExp, err := c.GetExposureTime()
+	fmt.Println(tExp, err)
 	if err != nil {
 		return []uint16{}, err
 	}
-	err = c.WaitForAcquisition(tExp + time.Second)
+
+	err = c.StartAcquisition()
 	if err != nil {
 		return []uint16{}, err
+	}
+
+	err = c.WaitForAcquisition(tExp + 3*time.Second)
+	fmt.Println("wait", err)
+	if err != nil {
+		return []uint16{}, err
+	}
+	stat, err := c.GetStatus()
+	// sometimes the SDK frees you from sleep even though the camera is still in acq
+	// this block will spam the camera for if it is acquiring for up (tExp + 5 seconds)
+	// to "guarantee" we aren't trapped in a bad state.
+	fmt.Println(stat)
+	if stat == StatusAcquiring {
+		deadline := time.Now().Add(tExp + 15*time.Second)
+		tSleep := 1 * time.Millisecond
+		for stat == StatusAcquiring && time.Now().Before(deadline) {
+			stat, err = c.GetStatus()
+			fmt.Println(stat)
+			time.Sleep(tSleep)
+			tSleep *= 2
+		}
 	}
 	buf, err := c.GetAcquiredData()
-	b2 := make([]uint16, len(buf))
+	fmt.Println("gad", err)
+	if err != nil {
+		return []uint16{}, err
+	}
+
 	l := len(buf)
+	b2 := make([]uint16, l)
 	for idx := 0; idx < l; idx++ {
 		b2[idx] = uint16(buf[idx])
 	}
-	return b2, nil
+	err = c.AbortAcquisition()
+	return b2, err
 }
 
 // Burst takes a chunk of pictures and returns them as one contiguous buffer
@@ -1074,4 +1102,29 @@ func (c *Camera) CollectHeaderMetadata() []fitsio.Card {
 		// needed for uint16 encoding
 		fitsio.Card{Name: "BZERO", Value: 32768},
 		fitsio.Card{Name: "BSCALE", Value: 1.0}}
+}
+
+// Configure sets many values for the camera at once
+func (c *Camera) Configure(settings map[string]interface{}) error {
+	type fStrErr func(string) error
+	funcs := map[string]fStrErr{
+		"VSAmplitude":         c.SetVSAmplitude,
+		"AcquisitionMode":     c.SetAcquisitionMode,
+		"ReadoutMode":         c.SetReadoutMode,
+		"TemperatureSetpoint": c.SetTemperatureSetpoint}
+	errs := []error{}
+	for k, v := range settings {
+		switch k {
+		case "VSAmplitude", "VSSpeed", "HSSpeed", "AcquisitionMode", "ReadoutMode", "TemperatureSetpoint":
+			str := v.(string)
+			f := funcs[k]
+			err := f(str)
+			errs = append(errs, err)
+		case "SensorCooling":
+			b := v.(bool)
+			err := c.SetCooling(b)
+			errs = append(errs, err)
+		}
+	}
+	return util.MergeErrors(errs)
 }

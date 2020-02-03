@@ -2,6 +2,7 @@
 package util
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -123,4 +124,20 @@ type Limiter struct {
 // Clamp limits min < input < max
 func (l *Limiter) Clamp(input float64) float64 {
 	return Clamp(input, l.Min, l.Max)
+}
+
+// MergeErrors converts many errors to a single one, newline separated
+func MergeErrors(errs []error) error {
+	strs := []string{}
+	for idx := 0; idx < len(errs); idx++ {
+		err := errs[idx]
+		if err != nil {
+			strs = append(strs, err.Error())
+		}
+	}
+	err := fmt.Errorf(strings.Join(strs, "\n"))
+	if err.Error() == "" {
+		return nil
+	}
+	return err
 }
