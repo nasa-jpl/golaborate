@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"go/types"
+	"math"
 	"net/http"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/mathx"
 	"github.jpl.nasa.gov/HCIT/go-hcit/server"
 	"goji.io/pat"
 )
@@ -158,7 +158,7 @@ func (h *SuperKHTTPWrapper) SetCenterBandwidth(w http.ResponseWriter, r *http.Re
 	l := len(addrs)
 	datas := make([][]byte, l, l)
 	for idx, wav := range []float64{low, high} {
-		f := mathx.Round(wav*10, 1)
+		f := math.Round(wav * 10)
 		buf := make([]byte, 2)
 		dataOrder.PutUint16(buf, uint16(f))
 		datas[idx] = buf
@@ -240,7 +240,7 @@ func httpSetFloatValue(w http.ResponseWriter, r *http.Request, value string, mod
 		http.Error(w, fstr, http.StatusBadRequest)
 		return
 	}
-	intt := uint16(mathx.Round(vT.F64*10, 1))
+	intt := uint16(math.Round(vT.F64 * 10))
 	buf := make([]byte, 2, 2)
 	dataOrder.PutUint16(buf, intt)
 	_, err = mod.SetValue(value, buf)

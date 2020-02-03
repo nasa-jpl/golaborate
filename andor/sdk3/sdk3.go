@@ -13,6 +13,7 @@ package sdk3
 import "C"
 import (
 	"fmt"
+	"image"
 	"math"
 	"reflect"
 	"strings"
@@ -20,6 +21,7 @@ import (
 	"unsafe"
 ``
 	"github.com/astrogo/fitsio"
+	"github.com/disintegration/gift"
 	"github.jpl.nasa.gov/HCIT/go-hcit/generichttp/camera"
 )
 
@@ -352,20 +354,18 @@ func (c *Camera) GetAOITop() (int, error) {
 // SetAOI updates the AOI and re-allocates the buffer.  Width and height are
 // calculated from the difference of the sensor dimensions and top-left if they
 // are zero
-func (c *Camera) SetAOI(aoi AOI) error {
+func (c *Camera) SetAOI(aoi camera.AOI) error {
 	// top
 	err := SetInt(c.Handle, "AOITop", int64(aoi.Top))
 	if err != nil {
 		return err
 	}
-	c.aoiTop = aoi.Top
 
 	// left
 	err = SetInt(c.Handle, "AOILeft", int64(aoi.Left))
 	if err != nil {
 		return err
 	}
-	c.aoiLeft = aoi.Left
 
 	width := aoi.Width
 	if width == 0 { // if the width is zero, the width will span from left~end of chip
@@ -379,7 +379,6 @@ func (c *Camera) SetAOI(aoi AOI) error {
 	if err != nil {
 		return err
 	}
-	c.aoiWidth = width
 
 	height := aoi.Height
 	if height == 0 { // if the height is zero, the height will span from top~end of chip
@@ -393,10 +392,14 @@ func (c *Camera) SetAOI(aoi AOI) error {
 	if err != nil {
 		return err
 	}
-	c.aoiHeight = height
 
-	// blow the image size cache
+	// blow the cached values
 	c.imageSizeBytes = 0
+	c.aoiTop = 0
+	c.aoiLeft = 0
+	c.aoiWidth = 0
+	c.aoiHeight = 0
+	c.aoiStride = 0
 	err = c.Allocate()
 	if err != nil {
 		return err
@@ -406,14 +409,14 @@ func (c *Camera) SetAOI(aoi AOI) error {
 }
 
 // GetAOI gets the AOI
-func (c *Camera) GetAOI() (AOI, error) {
+func (c *Camera) GetAOI() (camera.AOI, error) {
 	// no point bailing early since these will all throw the same error if
 	// they do at all
 	top, err := c.GetAOITop()
 	left, err := c.GetAOILeft()
 	width, err := c.GetAOIWidth()
 	height, err := c.GetAOIHeight()
-	return AOI{Top: top, Left: left, Width: width, Height: height}, err
+	return camera.AOI{Top: top, Left: left, Width: height, Height: width}, err
 }
 
 // GetSDKVersion gets the software version of the SDK
@@ -435,11 +438,11 @@ func (c *Camera) GetBinning() (camera.Binning, error) {
 	if c.binning.H == 0 {
 		b := camera.Binning{}
 		// uninitialized, fetch from SDK
-		s, err := GetString(c.Handle, "AOIBinning")
+		s, err := GetEnumString(c.Handle, "AOIBinning")
 		if err != nil {
 			return b, err
 		}
-		b = camera.HxVToBinning(s)
+		b = camera.HxVToBin(s)
 		c.binning = b
 	}
 	return c.binning, nil
@@ -450,10 +453,14 @@ func (c *Camera) SetBinning(b camera.Binning) error {
 	// blow the image size cache
 	c.imageSizeBytes = 0
 	str := b.HxV()
-	err := enrich(SetString(c.Handle, "AOIBinning", str), "AOIBinning")
+	err := enrich(SetEnumString(c.Handle, "AOIBinning", str), "AOIBinning")
 	if err != nil {
 		return err
 	}
+	// blow the cache on some AoI parameters
+	c.aoiWidth = 0
+	c.aoiHeight = 0
+	c.aoiStride = 0
 	return c.Allocate()
 }
 
@@ -542,15 +549,16 @@ func (c *Camera) WaitBuffer(timeout time.Duration) error {
 	return err
 }
 
-// GetFrame triggers an exposure and returns the frame as a strided slice of bytes
-func (c *Camera) GetFrame() ([]uint16, error) {
+// GetFrame triggers an exposure and returns the frame as an image.Gray16 masquerading as an image.Image
+func (c *Camera) GetFrame() (image.Image, error) {
+	var ret image.Gray16
 	if !c.bufferOnQueue {
-		return nil, ErrBufferNotOnQueue
+		return &ret, ErrBufferNotOnQueue
 	}
 	// if we have to query hardware for exposure time, there may be an error
 	expT, err := c.GetExposureTime()
 	if err != nil {
-		return []uint16{}, err
+		return &ret, err
 	}
 
 	// injected here 2019-12-03, not writable on AcqStart happens because
@@ -560,96 +568,43 @@ func (c *Camera) GetFrame() ([]uint16, error) {
 	// do the big acquisition loop
 	err = c.QueueBuffer()
 	if err != nil {
-		return []uint16{}, err
+		return &ret, err
 	}
 
 	err = IssueCommand(c.Handle, "AcquisitionStart")
 	if err != nil {
-		return []uint16{}, err
+		return &ret, err
 	}
 	err = c.WaitBuffer(expT + 1*time.Second)
 	if err != nil {
-		return []uint16{}, err
+		return &ret, err
 	}
 	err = IssueCommand(c.Handle, "AcquisitionStop")
 	if err != nil {
-		return []uint16{}, err
+		return &ret, err
 	}
 	buf, err := c.unpadBuffer()
 	if err != nil {
-		return []uint16{}, err
+		return &ret, err
 	}
-	ary := bytesToUint(buf)
-	return ary, nil
+	aoi, err := c.GetAOI()
+	if err != nil {
+		return &ret, err
+	}
+
+	im := &image.Gray16{Pix: buf, Stride: aoi.Height * 2, Rect: image.Rect(0, 0, aoi.Height, aoi.Width)} // swap W, H -- still in detector coordinates
+	g := gift.New(
+		gift.Rotate90(),
+	)
+	rect := g.Bounds(im.Bounds())
+	dst := image.NewGray16(rect)
+	g.Draw(dst, im)
+	return dst, nil
 }
 
 // Burst performs a burst by taking N images at M fps
-func (c *Camera) Burst(frames int, fps float64) ([]uint16, error) {
-	var holding []byte
-	var output []uint16
-
-	// get the previous framerate so we can reset to this like a good neighbor
-	prevFps, err := GetFloat(c.Handle, "FrameRate")
-	if err != nil {
-		return output, err
-	}
-
-	prevCycle, err := GetEnumString(c.Handle, "CycleMode")
-	if err != nil {
-		return output, err
-	}
-
-	IssueCommand(c.Handle, "AcquisitionStop")
-
-	err = c.QueueBuffer()
-	if err != nil {
-		return output, err
-	}
-	fmt.Println(GetBool(c.Handle, "CameraAcquiring"))
-	err = SetEnumString(c.Handle, "CycleMode", "Continuous")
-	if err != nil {
-		return output, err
-	}
-	// now start acq and begin handling buffers
-	err = SetFloat(c.Handle, "FrameRate", fps)
-	if err != nil {
-		return output, err
-	}
-
-	// get the exposure time so we know how long to wait for a buffer
-	expT, err := c.GetExposureTime()
-	if err != nil {
-		return output, err
-	}
-	waitT := expT + time.Second
-
-	err = IssueCommand(c.Handle, "AcquisitionStart")
-
-	for idx := 0; idx < frames; idx++ {
-		err = c.QueueBuffer()
-		if err != nil {
-			return output, err
-		}
-		err := c.WaitBuffer(waitT)
-		if err != nil {
-			return output, err
-		}
-		buf, err := c.unpadBuffer()
-		if err != nil {
-			return output, err
-		}
-		if idx == 0 { // on the first go around, allocate a big buffer to hold the cube
-			holding = make([]byte, 0, len(buf)*frames)
-		}
-		// every time, add to the buffer
-		holding = append(holding, buf...)
-	}
-	output = bytesToUint(holding)
-
-	// finally, reset the camera to how it was when we started
-	err = SetFloat(c.Handle, "FrameRate", prevFps)
-	err = SetEnumString(c.Handle, "CycleMode", prevCycle)
-	return output, err
+func (c *Camera) Burst(frames int, fps float64) ([]image.Image, error) {
+	return nil, nil
 }
 
 func (c *Camera) unpadBuffer() ([]byte, error) {
@@ -785,7 +740,7 @@ func (c *Camera) Command(cmd string) error {
 // GetFrameSize returns the AOI W, H
 func (c *Camera) GetFrameSize() (int, int, error) {
 	aoi, err := c.GetAOI()
-	return aoi.Width, aoi.Height, err
+	return aoi.Height, aoi.Width, err
 }
 
 // CollectHeaderMetadata satisfies generichttp/camera and makes a stack of FITS cards
@@ -853,6 +808,9 @@ func (c *Camera) CollectHeaderMetadata() []fitsio.Card {
 		// timestamp
 		fitsio.Card{Name: "DATE", Value: ts}, // timestamp is standard and does not require comment
 
+		// orientation
+		fitsio.Card{Name: "ORIENT", Value: 0, Comment: "cw rotation from origin index +row +col"},
+
 		// exposure parameters
 		fitsio.Card{Name: "EXPTIME", Value: texp.Seconds(), Comment: "exposure time, seconds"},
 
@@ -906,6 +864,7 @@ func UnpadBuffer(buf []byte, aoistride, aoiwidth, aoiheight int) ([]byte, error)
 	// can improve performance a little bit by changing this
 	out := make([]byte, 0, len(buf))
 
+	// stride is in bytes, while width is in pixels
 	// TODO: generalize this to other modes besides 16-bit
 	bidx := 0                       // byte index
 	bpp := 2                        // bytes per pixel

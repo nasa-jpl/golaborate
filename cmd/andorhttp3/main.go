@@ -150,7 +150,6 @@ func run() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer sdk3.FinalizeLibrary()
 	ncam, err := sdk3.DeviceCount()
 	if err != nil {
 		log.Fatal(err)
@@ -171,7 +170,6 @@ func run() {
 		snCam string
 	)
 	for idx := 0; idx < ncam; idx++ {
-		log.Println("scanning for camera, index", idx)
 		c, err = sdk3.Open(idx)
 		if err != nil {
 			log.Fatal(err)
@@ -195,6 +193,8 @@ func run() {
 			}
 		}
 	}
+	defer c.Close()
+	defer sdk3.FinalizeLibrary()
 	model, err := c.GetModel()
 	if err != nil {
 		log.Fatal(err)
@@ -222,6 +222,7 @@ func run() {
 	addr := cfg.Addr + cfg.Root
 	log.Println("now listening for requests at ", addr)
 	log.Fatal(http.ListenAndServe(cfg.Addr, root))
+	c.Close()
 }
 
 func main() {

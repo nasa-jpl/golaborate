@@ -26,6 +26,7 @@ import "C"
 import (
 	"errors"
 	"fmt"
+	"image"
 	"strconv"
 	"time"
 	"unsafe"
@@ -991,7 +992,7 @@ func (c *Camera) GetFrame() ([]uint16, error) {
 }
 
 // Burst takes a chunk of pictures and returns them as one contiguous buffer
-func (c *Camera) Burst(frames int, fps float64) ([]uint16, error) {
+func (c *Camera) Burst(frames int, fps float64) ([]image.Image, error) {
 	return []uint16{}, fmt.Errorf("not implemented")
 }
 

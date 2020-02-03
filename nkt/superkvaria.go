@@ -4,7 +4,6 @@ import (
 	"math"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
-	"github.jpl.nasa.gov/HCIT/go-hcit/mathx"
 )
 
 // this file contains values relevant to the SuperK Varia accessory
@@ -52,7 +51,7 @@ type CenterBandwidth struct {
 // ShortLongToCB converts short, long wavelengths to a CenterBandwidth struct
 func ShortLongToCB(short, long float64) CenterBandwidth {
 	center := (short + long) / 2
-	bw := mathx.Round(math.Abs(long-short), 0.1)
+	bw := math.Round(math.Abs(long-short)*10) / 10 // *10/10 to round to nearest tenth
 	return CenterBandwidth{Center: center, Bandwidth: bw}
 }
 

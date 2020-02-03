@@ -51,6 +51,8 @@ var (
 		{Cmd: "VA", Alias: "set-velocity-linear", Description: "set velocity for linear motors", UsesAxis: true},
 		{Cmd: "VB", Alias: "set-velocity-stepper", Description: "set velocity for stepper motors", UsesAxis: true},
 		{Cmd: "VU", Alias: "set-max-speed", Description: "set maximum speed", UsesAxis: true},
+		{Cmd: "MO", Alias: "enable-axis", Description: "Turn the motor on for an axis", UsesAxis: true},
+		{Cmd: "MF", Alias: "disable-axis", Description: "turn the motor off for an axis", UsesAxis: true},
 
 		// Not implemented:
 		// - General mode selection,
@@ -144,16 +146,6 @@ type Command struct {
 	IsReadOnly  bool   `json:"isReadOnly"`
 }
 
-// JSONCommand is a primitive describing a command sent as JSON.
-// CMD may either be a command (Command.Cmd) or an alias (Command.Alias)
-// if Write is true, the data (F64) will be used.  If false, it will be ignored.
-type JSONCommand struct {
-	Axis  int     `json:"axis"`
-	Cmd   string  `json:"cmd"`
-	F64   float64 `json:"f64"`
-	Write bool    `json:"write"`
-}
-
 // ErrCommandNotFound is generated when a command is unknown to the newport module
 type ErrCommandNotFound struct {
 	Cmd string
@@ -199,10 +191,10 @@ func commandFromCmdOrAlias(cmdAlias string) (Command, error) {
 	return cmd, err
 }
 
-func makeTelegram(c Command, axis int, write bool, data float64) string {
+func makeTelegram(c Command, axis string, write bool, data float64) string {
 	pieces := []string{}
 	if c.UsesAxis {
-		pieces = append(pieces, strconv.Itoa(axis))
+		pieces = append(pieces, axis)
 	}
 	pieces = append(pieces, c.Cmd)
 	if c.IsReadOnly || !write {
@@ -213,7 +205,7 @@ func makeTelegram(c Command, axis int, write bool, data float64) string {
 	return strings.Join(pieces, "")
 }
 
-func makeTelegramPlural(c []Command, axes []int, write []bool, data []float64) string {
+func makeTelegramPlural(c []Command, axes []string, write []bool, data []float64) string {
 	telegrams := make([]string, 0, len(c))
 	for idx, c := range c {
 		telegrams = append(telegrams, makeTelegram(c, axes[idx], write[idx], data[idx]))
@@ -239,7 +231,11 @@ type ESP301 struct {
 
 // NewESP301 makes a new ESP301 motion controller instance
 func NewESP301(addr string, serial bool) *ESP301 {
-	rd := comm.NewRemoteDevice(addr, serial, nil, makeSerConf(addr))
+	rd := comm.NewRemoteDevice(addr, serial, &comm.Terminators{
+		Rx: '\r',
+		Tx: '\r',
+	}, makeSerConf(addr))
+	rd.Timeout = 10 * time.Minute
 	return &ESP301{RemoteDevice: &rd}
 }
 
@@ -250,49 +246,99 @@ func (esp *ESP301) RawCommand(cmd string) (string, error) {
 		return "", err
 	}
 	defer esp.CloseEventually()
-	r, err := esp.SendRecv([]byte(cmd))
-	if err != nil {
-		return "", err
+	if strings.Contains(cmd, "?") {
+		r, err := esp.SendRecv([]byte(cmd))
+		if err != nil {
+			return "", err
+		}
+		return string(r), nil
 	}
-	return string(r), nil
+	return "", esp.Send([]byte(cmd))
+}
 
+// Enable enables an axis
+func (esp *ESP301) Enable(axis string) error {
+	cmd := fmt.Sprintf("%sMO", axis)
+	_, err := esp.RawCommand(cmd)
+	return err
+}
+
+// Disable disables an axis
+func (esp *ESP301) Disable(axis string) error {
+	cmd := fmt.Sprintf("%sMF", axis)
+	_, err := esp.RawCommand(cmd)
+	return err
+}
+
+// GetEnabled returns if an axis is enabled.  This may not be truthy if the controller
+// threw an error, check the errors if you get disabled errors and this reports true
+func (esp *ESP301) GetEnabled(axis string) (bool, error) {
+	cmd, _ := commandFromAlias("enable-axis")
+	tele := makeTelegram(cmd, axis, false, 0)
+	resp, err := esp.RawCommand(tele)
+	if err != nil {
+		return false, err
+	}
+	return strconv.ParseBool(resp)
+}
+
+// SetVelocity sets the velocity setpoint for an axis
+func (esp *ESP301) SetVelocity(axis string, vel float64) error {
+	c, _ := commandFromAlias("set-velocity-linear")
+	tele := makeTelegram(c, axis, true, vel)
+	_, err := esp.RawCommand(tele)
+	return err
+}
+
+// GetVelocity returns the velocity setpoint for an axis
+func (esp *ESP301) GetVelocity(axis string) (float64, error) {
+	c, _ := commandFromAlias("set-velocity-linear")
+	tele := makeTelegram(c, axis, false, 0)
+	resp, err := esp.RawCommand(tele)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseFloat(resp, 64)
 }
 
 // GetPos gets the absolute position of an axis in controller units (usually mm)
-func (esp *ESP301) GetPos(axis int) (float64, error) {
+func (esp *ESP301) GetPos(axis string) (float64, error) {
 	c, _ := commandFromAlias("get-position")
 	tele := makeTelegram(c, axis, false, 0)
 	resp, err := esp.RawCommand(tele)
 	if err != nil {
 		return 0, err
 	}
-	fmt.Println(resp)
-	return 0, nil
+	return strconv.ParseFloat(resp, 64)
 }
 
-// SetPosAbs sets the absolute position of an axis in controller units (usually mm)
-func (esp *ESP301) SetPosAbs(axis int, pos float64) error {
+// MoveAbs sets the absolute position of an axis in controller units (usually mm)
+func (esp *ESP301) MoveAbs(axis string, pos float64) error {
 	c, _ := commandFromAlias("move-abs")
 	tele := makeTelegram(c, axis, true, pos)
-	resp, err := esp.RawCommand(tele)
-	fmt.Println(resp)
+	_, err := esp.RawCommand(tele)
+	return err
+}
+
+// MoveRel triggers a relative motion of an axis in controller units
+func (esp *ESP301) MoveRel(axis string, pos float64) error {
+	c, _ := commandFromAlias("move-rel")
+	tele := makeTelegram(c, axis, true, pos)
+	_, err := esp.RawCommand(tele)
 	return err
 }
 
 // Home homes an axis.
-// We use a mode 1 home forcibly, which does "Find Home and Index Signal."  This
-// This 'fully' homes either linear or rotary axes. Use RawCommand if you want
-// to do a different kind of homing
-func (esp *ESP301) Home(axis int) error {
+// mode 6, negative limit switch + home mark
+func (esp *ESP301) Home(axis string) error {
 	cmd, _ := commandFromAlias("origin-search")
 	tele := makeTelegram(cmd, axis, true, 1)
-	resp, err := esp.RawCommand(tele)
-	fmt.Println(resp)
+	_, err := esp.RawCommand(tele)
 	return err
 }
 
 // Wait waits for motion to cease and then returns nil
-func (esp *ESP301) Wait(axis int) error {
+func (esp *ESP301) Wait(axis string) error {
 	cmd, _ := commandFromAlias("wait")
 	tele := makeTelegram(cmd, axis, true, 0)
 	fmt.Println(tele)
@@ -300,7 +346,7 @@ func (esp *ESP301) Wait(axis int) error {
 }
 
 // SetFollowingErrorConfiguration sets the "following error" configuration
-func (esp *ESP301) SetFollowingErrorConfiguration(axis int, enableChecking, disableMotorPowerOnError, abortMotionOnError bool) error {
+func (esp *ESP301) SetFollowingErrorConfiguration(axis string, enableChecking, disableMotorPowerOnError, abortMotionOnError bool) error {
 	// this could be cleaner, but it is rare we need to pack bits into bytes
 	bits := [8]bool{enableChecking, disableMotorPowerOnError, abortMotionOnError, false, false, false, false, false}
 	b := byte(0)
@@ -309,7 +355,7 @@ func (esp *ESP301) SetFollowingErrorConfiguration(axis int, enableChecking, disa
 			b |= 1 << idx
 		}
 	}
-	msg := fmt.Sprintf("%dZF0%XH", axis, b)
+	msg := fmt.Sprintf("%sZF0%XH", axis, b)
 	resp, err := esp.RawCommand(msg)
 	fmt.Println(resp)
 	return err

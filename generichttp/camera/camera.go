@@ -267,13 +267,13 @@ func SetFan(t ThermalManager) http.HandlerFunc {
 // PictureTaker describes an interface to a camera which can capture images
 type PictureTaker interface {
 	// GetFrame triggers capture of a frame and returns the strided image data as 16-bit integers
-	GetFrame() ([]uint16, error)
+	GetFrame() (image.Image, error)
 
 	//GetFrameSize returns the image (width, height)
 	GetFrameSize() (int, int, error)
 
-	// Burst takes N frames at a certain framerate and returns the contiguous strided buffer for the 3D array
-	Burst(int, float64) ([]uint16, error)
+	// Burst takes N frames at a certain framerate and returns a slice of images
+	Burst(int, float64) ([]image.Image, error)
 
 	// SetExposureTime sets the exposure time
 	SetExposureTime(time.Duration) error
@@ -384,30 +384,19 @@ func GetFrame(p Camera, rec *imgrec.Recorder) http.HandlerFunc {
 			format = "jpg"
 		}
 
-		width, height, err := p.GetFrameSize()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		switch format {
 		case "jpg":
-			buf := make([]byte, len(img))
-			for idx := 0; idx < len(img); idx++ {
-				buf[idx] = byte(img[idx] / 256) // scale 16 to 8 bits
-			}
-			im := &image.Gray{Pix: buf, Stride: width, Rect: image.Rect(0, 0, width, height)}
 			w.Header().Set("Content-Type", "image/jpeg")
 			w.WriteHeader(http.StatusOK)
-			jpeg.Encode(w, im, nil)
+			jpeg.Encode(w, img, nil)
 		case "png":
-			buf := make([]byte, len(img))
-			for idx := 0; idx < len(img); idx++ {
-				buf[idx] = byte(img[idx] / 256) // scale 16 to 8 bits
-			}
-			im := &image.Gray{Pix: buf, Stride: width, Rect: image.Rect(0, 0, width, height)}
 			w.Header().Set("Content-Type", "image/png")
 			w.WriteHeader(http.StatusOK)
-			png.Encode(w, im)
+			png.Encode(w, img)
 		case "fits":
 			// ^\- for picture taker::
 			// there is some cross logic, where picturetaker introspects whether the type
@@ -437,9 +426,10 @@ func GetFrame(p Camera, rec *imgrec.Recorder) http.HandlerFunc {
 			hdr := w.Header()
 			hdr.Set("Content-Type", "image/fits")
 			hdr.Set("Content-Disposition", "attachment; filename=image.fits")
-			err = writeFits(w2, cards, img, width, height, 1)
+			err = WriteFits(w2, cards, []image.Image{img})
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
 			}
 			return
 		}
@@ -464,7 +454,6 @@ func Burst(p PictureTaker, rec *imgrec.Recorder) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		width, height, err := p.GetFrameSize()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -491,7 +480,7 @@ func Burst(p PictureTaker, rec *imgrec.Recorder) http.HandlerFunc {
 		hdr.Set("Content-Type", "image/fits")
 		hdr.Set("Content-Disposition", "attachment; filename=image.fits")
 		w.WriteHeader(http.StatusOK)
-		err = writeFits(w2, cards, img, width, height, t.Frames)
+		err = WriteFits(w2, cards, img)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
@@ -519,6 +508,8 @@ type AOIManipulator interface {
 func HTTPAOIManipulator(a AOIManipulator, table server.RouteTable) {
 	table[pat.Get("/aoi")] = GetAOI(a)
 	table[pat.Post("/aoi")] = SetAOI(a)
+	table[pat.Get("/binning")] = GetBinning(a)
+	table[pat.Post("/binning")] = SetBinning(a)
 }
 
 // SetAOI returns an HTTP handler func that sets the AOI of the camera
@@ -552,6 +543,43 @@ func GetAOI(a AOIManipulator) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		err = json.NewEncoder(w).Encode(aoi)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+}
+
+// SetBinning sets the binning over HTTP as JSON
+func SetBinning(a AOIManipulator) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		b := Binning{}
+		err := json.NewDecoder(r.Body).Decode(&b)
+		defer r.Body.Close()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		err = a.SetBinning(b)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+// Getbinning gets the binning over HTTP as JSON
+func GetBinning(a AOIManipulator) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		b, err := a.GetBinning()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		err = json.NewEncoder(w).Encode(b)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
@@ -729,7 +757,7 @@ func HTTPShutterController(s ShutterController, table server.RouteTable) {
 // Camera describes the most basic camera possible
 type Camera interface {
 	// GetFrame returns a frame from the device as a strided array
-	GetFrame() ([]uint16, error)
+	GetFrame() (image.Image, error)
 
 	//GetFrameSize gets the (W, H) of a frame
 	GetFrameSize() (int, int, error)

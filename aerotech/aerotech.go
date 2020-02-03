@@ -80,7 +80,7 @@ func NewEnsemble(addr string, serial bool, limits map[string]util.Limiter) *Ense
 	// are not terminated, so we strip them everywhere else.
 	terms := comm.Terminators{Rx: '\n', Tx: '\n'}
 	rd := comm.NewRemoteDevice(addr, false, &terms, nil)
-	rd.Timeout = 60 * time.Second // long timeout for aerotech equipment
+	rd.Timeout = 10 * time.Minute // long timeout for aerotech equipment
 	return &Ensemble{
 		RemoteDevice: &rd,
 		Limits:       limits,
@@ -210,10 +210,18 @@ func (e *Ensemble) GetPos(axis string) (float64, error) {
 func (e *Ensemble) SetVelocity(axis string, vel float64) error {
 	str := fmt.Sprintf("MOVEINC %s 0 %sF %.9f", axis, axis, vel)
 	err := e.gCodeWriteOnly(str)
-	if err != nil {
+	if err == nil {
 		e.velocities[axis] = vel
 	}
 	return err
+}
+
+// GetVelocity gets the velocity of an axis in mm/s
+func (e *Ensemble) GetVelocity(axis string) (float64, error) {
+	if vel, ok := e.velocities[axis]; ok {
+		return vel, nil
+	}
+	return 0, errors.New("velocity not known for axis, use SetVelocity to make it known")
 }
 
 // clampPos clamps an input if there is a limit set, otherwise does not modulate it
@@ -246,14 +254,6 @@ func (e *Ensemble) clampPos(axis string, input float64, relative bool) (float64,
 	}
 	// if not relative, current is zero anyway, so can always subtract it
 	return output, err
-}
-
-// GetVelocity gets the velocity of an axis in mm/s
-func (e *Ensemble) GetVelocity(axis string) (float64, error) {
-	if vel, ok := e.velocities[axis]; ok {
-		return vel, nil
-	}
-	return 0, errors.New("velocity not known for axis, use SetVelocity to make it known")
 }
 
 // Limit returns the limiter for an axis
