@@ -51,7 +51,6 @@ func (l *Locker) Locked() bool {
 func (l *Locker) Check(next http.Handler) http.Handler {
 	// return a handlerfunc wrapping a handler, middleware/generator pattern
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// if the resource is locked
 		if l.Locked() {
 			// check if the path is protected
 			protected := true

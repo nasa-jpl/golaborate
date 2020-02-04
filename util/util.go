@@ -126,6 +126,17 @@ func (l *Limiter) Clamp(input float64) float64 {
 	return Clamp(input, l.Min, l.Max)
 }
 
+// Check verifies if min < input < max, returns true if this is the case
+func (l *Limiter) Check(input float64) bool {
+	if input < l.Min {
+		return false
+	}
+	if input > l.Max {
+		return false
+	}
+	return true
+}
+
 // MergeErrors converts many errors to a single one, newline separated
 func MergeErrors(errs []error) error {
 	strs := []string{}
