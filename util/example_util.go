@@ -18,3 +18,15 @@ func ExampleArangeByte_StartEndStep() {
 	fmt.Println(ArangeByte(10, 22, 2))
 	// Output: [10 12 14 16 18 20]
 }
+
+func ExampleSetBit_MSB() {
+	out := SetBit(0, 7, true)
+	fmt.Printf("%08b\n", out)
+	// Output: 10000000
+}
+
+func ExampleSetBit_LSB() {
+	out := SetBit(255, 0, false)
+	fmt.Printf("%08b\n", out)
+	// Output: 11111110
+}

@@ -34,6 +34,16 @@ func GetBit(b byte, bitIndex uint) bool {
 	return (b>>bitIndex)&1 == 1
 }
 
+// SetBit sets a single bit in a byte
+func SetBit(in byte, bitIndex uint, high bool) byte {
+	if high {
+		in |= (1 << bitIndex)
+	} else {
+		in &= ^(1 << bitIndex)
+	}
+	return in
+}
+
 /*ArangeByte replicates np.arange for byte slices
 
 if startEnd is the only argument, it is the end value and start = 0, step = 1
