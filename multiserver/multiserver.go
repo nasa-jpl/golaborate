@@ -95,6 +95,7 @@ func BuildMux(c Config) *goji.Mux {
 	// for every node specified, build a submux
 	for _, node := range c.Nodes {
 		var httper server.HTTPer
+		middleware := []func(http.Handler) http.Handler{}
 		switch strings.ToLower(node.Type) {
 
 		case "aerotech", "ensemble":
@@ -127,8 +128,11 @@ func BuildMux(c Config) *goji.Mux {
 				}
 			}
 
-			ensemble := aerotech.NewEnsemble(node.Addr, node.Serial, limiters)
+			ensemble := aerotech.NewEnsemble(node.Addr, node.Serial)
+			limiter := motion.LimitMiddleware{Limits: limiters, Mov: ensemble}
 			httper = motion.NewHTTPMotionController(ensemble)
+			middleware = append(middleware, limiter.Check)
+			limiter.Inject(httper)
 
 		case "cryocon":
 			cryo := cryocon.NewTemperatureMonitor(node.Addr)
@@ -193,6 +197,9 @@ func BuildMux(c Config) *goji.Mux {
 
 		// add the lock middleware
 		mux.Use(lock.Check)
+		for _, ware := range middleware {
+			mux.Use(ware)
+		}
 		root.Handle(pat.New(hndlS), mux)
 	}
 	root.HandleFunc(pat.Get("/endpoints"), func(w http.ResponseWriter, r *http.Request) {

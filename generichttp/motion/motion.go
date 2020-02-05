@@ -7,14 +7,21 @@ interfaces for a motion controller, which may implement any number of them.
 There are functions which consume a type that
 */
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"go/types"
+	"io/ioutil"
 	"net/http"
 	"strconv"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/server"
 	"github.jpl.nasa.gov/HCIT/go-hcit/util"
 	"goji.io/pat"
+)
+
+var (
+	errClamped = errors.New("requested position violates software limits, aborted")
 )
 
 // Enabler describes an interface with enable/disable methods for axes
@@ -110,16 +117,21 @@ func GetPos(m Mover) http.HandlerFunc {
 	}
 }
 
+func popAxisRelative(r *http.Request) (string, bool, error) {
+	axis := pat.Param(r, "axis")
+	relative := r.URL.Query().Get("relative")
+	if relative == "" {
+		relative = "false"
+	}
+	b, err := strconv.ParseBool(relative)
+	return axis, b, err
+}
+
 // SetPos returns an HTTP handler func from a mover that triggers an absolute or
 // relative move on an axis based on the relative query parameter
 func SetPos(m Mover) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		axis := pat.Param(r, "axis")
-		relative := r.URL.Query().Get("relative")
-		if relative == "" {
-			relative = "false"
-		}
-		b, err := strconv.ParseBool(relative)
+		axis, b, err := popAxisRelative(r)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -230,27 +242,88 @@ func Initialize(i Initializer) http.HandlerFunc {
 	}
 }
 
-// Limiter is an interface which exposes a copy of its limiter on an axis
-type Limiter interface {
-	Limit(string) util.Limiter
+// LimitMiddleware is a type that can impose axis-specific limits on motion
+// it returns a boolean "notOK" that indicates if the limit would be violated
+// by a motion, stopping the chain of handling calls
+type LimitMiddleware struct {
+	// Limits contains the server imposed limits on the controller
+	Limits map[string]util.Limiter
+
+	// Mov is a reference to the mover, used to query axis positions
+	Mov Mover
 }
 
-// HTTPLimiter adds routes for the limiter to the route table
-func HTTPLimiter(l Limiter, table server.RouteTable) {
-	table[pat.Get("/axis/:axis/limits")] = Limits(l)
+// Check verifies if a motion would violate the axis limit, if it exists,
+// and if it does, responds with StatusBadRequest
+// otherwise, flows control to the next handler
+func (l *LimitMiddleware) Check(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// get the axis to move, and if the motion is relative
+		axis, relative, err := popAxisRelative(r)
+		// bail as early as possible if we don't have a limit for this axis
+		limiter, ok := l.Limits[axis]
+		if !ok {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		// get the command
+		f := server.FloatT{}
+		// downstream functions might want the body...
+		// read it all here, then "paste" it back with ioutil
+		bodyContent, _ := ioutil.ReadAll(r.Body)
+		defer r.Body.Close()
+		r.Body = ioutil.NopCloser(bytes.NewBuffer(bodyContent))
+		err = json.NewDecoder(bytes.NewReader(bodyContent)).Decode(&f)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		cmd := f.F64
+		if relative {
+			// in the relative case, shift the command by currPos
+			currPos, err := l.Mov.GetPos(axis)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			cmd += currPos
+		}
+		ok = limiter.Check(cmd)
+		if !ok {
+			http.Error(w, errClamped.Error(), http.StatusBadRequest)
+			return
+		}
+		// at this point, all checks have passed and we can move on
+		next.ServeHTTP(w, r)
+	})
+}
+
+// Inject places a /axis/:axis/limits route on the table of the HTTPer
+func (l LimitMiddleware) Inject(h server.HTTPer) {
+	h.RT()[pat.Get("/axis/:axis/limits")] = Limits(l)
 }
 
 // Limits returns an HTTP handler func that returns the limits for an axis
-func Limits(l Limiter) http.HandlerFunc {
+func Limits(l LimitMiddleware) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		axis := pat.Param(r, "axis")
-		lim := l.Limit(axis)
+		lim, ok := l.Limits[axis]
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		err := json.NewEncoder(w).Encode(lim)
+		var err error
+		if !ok {
+			err = json.NewEncoder(w).Encode(nil)
+		} else {
+			err = json.NewEncoder(w).Encode(lim)
+		}
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
+		return
 	}
 }
 
@@ -280,9 +353,6 @@ func NewHTTPMotionController(c Controller) HTTPMotionController {
 	}
 	if speeder, ok := interface{}(c).(Speeder); ok {
 		HTTPSpeed(speeder, rt)
-	}
-	if Limiter, ok := interface{}(c).(Limiter); ok {
-		HTTPLimiter(Limiter, rt)
 	}
 	if initializer, ok := interface{}(c).(Initializer); ok {
 		HTTPInitialize(initializer, rt)

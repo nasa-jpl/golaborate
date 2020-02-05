@@ -49,10 +49,6 @@ const (
 	BadReqCode = byte(33)
 )
 
-var (
-	errClamped = errors.New("requested position violates software limits, aborted, is the axis enabled?")
-)
-
 // ErrBadResponse is generated when a bad response comes from the controller
 type ErrBadResponse struct {
 	resp string
@@ -66,16 +62,13 @@ func (e ErrBadResponse) Error() string {
 type Ensemble struct {
 	*comm.RemoteDevice
 
-	// Limits contains the server imposed limits on the controller
-	Limits map[string]util.Limiter
-
 	// velocities holds the velocities of the axes; the controller does not allow this to be queried, so we store it here
 	velocities map[string]float64
 }
 
 // NewEnsemble returns a new Ensemble instance with the remote
 // device preconfigured
-func NewEnsemble(addr string, serial bool, limits map[string]util.Limiter) *Ensemble {
+func NewEnsemble(addr string, serial bool) *Ensemble {
 	// we actually need \r terminators on both sides, but ACK responses
 	// are not terminated, so we strip them everywhere else.
 	terms := comm.Terminators{Rx: '\n', Tx: '\n'}
@@ -83,7 +76,6 @@ func NewEnsemble(addr string, serial bool, limits map[string]util.Limiter) *Ense
 	rd.Timeout = 10 * time.Minute // long timeout for aerotech equipment
 	return &Ensemble{
 		RemoteDevice: &rd,
-		Limits:       limits,
 		velocities:   map[string]float64{}}
 }
 
@@ -158,28 +150,12 @@ func (e *Ensemble) Home(axis string) error {
 
 // MoveAbs commands the controller to move an axis to an absolute position
 func (e *Ensemble) MoveAbs(axis string, pos float64) error {
-	set := pos
-	set, err := e.clampPos(axis, pos, false)
-	if err != nil {
-		return err
-	}
-	if set != pos {
-		return errClamped
-	}
 	posS := strconv.FormatFloat(pos, 'G', -1, 64)
 	return e.gCodeWriteOnly("MOVEABS", axis, posS)
 }
 
 // MoveRel commands the controller to move an axis an incremental distance
 func (e *Ensemble) MoveRel(axis string, dist float64) error {
-	set := dist
-	set, err := e.clampPos(axis, dist, true)
-	if err != nil {
-		return err
-	}
-	if set != dist {
-		return errClamped
-	}
 	posS := strconv.FormatFloat(dist, 'G', -1, 64)
 	return e.gCodeWriteOnly("MOVEINC", axis, posS)
 }
@@ -222,41 +198,4 @@ func (e *Ensemble) GetVelocity(axis string) (float64, error) {
 		return vel, nil
 	}
 	return 0, errors.New("velocity not known for axis, use SetVelocity to make it known")
-}
-
-// clampPos clamps an input if there is a limit set, otherwise does not modulate it
-func (e *Ensemble) clampPos(axis string, input float64, relative bool) (float64, error) {
-	var (
-		current float64
-		output  float64
-		err     error = nil
-	)
-	if relative { // the input needs to be translated to an absolute to apply the limit.
-		current, err = e.GetPos(axis)
-		if err != nil {
-			return input, err
-		}
-		input += current
-	}
-	if limiter, ok := e.Limits[axis]; ok {
-		if (limiter.Max != 0) || (limiter.Min != 0) {
-			// the alternative is uninitialized
-			output = limiter.Clamp(input)
-			if relative && (output != input) {
-				return 0, nil
-			}
-		}
-	} else {
-		output = input
-	}
-	if relative {
-		output -= current
-	}
-	// if not relative, current is zero anyway, so can always subtract it
-	return output, err
-}
-
-// Limit returns the limiter for an axis
-func (e *Ensemble) Limit(axis string) util.Limiter {
-	return e.Limits[axis]
 }
