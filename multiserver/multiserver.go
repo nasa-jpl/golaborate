@@ -129,11 +129,26 @@ func BuildMux(c Config) *goji.Mux {
 				}
 			}
 
-			ensemble := aerotech.NewEnsemble(node.Addr, node.Serial)
-			limiter := motion.LimitMiddleware{Limits: limiters, Mov: ensemble}
-			httper = motion.NewHTTPMotionController(ensemble)
-			middleware = append(middleware, limiter.Check)
-			limiter.Inject(httper)
+			switch typ {
+			case "aerotech", "ensemble":
+				ensemble := aerotech.NewEnsemble(node.Addr, node.Serial)
+				limiter := motion.LimitMiddleware{Limits: limiters, Mov: ensemble}
+				httper = motion.NewHTTPMotionController(ensemble)
+				middleware = append(middleware, limiter.Check)
+				limiter.Inject(httper)
+			case "esp", "esp300", "esp301":
+				esp := newport.NewESP301(node.Addr, node.Serial)
+				limiter := motion.LimitMiddleware{Limits: limiters, Mov: esp}
+				httper := motion.NewHTTPMotionController(esp)
+				middleware = append(middleware, limiter.Check)
+				limiter.Inject(httper)
+			case "xps":
+				xps := newport.NewXPS(node.Addr)
+				limiter := motion.LimitMiddleware{Limits: limiters, Mov: xps}
+				httper := motion.NewHTTPMotionController(xps)
+				middleware = append(middleware, limiter.Check)
+				limiter.Inject(httper)
+			}
 
 		case "cryocon":
 			cryo := cryocon.NewTemperatureMonitor(node.Addr)
