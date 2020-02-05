@@ -14,6 +14,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/server"
 	"github.jpl.nasa.gov/HCIT/go-hcit/util"
@@ -258,6 +259,10 @@ type LimitMiddleware struct {
 // otherwise, flows control to the next handler
 func (l *LimitMiddleware) Check(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.String(), "pos") || r.Method != http.MethodPost {
+			next.ServeHTTP(w, r)
+			return
+		}
 		// get the axis to move, and if the motion is relative
 		axis, relative, err := popAxisRelative(r)
 		// bail as early as possible if we don't have a limit for this axis
