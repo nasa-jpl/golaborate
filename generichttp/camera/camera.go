@@ -272,14 +272,87 @@ type PictureTaker interface {
 	//GetFrameSize returns the image (width, height)
 	GetFrameSize() (int, int, error)
 
-	// Burst takes N frames at a certain framerate and returns a slice of images
-	Burst(int, float64) ([]image.Image, error)
-
 	// SetExposureTime sets the exposure time
 	SetExposureTime(time.Duration) error
 
 	// GetExposureTime gets the exposure time
 	GetExposureTime() (time.Duration, error)
+}
+
+// Burster describes an interface of a camera that may take a burst of frames
+type Burster interface {
+	// Burst takes N frames at a certain framerate and writes them to the provided channel
+	Burst(int, float64, chan<- image.Image) error
+}
+
+// BurstWrapper is a type that holds the internal buffer for a burst of camera
+// frames
+type BurstWrapper struct {
+	// ch is the channel of images streamed from the camera
+	ch chan image.Image
+
+	// errCh is the channel that will receive an error from Burst if it occurs
+	errCh chan error
+
+	// B is the bursty camera
+	B Burster
+
+	// spoolSize is the size of the buffer to use on the channel. (measured in frames)
+	// If Zero, the spool will be set to the size of the burst, which may result in out of memory for
+	// long bursts
+	spoolSize int
+}
+
+// SetupBurst returns a function which triggers the burst on the camera
+func (b *BurstWrapper) SetupBurst(w http.ResponseWriter, r *http.Request) {
+	t := struct {
+		FPS    float64 `json:"fps"`
+		Frames int     `json:"frames"`
+		Spool  int     `json:"spool"`
+	}{}
+	err := json.NewDecoder(r.Body).Decode(&t)
+	defer r.Body.Close()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if t.Spool == 0 {
+		t.Spool = int(float64(t.Frames) * t.FPS)
+	}
+	ch := make(chan image.Image, t.Spool)
+	go func() {
+		b.errCh <- b.B.Burst(t.Frames, t.FPS, ch)
+	}()
+	w.WriteHeader(http.StatusOK)
+	return
+}
+
+// ReadFrame returns one frame from the buffer, as FITS, over HTTP
+func (b *BurstWrapper) ReadFrame(w http.ResponseWriter, r *http.Request) {
+	select {
+	case err := <-b.errCh:
+		// there was an error, feedback to the burst to stop by closing the channel
+		close(b.ch)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	case <-time.After(2 * time.Second): // if you're doing a burst the frames should come far faster than this
+		// feedback to the burst
+		close(b.ch)
+		http.Error(w, "timeout waiting for frame from the camera", http.StatusInternalServerError)
+		return
+	case img := <-b.ch:
+		err := WriteFits(w, []fitsio.Card{}, []image.Image{img})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+}
+
+// Inject puts burst management routes on a table
+func (b *BurstWrapper) Inject(table server.RouteTable) {
+	table[pat.Post("/burst/setup")] = b.SetupBurst
+	table[pat.Get("/burst/frame")] = b.ReadFrame
 }
 
 // MetadataMaker can produce an array of FITS cards
@@ -293,7 +366,6 @@ func HTTPPicture(p PictureTaker, table server.RouteTable, rec *imgrec.Recorder) 
 	table[pat.Get("/exposure-time")] = GetExposureTime(p)
 	table[pat.Post("/exposure-time")] = SetExposureTime(p)
 	table[pat.Get("/image")] = GetFrame(p, rec)
-	table[pat.Get("/burst")] = Burst(p, rec)
 }
 
 // SetExposureTime sets the exposure time on a POST request.
@@ -384,10 +456,6 @@ func GetFrame(p Camera, rec *imgrec.Recorder) http.HandlerFunc {
 			format = "jpg"
 		}
 
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
 		switch format {
 		case "jpg":
 			w.Header().Set("Content-Type", "image/jpeg")
@@ -433,58 +501,6 @@ func GetFrame(p Camera, rec *imgrec.Recorder) http.HandlerFunc {
 			}
 			return
 		}
-	}
-}
-
-// Burst takes a burst of N frames at M fps and returns it as a fits image cube
-func Burst(p PictureTaker, rec *imgrec.Recorder) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		t := struct {
-			FPS    float64 `json:"fps"`
-			Frames int     `json:"frames"`
-		}{}
-		err := json.NewDecoder(r.Body).Decode(&t)
-		defer r.Body.Close()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		img, err := p.Burst(t.Frames, t.FPS)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		cards := []fitsio.Card{}
-		if carder, ok := interface{}(p).(MetadataMaker); ok {
-			cards = carder.CollectHeaderMetadata()
-		}
-		// mutate the header version because this is a burst.
-		// Opportunity for a bug here if the first card isn't a header version tag,
-		// but we wouldn't violate that design, would we?
-		cards[0].Value = cards[0].Value.(string) + "+burst" // inject burst modifier to header version
-		cards = append(cards, fitsio.Card{Name: "fps", Value: t.FPS, Comment: "frame rate"})
-
-		var w2 io.Writer
-		if rec != nil && rec.Enabled && rec.Root != "" {
-			// if it is "", the recorder is not to be used
-			w2 = io.MultiWriter(w, rec)
-			defer rec.Incr()
-		} else {
-			w2 = w
-		}
-		hdr := w.Header()
-		hdr.Set("Content-Type", "image/fits")
-		hdr.Set("Content-Disposition", "attachment; filename=image.fits")
-		w.WriteHeader(http.StatusOK)
-		err = WriteFits(w2, cards, img)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-		return
 	}
 }
 
@@ -787,6 +803,11 @@ func NewHTTPCamera(p PictureTaker, rec *imgrec.Recorder) HTTPCamera {
 	}
 	if sh, ok := interface{}(p).(ShutterController); ok {
 		HTTPShutterController(sh, rt)
+	}
+	if b, ok := interface{}(p).(Burster); ok {
+		wrap := BurstWrapper{B: b}
+		wrap.Inject(rt)
+
 	}
 
 	w.RouteTable = rt

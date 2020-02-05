@@ -138,6 +138,8 @@ var (
 type Camera struct {
 	// buffer is written to by the SDK.
 	// It must be 8-byte aligned.
+	// uint64 causes the Go runtime to guarantee 8-byte alignment
+	// and we use dtype hacking via unsafe.SliceHeader so the type is not actually important
 	buffer []uint64
 
 	// cptr is a C pointer to the first byte in buffer
@@ -602,9 +604,77 @@ func (c *Camera) GetFrame() (image.Image, error) {
 	return dst, nil
 }
 
-// Burst performs a burst by taking N images at M fps
-func (c *Camera) Burst(frames int, fps float64) ([]image.Image, error) {
-	return nil, nil
+// Burst performs a burst by taking N images at M fps.  The images are streamed to ch, and are image.Gray16.
+func (c *Camera) Burst(frames int, fps float64, ch chan<- image.Image) error {
+
+	// get the previous framerate so we can reset to this like a good neighbor
+	prevFps, err := GetFloat(c.Handle, "FrameRate")
+	if err != nil {
+		return err
+	}
+
+	prevCycle, err := GetEnumString(c.Handle, "CycleMode")
+	if err != nil {
+		return err
+	}
+
+	IssueCommand(c.Handle, "AcquisitionStop")
+
+	aoi, err := c.GetAOI()
+	if err != nil {
+		return err
+	}
+
+	err = c.QueueBuffer()
+	if err != nil {
+		return err
+	}
+	err = SetEnumString(c.Handle, "CycleMode", "Continuous")
+	if err != nil {
+		return err
+	}
+	// now start acq and begin handling buffers
+	err = SetFloat(c.Handle, "FrameRate", fps)
+	if err != nil {
+		return err
+	}
+
+	// get the exposure time so we know how long to wait for a buffer
+	expT, err := c.GetExposureTime()
+	if err != nil {
+		return err
+	}
+	waitT := expT + time.Second
+
+	err = IssueCommand(c.Handle, "AcquisitionStart")
+
+	for idx := 0; idx < frames; idx++ {
+		err = c.QueueBuffer()
+		if err != nil {
+			return err
+		}
+		err := c.WaitBuffer(waitT)
+		if err != nil {
+			return err
+		}
+		buf, err := c.unpadBuffer()
+		if err != nil {
+			return err
+		}
+		im := &image.Gray16{Pix: buf, Stride: aoi.Height * 2, Rect: image.Rect(0, 0, aoi.Height, aoi.Width)} // swap W, H -- still in detector coordinates
+		g := gift.New(
+			gift.Rotate90(),
+		)
+		rect := g.Bounds(im.Bounds())
+		dst := image.NewGray16(rect)
+		g.Draw(dst, im)
+		ch <- dst
+	}
+
+	// finally, reset the camera to how it was when we started
+	err = SetFloat(c.Handle, "FrameRate", prevFps)
+	err = SetEnumString(c.Handle, "CycleMode", prevCycle)
+	return err
 }
 
 func (c *Camera) unpadBuffer() ([]byte, error) {

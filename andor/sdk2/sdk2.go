@@ -1010,9 +1010,9 @@ func (c *Camera) GetFrame() (image.Image, error) {
 	return ret, err
 }
 
-// Burst takes a chunk of pictures and returns them as one contiguous buffer
-func (c *Camera) Burst(frames int, fps float64) ([]image.Image, error) {
-	return []image.Image{}, fmt.Errorf("not implemented")
+// Burst takes a chunk of pictures and sends htem on a channel
+func (c *Camera) Burst(frames int, fps float64, ch chan<- image.Image) error {
+	return fmt.Errorf("not implemented")
 }
 
 // GetSerialNumber returns the serial number as an integer
