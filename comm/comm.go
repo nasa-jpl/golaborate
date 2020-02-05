@@ -135,8 +135,10 @@ type RemoteDevice struct {
 	Timeout time.Duration
 
 	// Conn holds the TCP or Serial connection
-	Conn     io.ReadWriteCloser
-	lastComm time.Time
+	Conn io.ReadWriteCloser
+
+	// LastComm holds the last communication time
+	LastComm time.Time
 	txTerm   byte
 	rxTerm   byte
 
@@ -258,7 +260,7 @@ func (rd *RemoteDevice) Close() error {
 
 func (rd *RemoteDevice) closeMaybe() error {
 	now := time.Now()
-	if now.Sub(rd.lastComm) < closeDelay {
+	if now.Sub(rd.LastComm) < closeDelay {
 		return errCloseTooSoon
 	}
 	return rd.Close()
@@ -295,7 +297,7 @@ func (rd *RemoteDevice) Send(b []byte) error {
 
 	b = append(b, rd.txTerm)
 	_, err := rd.Conn.Write(b)
-	rd.lastComm = time.Now()
+	rd.LastComm = time.Now()
 	return err
 }
 
@@ -306,7 +308,7 @@ func (rd *RemoteDevice) Recv() ([]byte, error) {
 	}
 	term := rd.rxTerm
 	buf, err := bufio.NewReader(rd.Conn).ReadBytes(term)
-	rd.lastComm = time.Now()
+	rd.LastComm = time.Now()
 	if err != nil {
 		return []byte{}, err
 	}

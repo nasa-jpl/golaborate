@@ -320,6 +320,7 @@ func (xps *XPS) openReadWriteClose(cmd string) (xpsResponse, error) {
 	if err != nil {
 		return resp, err
 	}
+	defer func() { xps.LastComm = time.Now() }()
 	defer xps.CloseEventually()
 	msg := []byte(cmd)
 	n, err := xps.Conn.Write(msg)
