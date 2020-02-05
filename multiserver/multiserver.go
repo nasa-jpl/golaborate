@@ -96,9 +96,10 @@ func BuildMux(c Config) *goji.Mux {
 	for _, node := range c.Nodes {
 		var httper server.HTTPer
 		middleware := []func(http.Handler) http.Handler{}
-		switch strings.ToLower(node.Type) {
+		typ := strings.ToLower(node.Type)
+		switch typ {
 
-		case "aerotech", "ensemble":
+		case "aerotech", "ensemble", "esp", "esp300", "esp301", "xps":
 			/* the limits are encoded as:
 			Args:
 				Limits:
@@ -155,14 +156,6 @@ func BuildMux(c Config) *goji.Mux {
 		case "lesker", "kjc":
 			kjc := lesker.NewSensor(node.Addr, node.Serial)
 			httper = commonpressure.NewHTTPWrapper(*kjc)
-
-		case "esp", "esp300", "esp301":
-			esp := newport.NewESP301(node.Addr, node.Serial)
-			httper = motion.NewHTTPMotionController(esp)
-
-		case "xps":
-			xps := newport.NewXPS(node.Addr)
-			httper = motion.NewHTTPMotionController(xps)
 
 		case "nkt", "superk":
 			skE := nkt.NewSuperKExtreme(node.Addr, node.Serial)
