@@ -3,6 +3,7 @@ package util
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -161,4 +162,18 @@ func MergeErrors(errs []error) error {
 		return nil
 	}
 	return err
+}
+
+// ClosestIndex returns the index of the closest element in the slice to the given value
+func ClosestIndex(values []float64, test float64) int {
+	lowestIdx := 0
+	lowestDiff := math.Inf(1)
+	for idx := 0; idx < len(values); idx++ {
+		diff := math.Abs(values[idx] - test)
+		if diff < lowestDiff {
+			lowestIdx = idx
+			lowestDiff = diff
+		}
+	}
+	return lowestIdx
 }
