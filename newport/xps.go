@@ -16,6 +16,7 @@ OR
 import (
 	"errors"
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -320,6 +321,8 @@ func (xps *XPS) openReadWriteClose(cmd string) (xpsResponse, error) {
 	if err != nil {
 		return resp, err
 	}
+	conn := (xps.RemoteDevice.Conn).(net.Conn)
+	conn.SetDeadline(time.Now().Add(xps.Timeout))
 	defer func() { xps.LastComm = time.Now() }()
 	defer xps.CloseEventually()
 	msg := []byte(cmd)
