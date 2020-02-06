@@ -3,11 +3,15 @@ package thermocube
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"math"
+	"net/http"
 	"time"
 
 	"github.com/tarm/serial"
 	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
+	"github.jpl.nasa.gov/HCIT/go-hcit/generichttp/thermal"
+	"github.jpl.nasa.gov/HCIT/go-hcit/server"
 	"github.jpl.nasa.gov/HCIT/go-hcit/temperature"
 	"github.jpl.nasa.gov/HCIT/go-hcit/util"
 )
@@ -167,8 +171,8 @@ func (c *Chiller) Read(d Datagram) ([]byte, error) {
 	return buf, nil
 }
 
-// GetSetpoint gets the current setpoint of the thermocube in Celcius
-func (c *Chiller) GetSetpoint() (float64, error) {
+// GetTemperatureSetpoint gets the current setpoint of the thermocube in Celcius
+func (c *Chiller) GetTemperatureSetpoint() (float64, error) {
 	d := Datagram{
 		Remote: RemoteOn,
 		On:     RemoteOn,
@@ -181,8 +185,8 @@ func (c *Chiller) GetSetpoint() (float64, error) {
 	return float64(DecodeTemp(resp)), nil
 }
 
-// SetSetpoint sets the current setpoint of the thermocube in celcius
-func (c *Chiller) SetSetpoint(t float64) error {
+// SetTemperatureSetpoint sets the current setpoint of the thermocube in celcius
+func (c *Chiller) SetTemperatureSetpoint(t float64) error {
 	d := Datagram{
 		Remote: RemoteOn,
 		On:     RemoteOn,
@@ -224,4 +228,39 @@ func (c *Chiller) GetFaults() (FaultState, error) {
 func (c *Chiller) GetTankLevelLow() (bool, error) {
 	fs, err := c.GetFaults()
 	return fs.TankLevelLow, err
+}
+
+// HTTPChiller is an HTTP wrapper around the thermocube
+type HTTPChiller struct {
+	server.RouteTable
+
+	c *Chiller
+}
+
+// NewHTTPChiller returns a new HTTP wrapper around the chiller
+func NewHTTPChiller(c *Chiller) HTTPChiller {
+	rt := server.RouteTable{}
+	thermal.HTTPController(c, rt)
+	return HTTPChiller{RouteTable: rt, c: c}
+}
+
+// RT satisfies server.HTTPer
+func (h HTTPChiller) RT() server.RouteTable {
+	return h.RouteTable
+}
+
+// Faults pipes the faults back over HTTP
+func (h HTTPChiller) Faults(w http.ResponseWriter, r *http.Request) {
+	f, err := h.c.GetFaults()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	err = json.NewEncoder(w).Encode(f)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }

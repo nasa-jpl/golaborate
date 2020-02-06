@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/server/middleware/locker"
+	"github.jpl.nasa.gov/HCIT/go-hcit/thermocube"
 	"github.jpl.nasa.gov/HCIT/go-hcit/thorlabs"
 	"github.jpl.nasa.gov/HCIT/go-hcit/util"
 
@@ -184,6 +185,10 @@ func BuildMux(c Config) *goji.Mux {
 			}
 			httper = laser.NewHTTPLaserController(itc)
 			ascii.InjectRawComm(httper, itc)
+
+		case "thermocube", "chiller":
+			chiller := thermocube.NewChiller(node.Addr, node.Serial)
+			httper = thermocube.NewHTTPChiller(chiller)
 
 		default:
 			continue // could be an empty entry in the list of nodes
