@@ -81,12 +81,14 @@ Hardware and matching "type" fields, case insensitive, alphabetical by vendor:
 - IXL Lightwave
 	> LDC3916, "lightwave", "ldc3916", "ixl"
 - Lesker
-	> KJC pressure sensor
+	> KJC pressure sensor, "kjc", "lesker"
 - Newport
 	> ESP300 / ESP301 "esp", "esp300", "esp301"
 	> XPS "xps"
 - NKT
 	> SuperK Extreme / SuperK Varia "nkt", "superk"
+- Thermocube
+	> 200, 300, 400 series "cube" fluid temperature controllers, "thermocube"
 - Thorlabs
 	> ITC 4000 series "itc4000", "tl-laser-diode"
 `
