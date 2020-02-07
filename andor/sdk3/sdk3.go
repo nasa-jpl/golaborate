@@ -895,10 +895,6 @@ func (c *Camera) CollectHeaderMetadata() []fitsio.Card {
 		fitsio.Card{Name: "AOIW", Value: aoi.Width, Comment: "AOI width, px"},
 		fitsio.Card{Name: "AOIH", Value: aoi.Height, Comment: "AOI height, px"},
 		fitsio.Card{Name: "AOIB", Value: binS, Comment: "AOI Binning, HxV"},
-
-		// needed for uint16 encoding
-		fitsio.Card{Name: "BZERO", Value: 32768},
-		fitsio.Card{Name: "BSCALE", Value: 1.0}}
 }
 
 // Configure takes a map of interfaces and calls Set_xxx for each, where

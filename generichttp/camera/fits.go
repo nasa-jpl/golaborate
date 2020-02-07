@@ -11,6 +11,7 @@ import (
 
 // WriteFits streams a fits file to w
 func WriteFits(w io.Writer, metadata []fitsio.Card, imgs []image.Image) error {
+	metadata = append(metadata, fitsio.Card{Name: "BZERO", Value: 32768}, fitsio.Card{Name: "BSCALE", Value: 1.0})
 	nframes := len(imgs)
 	b := imgs[0].Bounds()
 	width, height := b.Dx(), b.Dy()
