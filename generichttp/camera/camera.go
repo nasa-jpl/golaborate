@@ -296,11 +296,6 @@ type BurstWrapper struct {
 
 	// B is the bursty camera
 	B Burster
-
-	// spoolSize is the size of the buffer to use on the channel. (measured in frames)
-	// If Zero, the spool will be set to the size of the burst, which may result in out of memory for
-	// long bursts
-	spoolSize int
 }
 
 // SetupBurst returns a function which triggers the burst on the camera
@@ -341,8 +336,13 @@ func (b *BurstWrapper) ReadFrame(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "timeout waiting for frame from the camera", http.StatusInternalServerError)
 		return
 	case img := <-b.ch:
+		hdr := w.Header()
+		hdr.Set("Content-Type", "image/fits")
+		hdr.Set("Content-Disposition", "attachment; filename=image.fits")
+		w.WriteHeader(http.StatusOK)
 		err := WriteFits(w, []fitsio.Card{}, []image.Image{img})
 		if err != nil {
+			fmt.Println(err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -494,6 +494,7 @@ func GetFrame(p Camera, rec *imgrec.Recorder) http.HandlerFunc {
 			hdr := w.Header()
 			hdr.Set("Content-Type", "image/fits")
 			hdr.Set("Content-Disposition", "attachment; filename=image.fits")
+			w.WriteHeader(http.StatusOK)
 			err = WriteFits(w2, cards, []image.Image{img})
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
