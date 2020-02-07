@@ -79,17 +79,18 @@ var (
 		"TimestampClockFrequency": "int",
 
 		// bools
-		"CameraAcquiring":       "bool",
-		"EventEnable":           "bool",
-		"FullAOIControl":        "bool",
-		"IOInvert":              "bool",
-		"MetadataEnable":        "bool",
-		"MetadataFrame":         "bool",
-		"MetadataTimestamp":     "bool",
-		"Overlap":               "bool", // TODO: see if enabling this fixes fast shutter problems
-		"SensorCooling":         "bool",
-		"SpuriousNoiseFilter":   "bool",
-		"SynchronousTriggering": "bool",
+		"CameraAcquiring":         "bool",
+		"EventEnable":             "bool",
+		"FullAOIControl":          "bool",
+		"IOInvert":                "bool",
+		"MetadataEnable":          "bool",
+		"MetadataFrame":           "bool",
+		"MetadataTimestamp":       "bool",
+		"Overlap":                 "bool", // TODO: see if enabling this fixes fast shutter problems
+		"SensorCooling":           "bool",
+		"SpuriousNoiseFilter":     "bool",
+		"StaticBlemishCorrection": "bool",
+		"SynchronousTriggering":   "bool",
 
 		// commands
 		"AcquisitionStart":    "command",
