@@ -618,12 +618,6 @@ func (c *Camera) Burst(frames int, fps float64, ch chan<- image.Image) error {
 		return err
 	}
 
-	defer func() {
-		IssueCommand(c.Handle, "AcquisitionStop")
-		SetFloat(c.Handle, "FrameRate", prevFps)
-		SetEnumString(c.Handle, "CycleMode", prevCycle)
-	}()
-
 	IssueCommand(c.Handle, "AcquisitionStop")
 
 	aoi, err := c.GetAOI()
@@ -644,6 +638,12 @@ func (c *Camera) Burst(frames int, fps float64, ch chan<- image.Image) error {
 	if err != nil {
 		return err
 	}
+
+	defer func() {
+		IssueCommand(c.Handle, "AcquisitionStop")
+		SetFloat(c.Handle, "FrameRate", prevFps)
+		SetEnumString(c.Handle, "CycleMode", prevCycle)
+	}()
 
 	// get the exposure time so we know how long to wait for a buffer
 	expT, err := c.GetExposureTime()
