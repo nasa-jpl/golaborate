@@ -325,6 +325,8 @@ func (xps *XPS) openReadWriteClose(cmd string) (xpsResponse, error) {
 	conn.SetDeadline(time.Now().Add(xps.Timeout))
 	defer func() { xps.LastComm = time.Now() }()
 	defer xps.CloseEventually()
+	xps.Lock()
+	defer xps.Unlock()
 	msg := []byte(cmd)
 	n, err := xps.Conn.Write(msg)
 	if err != nil {
