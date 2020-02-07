@@ -618,6 +618,12 @@ func (c *Camera) Burst(frames int, fps float64, ch chan<- image.Image) error {
 		return err
 	}
 
+	defer func() {
+		IssueCommand(c.Handle, "AcquisitionStop")
+		SetFloat(c.Handle, "FrameRate", prevFps)
+		SetEnumString(c.Handle, "CycleMode", prevCycle)
+	}()
+
 	IssueCommand(c.Handle, "AcquisitionStop")
 
 	aoi, err := c.GetAOI()
@@ -670,10 +676,6 @@ func (c *Camera) Burst(frames int, fps float64, ch chan<- image.Image) error {
 		g.Draw(dst, im)
 		ch <- dst
 	}
-
-	// finally, reset the camera to how it was when we started
-	err = SetFloat(c.Handle, "FrameRate", prevFps)
-	err = SetEnumString(c.Handle, "CycleMode", prevCycle)
 	return err
 }
 
