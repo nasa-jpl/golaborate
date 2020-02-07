@@ -319,9 +319,9 @@ func (b *BurstWrapper) SetupBurst(w http.ResponseWriter, r *http.Request) {
 	if t.Spool == 0 {
 		t.Spool = int(float64(t.Frames) * t.FPS)
 	}
-	ch := make(chan image.Image, t.Spool)
+	b.ch = make(chan image.Image, t.Spool)
 	go func() {
-		b.errCh <- b.B.Burst(t.Frames, t.FPS, ch)
+		b.errCh <- b.B.Burst(t.Frames, t.FPS, b.ch)
 	}()
 	w.WriteHeader(http.StatusOK)
 	return

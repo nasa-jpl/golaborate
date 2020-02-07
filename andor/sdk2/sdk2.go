@@ -1117,7 +1117,7 @@ func (c *Camera) CollectHeaderMetadata() []fitsio.Card {
 		fitsio.Card{Name: "AOIT", Value: aoi.Top, Comment: "1-based top pixel of the AOI"},
 		fitsio.Card{Name: "AOIW", Value: aoi.Width, Comment: "AOI width, px"},
 		fitsio.Card{Name: "AOIH", Value: aoi.Height, Comment: "AOI height, px"},
-		fitsio.Card{Name: "AOIB", Value: binS, Comment: "AOI Binning, HxV"},
+		fitsio.Card{Name: "AOIB", Value: binS, Comment: "AOI Binning, HxV"}}
 }
 
 // Configure sets many values for the camera at once
