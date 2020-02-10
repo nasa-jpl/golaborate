@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"math"
+	"net"
 	"net/http"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.jpl.nasa.gov/HCIT/go-hcit/server"
 	"github.jpl.nasa.gov/HCIT/go-hcit/temperature"
 	"github.jpl.nasa.gov/HCIT/go-hcit/util"
+	"goji.io/pat"
 )
 
 // Direction describes the flow of data
@@ -66,7 +68,10 @@ func DecodeFault(fault byte) FaultState {
 
 // DecodeTemp decodes the temperature and returns it as Celcius
 func DecodeTemp(data []byte) temperature.Celsius {
-	return temperature.Celsius(0)
+	u := binary.LittleEndian.Uint16(data)
+	f := float64(u) / 10
+	F := temperature.Fahrenheit(f)
+	return temperature.F2C(F)
 }
 
 // EncodeTemp encodes a temperature how the thermocube wants it
@@ -74,7 +79,7 @@ func EncodeTemp(t temperature.Celsius) []byte {
 	f := temperature.C2F(t)
 	i := uint16(math.Round(float64(f) * 10))
 	buf := make([]byte, 2)
-	binary.BigEndian.PutUint16(buf, i)
+	binary.LittleEndian.PutUint16(buf, i)
 	return buf
 }
 
@@ -109,7 +114,7 @@ func (d Datagram) Encode() []byte {
 	cmd = util.SetBit(cmd, 7, bool(d.Remote))
 	cmd = util.SetBit(cmd, 6, bool(d.On))
 	cmd = util.SetBit(cmd, 5, bool(d.Dir))
-	for idx := 4; idx > 0; idx-- {
+	for idx := 4; idx > -1; idx-- {
 		cmd = util.SetBit(cmd, uint(idx), d.Param[4-idx])
 	}
 	ret := []byte{cmd}
@@ -139,13 +144,20 @@ type Chiller struct {
 func NewChiller(addr string, serial bool) *Chiller {
 	// NewESP301 makes a new ESP301 motion controller instance
 	rd := comm.NewRemoteDevice(addr, serial, nil, makeSerConf(addr))
-	rd.Timeout = 10 * time.Minute
+	rd.Timeout = 3 * time.Second
 	return &Chiller{RemoteDevice: &rd}
 }
 
 // Write sends a datagram to the controller.  The direction should be HostToChiller.
 func (c *Chiller) Write(d Datagram) error {
 	bytes := d.Encode()
+	c.Lock()
+	defer c.Unlock()
+	c.LastComm = time.Now()
+	conn, ok := (c.RemoteDevice.Conn).(net.Conn)
+	if ok {
+		conn.SetDeadline(time.Now().Add(c.Timeout))
+	}
 	_, err := c.RemoteDevice.Conn.Write(bytes)
 	return err
 }
@@ -159,8 +171,20 @@ func (c *Chiller) Read(d Datagram) ([]byte, error) {
 	case ParamFluidTemp, ParamSetPoint:
 		nbytes = 2
 	}
-	recieved := 0
 	buf := make([]byte, nbytes)
+	c.Lock()
+	defer c.Unlock()
+	// send the message to the cube
+	gram := d.Encode()
+	conn, ok := (c.RemoteDevice.Conn).(net.Conn)
+	if ok {
+		conn.SetDeadline(time.Now().Add(c.Timeout))
+	}
+	_, err := c.RemoteDevice.Conn.Write(gram)
+	if err != nil {
+		return buf, err
+	}
+	recieved := 0
 	for recieved < nbytes {
 		n, err := c.RemoteDevice.Conn.Read(buf)
 		recieved += n
@@ -168,6 +192,7 @@ func (c *Chiller) Read(d Datagram) ([]byte, error) {
 			return buf, err
 		}
 	}
+	c.LastComm = time.Now()
 	return buf, nil
 }
 
@@ -178,6 +203,11 @@ func (c *Chiller) GetTemperatureSetpoint() (float64, error) {
 		On:     RemoteOn,
 		Dir:    ChillerToHost,
 		Param:  ParamSetPoint}
+	err := c.Open()
+	defer c.CloseEventually()
+	if err != nil {
+		return 0, err
+	}
 	resp, err := c.Read(d)
 	if err != nil {
 		return 0, err
@@ -193,6 +223,12 @@ func (c *Chiller) SetTemperatureSetpoint(t float64) error {
 		Dir:    HostToChiller,
 		Param:  ParamSetPoint,
 		Data:   EncodeTemp(temperature.Celsius(t))}
+
+	err := c.Open()
+	if err != nil {
+		return err
+	}
+	defer c.CloseEventually()
 	return c.Write(d)
 }
 
@@ -203,6 +239,12 @@ func (c *Chiller) GetTemperature() (float64, error) {
 		On:     RemoteOn,
 		Dir:    ChillerToHost,
 		Param:  ParamFluidTemp}
+
+	err := c.Open()
+	if err != nil {
+		return 0, err
+	}
+	defer c.CloseEventually()
 	resp, err := c.Read(d)
 	if err != nil {
 		return 0, err
@@ -217,6 +259,12 @@ func (c *Chiller) GetFaults() (FaultState, error) {
 		On:     RemoteOn,
 		Dir:    ChillerToHost,
 		Param:  ParamFaults}
+
+	err := c.Open()
+	defer c.CloseEventually()
+	if err != nil {
+		return FaultState{}, err
+	}
 	resp, err := c.Read(d)
 	if err != nil {
 		return FaultState{}, err
@@ -241,7 +289,9 @@ type HTTPChiller struct {
 func NewHTTPChiller(c *Chiller) HTTPChiller {
 	rt := server.RouteTable{}
 	thermal.HTTPController(c, rt)
-	return HTTPChiller{RouteTable: rt, c: c}
+	h := HTTPChiller{RouteTable: rt, c: c}
+	rt[pat.Get("/faults")] = h.Faults
+	return h
 }
 
 // RT satisfies server.HTTPer
