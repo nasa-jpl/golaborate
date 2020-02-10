@@ -102,6 +102,7 @@ func BuildMux(c Config) *goji.Mux {
 		switch typ {
 
 		case "aerotech", "ensemble", "esp", "esp300", "esp301", "xps":
+			axislocker = true
 			/* the limits are encoded as:
 			Args:
 				Limits:
@@ -138,21 +139,18 @@ func BuildMux(c Config) *goji.Mux {
 				httper = motion.NewHTTPMotionController(ensemble)
 				middleware = append(middleware, limiter.Check)
 				limiter.Inject(httper)
-				axislocker = true
 			case "esp", "esp300", "esp301":
 				esp := newport.NewESP301(node.Addr, node.Serial)
 				limiter := motion.LimitMiddleware{Limits: limiters, Mov: esp}
 				httper = motion.NewHTTPMotionController(esp)
 				middleware = append(middleware, limiter.Check)
 				limiter.Inject(httper)
-				axislocker = true
 			case "xps":
 				xps := newport.NewXPS(node.Addr)
 				limiter := motion.LimitMiddleware{Limits: limiters, Mov: xps}
 				httper = motion.NewHTTPMotionController(xps)
 				middleware = append(middleware, limiter.Check)
 				limiter.Inject(httper)
-				axislocker = true
 			}
 
 		case "cryocon":
@@ -206,25 +204,23 @@ func BuildMux(c Config) *goji.Mux {
 
 		// add a lock interface for this node
 		var lock locker.ManipulableLock
-		if axislocker || !axislocker { // this looks insane.  Just a bypass for now, something broken in Goji.
+		if !axislocker {
 			lock = locker.New()
+		} else {
+			lock = locker.NewAL()
 		}
-		// if !axislocker {
-		// lock = locker.New()
-		// } else {
-		// lock = locker.NewAL()
-		// }
+
+		// add the lock middleware
+		locker.Inject(httper, lock)
 
 		// bind to the mux
 		mux := goji.SubMux()
 		httper.RT().Bind(mux)
 
-		// add the lock middleware
-		locker.Inject(httper, lock)
-		mux.Use(lock.Check)
 		for _, ware := range middleware {
 			mux.Use(ware)
 		}
+		mux.Use(lock.Check)
 		root.Handle(pat.New(hndlS), mux)
 	}
 	root.HandleFunc(pat.Get("/endpoints"), func(w http.ResponseWriter, r *http.Request) {

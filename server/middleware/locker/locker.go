@@ -3,7 +3,6 @@ package locker
 
 import (
 	"encoding/json"
-	"fmt"
 	"go/types"
 	"net/http"
 	"strings"
@@ -126,24 +125,21 @@ type AxisLocker struct {
 // Check is an HTTP middleware that implements the locker
 func (al *AxisLocker) Check(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		s := r.URL.String()
-		pieces := strings.Split(s, "/axis/")
-		axis := strings.Split(pieces[1], "/")[0]
-		fmt.Println(axis)
-		if !strings.Contains(r.URL.String(), "axis") {
+		url := r.URL.String()
+		if strings.Contains(url, "lock") {
 			next.ServeHTTP(w, r)
 			return
 		}
-		// axis = pat.Param(r, "axis")
-		fmt.Println(axis)
-		fmt.Println(al.locked)
-
+		if !strings.Contains(url, "axis") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		axis := pat.Param(r, "axis")
 		locked, ok := al.locked[axis]
 		if !ok {
 			al.locked[axis] = New()
 			locked = al.locked[axis]
 		}
-		fmt.Println(locked, ok)
 		if locked.isLocked {
 			// check if the path is protected
 			protected := true
@@ -187,7 +183,6 @@ func (al *AxisLocker) HTTPSet(w http.ResponseWriter, r *http.Request) {
 
 // HTTPGet returns Locked() over HTTP as JSON
 func (al *AxisLocker) HTTPGet(w http.ResponseWriter, r *http.Request) {
-	fmt.Println(r.URL.String())
 	axis := pat.Param(r, "axis")
 	locked, ok := al.locked[axis]
 	if !ok {
