@@ -278,6 +278,12 @@ func (c *Chiller) GetTankLevelLow() (bool, error) {
 	return fs.TankLevelLow, err
 }
 
+// RemoteStop toggles remote operation off
+func (c *Chiller) RemoteStop() error {
+	_, err := c.RemoteDevice.Conn.Write([]byte{0xA0})
+	return err
+}
+
 // HTTPChiller is an HTTP wrapper around the thermocube
 type HTTPChiller struct {
 	server.RouteTable
