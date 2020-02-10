@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/util"
@@ -61,7 +62,9 @@ func (rt RouteTable) Endpoints() []string {
 		routes[idx] = key.String()
 		idx++
 	}
-	return util.UniqueString(routes)
+	routes = util.UniqueString(routes)
+	sort.Strings(routes)
+	return routes
 }
 
 // EndpointsHTTP returns a function that encodes the endpoint list to a ResponseWriter
