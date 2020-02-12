@@ -460,10 +460,32 @@ func GetFrame(p Camera, rec *imgrec.Recorder) http.HandlerFunc {
 		case "jpg":
 			w.Header().Set("Content-Type", "image/jpeg")
 			w.WriteHeader(http.StatusOK)
+			if g16, ok := (img).(*image.Gray16); ok {
+				uints := bytesToUint(g16.Pix)
+				b := make([]byte, len(uints))
+				l := len(uints)
+				for i := 0; i < l; i++ {
+					b[i] = byte(uints[i] / 255)
+				}
+				bound := g16.Bounds()
+				out := &image.Gray{Pix: b, Stride: bound.Dx(), Rect: bound}
+				img = out
+			}
 			jpeg.Encode(w, img, nil)
 		case "png":
 			w.Header().Set("Content-Type", "image/png")
 			w.WriteHeader(http.StatusOK)
+			if g16, ok := (img).(*image.Gray16); ok {
+				uints := bytesToUint(g16.Pix)
+				b := make([]byte, len(uints))
+				l := len(uints)
+				for i := 0; i < l; i++ {
+					b[i] = byte(uints[i] / 255)
+				}
+				bound := g16.Bounds()
+				out := &image.Gray{Pix: b, Stride: bound.Dx(), Rect: bound}
+				img = out
+			}
 			png.Encode(w, img)
 		case "fits":
 			// ^\- for picture taker::
