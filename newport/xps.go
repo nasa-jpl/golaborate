@@ -321,12 +321,12 @@ func (xps *XPS) openReadWriteClose(cmd string) (xpsResponse, error) {
 	if err != nil {
 		return resp, err
 	}
+	xps.Lock()
+	defer xps.CloseEventually()
 	conn := (xps.RemoteDevice.Conn).(net.Conn)
 	conn.SetDeadline(time.Now().Add(xps.Timeout))
-	defer func() { xps.LastComm = time.Now() }()
-	defer xps.CloseEventually()
-	xps.Lock()
 	defer xps.Unlock()
+	defer func() { xps.LastComm = time.Now() }()
 	msg := []byte(cmd)
 	n, err := xps.Conn.Write(msg)
 	if err != nil {
