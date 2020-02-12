@@ -134,6 +134,13 @@ func (al *AxisLocker) Check(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		// pat.Param can panic.  If it panics, the route does not exist and we should 404
+		defer func() {
+			if r := recover(); r != nil {
+				http.Error(w, "404 page not found", http.StatusNotFound)
+				return
+			}
+		}()
 		axis := pat.Param(r, "axis")
 		locked, ok := al.locked[axis]
 		if !ok {
