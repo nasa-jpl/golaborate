@@ -450,3 +450,45 @@ func (xps *XPS) MoveRel(axis string, pos float64) error {
 	}
 	return XPSErr(resp.errCode)
 }
+
+// GetVelocity retrieves the velocity setpoint for an axis
+func (xps *XPS) GetVelocity(axis string) (float64, error) {
+	cmd := fmt.Sprintf("PositionerSGammaParameterGet(%s, double *, double *, double *, double *)", axis)
+	resp, err := xps.openReadWriteClose(cmd)
+	if err != nil {
+		return 0, err
+	}
+	if resp.errCode != 0 {
+		return 0, XPSErr(resp.errCode)
+	}
+	// return is CSV, we only want the first parameter
+	chunks := strings.Split(resp.content, ",")
+	return strconv.ParseFloat(chunks[0], 64)
+}
+
+// SetVelocity sets the velocity setpoint for an axis
+func (xps *XPS) SetVelocity(axis string, vel float64) error {
+	cmd := fmt.Sprintf("PositionerSGammaParameterGet(%s, double *, double *, double *, double *)", axis)
+	resp, err := xps.openReadWriteClose(cmd)
+	if err != nil {
+		return err
+	}
+	if resp.errCode != 0 {
+		return XPSErr(resp.errCode)
+	}
+	// return is CSV, we only want to change the first parameter
+	chunks := strings.Split(resp.content, ",")
+	s := strconv.FormatFloat(vel, 'G', -1, 64)
+	chunks[0] = s
+	unchunked := strings.Join(chunks, ",")
+	cmd = fmt.Sprintf("PositionerSGammaParameterSet(%s, %s)", axis, unchunked)
+	resp, err = xps.openReadWriteClose(cmd)
+	if err != nil {
+		return err
+	}
+	if resp.errCode != 0 {
+		return XPSErr(resp.errCode)
+	}
+	return nil
+
+}
