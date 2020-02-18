@@ -453,7 +453,8 @@ func (xps *XPS) MoveRel(axis string, pos float64) error {
 
 // GetVelocity retrieves the velocity setpoint for an axis
 func (xps *XPS) GetVelocity(axis string) (float64, error) {
-	cmd := fmt.Sprintf("PositionerSGammaParameterGet(%s, double *, double *, double *, double *)", axis)
+	axis += ".Pos"
+	cmd := fmt.Sprintf("PositionerSGammaParametersGet(%s, double *, double *, double *, double *)", axis)
 	resp, err := xps.openReadWriteClose(cmd)
 	if err != nil {
 		return 0, err
@@ -468,7 +469,8 @@ func (xps *XPS) GetVelocity(axis string) (float64, error) {
 
 // SetVelocity sets the velocity setpoint for an axis
 func (xps *XPS) SetVelocity(axis string, vel float64) error {
-	cmd := fmt.Sprintf("PositionerSGammaParameterGet(%s, double *, double *, double *, double *)", axis)
+	axis += ".Pos"
+	cmd := fmt.Sprintf("PositionerSGammaParametersGet(%s, double *, double *, double *, double *)", axis)
 	resp, err := xps.openReadWriteClose(cmd)
 	if err != nil {
 		return err
@@ -481,7 +483,7 @@ func (xps *XPS) SetVelocity(axis string, vel float64) error {
 	s := strconv.FormatFloat(vel, 'G', -1, 64)
 	chunks[0] = s
 	unchunked := strings.Join(chunks, ",")
-	cmd = fmt.Sprintf("PositionerSGammaParameterSet(%s, %s)", axis, unchunked)
+	cmd = fmt.Sprintf("PositionerSGammaParametersSet(%s, %s)", axis, unchunked)
 	resp, err = xps.openReadWriteClose(cmd)
 	if err != nil {
 		return err
