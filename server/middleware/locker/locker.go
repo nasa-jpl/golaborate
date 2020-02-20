@@ -80,6 +80,7 @@ func (l *Locker) Check(next http.Handler) http.Handler {
 			// if it is, bounce the request - locked
 			if protected {
 				w.WriteHeader(http.StatusLocked)
+				w.Write([]byte("Access denied\n"))
 				return
 			}
 		}
