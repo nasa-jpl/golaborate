@@ -5,7 +5,7 @@ This document describes communication between the LOWFS server and the greater w
 - play back disturbances on the jitter mirror
 
 While enabling some new capabilities:
-- enable high flexibility into Zernike estimation (Reconstruction)
+- enable high flexibility into Zernike (or other mode) estimation (Reconstruction)
 - enable easy maintanance of the system
 
 Point of Contact [Brandon Dube (383D)](mailto:brandon.dube@jpl.nasa.gov)
@@ -38,6 +38,11 @@ If you do not wish to roll your own, then the python API should be used as thus:
 ```python
 from lowfsclient import lowfs
 
+# set up communication to the server
+lowfs.connect()
+# later
+# lowfs.disconnect()
+
 sentinel = True
 while sentinel:
     data = lowfs.frame() # data is a 60x60 uint16 numpy array
@@ -61,6 +66,7 @@ lowfs.jm_pause()
 lowfs.jm_stop()
 
 # to send singular commands
+# in volts
 lowfs.jm_command((1,2,3)) # 1,2,3 is any length 3 iterable of volts
 
 lowfs.fsm_command([1,2,3]) # ditto, see that tuple or list or array does not matter
