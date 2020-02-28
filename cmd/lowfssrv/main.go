@@ -35,7 +35,7 @@ type LOWFS struct {
 
 // Loop runs the loop, reading frames from the camera and
 // passing replies to the FSM
-func (l *LOWFS) Loop() {
+func (l *LOWFS) Loop(fsmchan chan<- []float64) {
 	socket := l.Conn
 	for {
 		// this loop waits for data from the reconstructor
@@ -44,15 +44,28 @@ func (l *LOWFS) Loop() {
 		if err != nil {
 			log.Println(err)
 		}
-		// msg is CSV floats to send to the control loop
-		chunks := strings.Split(msg, ",")
-		floats := make([]float64, len(chunks))
-		for i := 0; i < 3; i++ {
-			f, err := strconv.ParseFloat(chunks[i], 64)
-			if err != nil {
-				log.Println(err)
+		// would use switch, but want to partially compare
+		if msg == "frame?" {
+			// get frame from camera
+		} else if msg[:3] == "fsm" {
+			// msg is CSV floats to send to the control loop
+			// split off the front
+			msg = msg[3:]
+			// chunk by "," and parse floats
+			chunks := strings.Split(msg, ",")
+			floats := make([]float64, len(chunks))
+			for i := 0; i < 3; i++ {
+				f, err := strconv.ParseFloat(chunks[i], 64)
+				if err != nil {
+					log.Println(err)
+				}
+				floats[i] = f
 			}
-			floats[i] = f
+			fsmchan <- floats
+			socket.SendBytes([]byte{6}, 0) // 6 == ACK
+		}
+		else {
+			socket.SendBytes([]byte{21}, 0) // 21 == NACK
 		}
 	}
 }
