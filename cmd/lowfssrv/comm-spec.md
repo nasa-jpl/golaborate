@@ -43,12 +43,23 @@ lowfs.connect()
 # later
 # lowfs.disconnect()
 
+lowfs.frame_size = (60,60)
+
 sentinel = True
 while sentinel:
-    data = lowfs.frame() # data is a 60x60 uint16 numpy array
-    zernikes = your_reconstruction_pipeline() # say, 1x13 vector of f64
+    # will throw if lowfs.frame_size is not appropriate for the data
+    # data is a 60x60 uint16 numpy array
+    data = lowfs.frame()
 
-    volts = your_calibration() # should produce a length 3 iterable
+    # say, 1x13 vector of f64
+    zernikes = your_reconstruction_pipeline()
+
+    # should produce a length 3 iterable
+    volts = your_calibration()
+
+    # modulo some timing to phase lock the loop
+    # or clamping of bad values,
+    # these volts are going out the DAC
     lowfs.fsm_feedback(volts)
 
 # to disturb the system
@@ -70,6 +81,10 @@ lowfs.jm_stop()
 lowfs.jm_command((1,2,3)) # 1,2,3 is any length 3 iterable of volts
 
 lowfs.fsm_command([1,2,3]) # ditto, see that tuple or list or array does not matter
+
+# convenience, == lowfs.jm_command((0,0,0))
+lowfs.jm_zero()
+lowfs.fsm_zero()
 ```
 
 Note that while TCP sockets are used for communication, running reconstruction on a computer other than the one running the server will probably introduce enough latency into the system to impede performance to be below 500Hz.  The server will operate below 500Hz without error or complaint; the phase lock on the loop only delays to ensure the maximum rep rate is 500Hz (or as specified).
