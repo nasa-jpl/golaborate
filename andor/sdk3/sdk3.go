@@ -212,6 +212,10 @@ func Open(camIdx int) (*Camera, error) {
 	var hndle C.AT_H
 	err := enrich(Error(int(C.AT_Open(C.int(camIdx), &hndle))), "AT_OPEN")
 	c.Handle = int(hndle)
+	c.GetAOIHeight()
+	c.GetAOIWidth()
+	c.GetAOILeft()
+	c.GetAOITop()
 	return &c, err
 }
 
@@ -358,40 +362,36 @@ func (c *Camera) GetAOITop() (int, error) {
 // calculated from the difference of the sensor dimensions and top-left if they
 // are zero
 func (c *Camera) SetAOI(aoi camera.AOI) error {
-	// top
-	err := SetInt(c.Handle, "AOITop", int64(aoi.Top))
+	var err error
+	if aoi.Left == 0 {
+		aoi.Left, err = c.GetAOILeft()
+	}
+	if aoi.Top == 0 {
+		aoi.Top, err = c.GetAOITop()
+	}
+	if aoi.Width == 0 {
+		aoi.Width, err = c.GetAOIWidth()
+	}
+	if aoi.Height == 0 {
+		aoi.Height, err = c.GetAOIHeight()
+	}
+
+	err = SetInt(c.Handle, "AOIWidth", int64(aoi.Width))
 	if err != nil {
 		return err
 	}
 
-	// left
 	err = SetInt(c.Handle, "AOILeft", int64(aoi.Left))
 	if err != nil {
 		return err
 	}
 
-	width := aoi.Width
-	if width == 0 { // if the width is zero, the width will span from left~end of chip
-		width, err := c.GetSensorWidth()
-		if err != nil {
-			return err
-		}
-		width -= c.aoiLeft
-	}
-	err = SetInt(c.Handle, "AOIWidth", int64(width))
+	err = SetInt(c.Handle, "AOIHeight", int64(aoi.Height))
 	if err != nil {
 		return err
 	}
 
-	height := aoi.Height
-	if height == 0 { // if the height is zero, the height will span from top~end of chip
-		height, err := c.GetSensorHeight()
-		if err != nil {
-			return err
-		}
-		height -= c.aoiTop
-	}
-	err = SetInt(c.Handle, "AOIHeight", int64(height))
+	err = SetInt(c.Handle, "AOITop", int64(aoi.Top))
 	if err != nil {
 		return err
 	}
@@ -543,7 +543,7 @@ func (c *Camera) WaitBuffer(timeout time.Duration) error {
 	if !c.bufferOnQueue {
 		return ErrBufferNotOnQueue
 	}
-	tout := C.uint(timeout.Nanoseconds() / 1e6)
+	tout := C.uint(timeout.Milliseconds()) // 2020-03-04 nanoseconds/1e6 -> milliseconds, go1.13+
 	var (
 		size C.int
 		ptr  *C.AT_U8
@@ -578,7 +578,7 @@ func (c *Camera) GetFrame() (image.Image, error) {
 	if err != nil {
 		return &ret, err
 	}
-	err = c.WaitBuffer(expT + 1*time.Second)
+	err = c.WaitBuffer(expT + 3*time.Second)
 	if err != nil {
 		return &ret, err
 	}
