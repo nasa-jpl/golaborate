@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.jpl.nasa.gov/HCIT/go-hcit/pi"
 	"github.jpl.nasa.gov/HCIT/go-hcit/server/middleware/locker"
 	"github.jpl.nasa.gov/HCIT/go-hcit/thermocube"
 	"github.jpl.nasa.gov/HCIT/go-hcit/thorlabs"
@@ -101,7 +102,7 @@ func BuildMux(c Config) *goji.Mux {
 		typ := strings.ToLower(node.Type)
 		switch typ {
 
-		case "aerotech", "ensemble", "esp", "esp300", "esp301", "xps":
+		case "aerotech", "ensemble", "esp", "esp300", "esp301", "xps", "pi":
 			axislocker = true
 			/* the limits are encoded as:
 			Args:
@@ -149,6 +150,12 @@ func BuildMux(c Config) *goji.Mux {
 				xps := newport.NewXPS(node.Addr)
 				limiter := motion.LimitMiddleware{Limits: limiters, Mov: xps}
 				httper = motion.NewHTTPMotionController(xps)
+				middleware = append(middleware, limiter.Check)
+				limiter.Inject(httper)
+			case "pi":
+				ctl := pi.NewController(node.Addr, node.Serial)
+				limiter := motion.LimitMiddleware{Limits: limiters, Mov: ctl}
+				httper = motion.NewHTTPMotionController(ctl)
 				middleware = append(middleware, limiter.Check)
 				limiter.Inject(httper)
 			}
