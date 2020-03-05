@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"go/types"
 	"net/http"
+	"time"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/server"
 	"goji.io/pat"
@@ -24,6 +25,8 @@ func NewHTTPDisturbance(d *Disturbance) HTTPDisturbance {
 	rt[pat.Post("/csv")] = disturbance.AcceptCSV
 	rt[pat.Post("/control")] = disturbance.Control
 	rt[pat.Get("/cursor")] = disturbance.Cursor
+	rt[pat.Get("/dt")] = disturbance.Getdt
+	rt[pat.Post("/dt")] = disturbance.Setdt
 	disturbance.RouteTable = rt
 	return disturbance
 }
@@ -70,4 +73,27 @@ func (hd HTTPDisturbance) Control(w http.ResponseWriter, r *http.Request) {
 func (hd HTTPDisturbance) Cursor(w http.ResponseWriter, r *http.Request) {
 	hp := server.HumanPayload{T: types.Int, Int: hd.d.cursor}
 	hp.EncodeAndRespond(w, r)
+}
+
+// Getdt returns the time delta in seconds as fp64 over HTTP
+func (hd HTTPDisturbance) Getdt(w http.ResponseWriter, r *http.Request) {
+	hp := server.HumanPayload{T: types.Float64, Float: hd.d.PL.Interval.Seconds()}
+	hp.EncodeAndRespond(w, r)
+	return
+}
+
+// Setdt sets the time delta in seconds as fp64 over hTTP
+func (hd HTTPDisturbance) Setdt(w http.ResponseWriter, r *http.Request) {
+	f := server.FloatT{}
+	err := json.NewDecoder(r.Body).Decode(&f)
+	defer r.Body.Close()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	ns := int64(f.F64 * 1e9)
+	tD := time.Duration(ns)
+	hd.d.PL.Interval = tD
+	w.WriteHeader(http.StatusOK)
+	return
 }

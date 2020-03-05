@@ -7,7 +7,8 @@ import (
 	"io"
 	"strconv"
 	"sync"
-	"time"
+
+	"github.com/brandondube/pctl"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/mccdaq"
 )
@@ -43,9 +44,8 @@ type Disturbance struct {
 	// if paused is true, the loop is short circuited with a CPU burn
 	paused bool
 
-	// DT is the temporal spacing between elements of data,
-	// changing it during playback is undefined behavior
-	DT time.Duration
+	// PL is the phase locker from process control
+	PL pctl.PhaseLock
 
 	// Callback is the function to run on each iteration of the loop
 	Callback func([]float64)
@@ -63,7 +63,7 @@ func (d *Disturbance) Play() {
 		// the double semicolon just does the end of loop clause
 		// so this is like for (i := i; i < n; i++) but i++ is a sleep and
 		// there is nothing done to initiate the loop or end it
-		for ; ; time.Sleep(d.DT) {
+		for {
 			select {
 			case action := <-d.signal:
 				switch action {
@@ -80,14 +80,17 @@ func (d *Disturbance) Play() {
 				if d.paused {
 					continue
 				}
+				d.PL.Start()
 				d.Callback(d.data[d.cursor])
 				d.cursor++
 				if d.cursor == len(d.data) {
 					if !d.Repeat {
+						d.PL.Stop()
 						return
 					}
 					d.cursor = 0
 				}
+				d.PL.Stop()
 			}
 		}
 	}()
@@ -149,5 +152,6 @@ func (d *Disturbance) LoadCSV(r io.Reader) error {
 		}
 		d.data = append(d.data, local)
 	}
+	d.cursor = 0
 	return nil
 }
