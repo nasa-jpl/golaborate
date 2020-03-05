@@ -2,6 +2,7 @@ package fsm
 
 import (
 	"encoding/json"
+	"go/types"
 	"net/http"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/server"
@@ -22,8 +23,14 @@ func NewHTTPDisturbance(d *Disturbance) HTTPDisturbance {
 	rt := server.RouteTable{}
 	rt[pat.Post("/csv")] = disturbance.AcceptCSV
 	rt[pat.Post("/control")] = disturbance.Control
+	rt[pat.Get("/cursor")] = disturbance.Cursor
 	disturbance.RouteTable = rt
 	return disturbance
+}
+
+// RT makes HTTPDisturbance conform to server.HTTPer
+func (hd HTTPDisturbance) RT() server.RouteTable {
+	return hd.RouteTable
 }
 
 // AcceptCSV downloads a CSV from the request and stores it in the buffer
@@ -53,7 +60,14 @@ func (hd HTTPDisturbance) Control(w http.ResponseWriter, r *http.Request) {
 		hd.d.Stop()
 	case "resume":
 		hd.d.Resume()
-	case "play":
+	case "start":
 		hd.d.Play()
 	}
+}
+
+// Cursor sends back the current counter
+// (useful after an error has stopped the loop)
+func (hd HTTPDisturbance) Cursor(w http.ResponseWriter, r *http.Request) {
+	hp := server.HumanPayload{T: types.Int, Int: hd.d.cursor}
+	hp.EncodeAndRespond(w, r)
 }

@@ -32,7 +32,7 @@ func (c *ControlLoop) Update(target float64) error {
 // Disturbance is a pre-recorded sequence to be played back, paused, or stopped
 type Disturbance struct {
 	// data is the list of data points, assumed to be of uniform spacing in time
-	data [][3]float64
+	data [][]float64
 
 	// cursor is the index into data
 	cursor int
@@ -48,7 +48,10 @@ type Disturbance struct {
 	DT time.Duration
 
 	// Callback is the function to run on each iteration of the loop
-	Callback func([3]float64)
+	Callback func([]float64)
+
+	// Repeat determines if the playback signal repeats
+	Repeat bool
 }
 
 // Play begins processing a stream of commands by calling callable for each
@@ -80,6 +83,9 @@ func (d *Disturbance) Play() {
 				d.Callback(d.data[d.cursor])
 				d.cursor++
 				if d.cursor == len(d.data) {
+					if !d.Repeat {
+						return
+					}
 					d.cursor = 0
 				}
 			}
@@ -115,7 +121,7 @@ func (d *Disturbance) Stop() {
 // LoadCSV loads data from a CSV file.
 // The file is assumed to have a header row, comma separation, three numeric f64-parse-able columns
 func (d *Disturbance) LoadCSV(r io.Reader) error {
-	d.data = [][3]float64{}
+	d.data = [][]float64{}
 	reader := csv.NewReader(r)
 	skip := true
 	for {
@@ -130,14 +136,14 @@ func (d *Disturbance) LoadCSV(r io.Reader) error {
 			skip = false
 			continue
 		}
-		local := [3]float64{}
+		local := make([]float64, len(record))
 		for i := 0; i < len(record); i++ {
 			f, err := strconv.ParseFloat(record[i], 64)
 			if err != nil {
 				return err
 			}
 			if i > 2 {
-				return fmt.Errorf("row contains at least %d records, must be == 3", i)
+				return fmt.Errorf("row contains at least %d records, must be == 3", i+1)
 			}
 			local[i] = f
 		}
