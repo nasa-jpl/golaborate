@@ -464,6 +464,7 @@ func (c *Camera) SetBinning(b camera.Binning) error {
 	c.aoiWidth = 0
 	c.aoiHeight = 0
 	c.aoiStride = 0
+	c.binning = b
 	return c.Allocate()
 }
 
