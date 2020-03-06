@@ -95,8 +95,6 @@ func main() {
 	}
 	getInterval := func(w http.ResponseWriter, r *http.Request) {
 		hp := server.HumanPayload{T: types.String, String: pl.Interval.String()}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
 		hp.EncodeAndRespond(w, r)
 		return
 	}

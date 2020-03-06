@@ -47,7 +47,11 @@ type Disturbance struct {
 	PL pctl.PhaseLock
 
 	// Callback is the function to run on each iteration of the loop
-	Callback func([]float64)
+	Callback func([]string, []float64)
+
+	// Axes is the first argument to Callback, and essentially specifies the
+	// channels to write to
+	Axes []string
 
 	// Repeat determines if the playback signal repeats
 	Repeat bool
@@ -58,6 +62,10 @@ type Disturbance struct {
 // loops to the beginning when the data stream is exhausted
 func (d *Disturbance) Play() {
 	d.fixchannel()
+	if d.cursor == len(d.data) {
+		d.cursor = 0
+	} // avoid running off the edge of the waveform
+
 	go func() {
 		// the double semicolon just does the end of loop clause
 		// so this is like for (i := i; i < n; i++) but i++ is a sleep and
@@ -80,7 +88,7 @@ func (d *Disturbance) Play() {
 					continue
 				}
 				d.PL.Start()
-				d.Callback(d.data[d.cursor])
+				d.Callback(d.Axes, d.data[d.cursor])
 				d.cursor++
 				if d.cursor == len(d.data) {
 					if !d.Repeat {

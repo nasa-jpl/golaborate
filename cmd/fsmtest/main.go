@@ -24,11 +24,11 @@ func main() {
 	wrap := motion.NewHTTPMotionController(ctl)
 
 	// now create the disturbance engine and its HTTP wrapper
-	cb := func(pos []float64) {
-		// axes := []string{"1", "2", "3"}
-		axes := []string{"A"}
-		// fmt.Println(pos)
-		ctl.MultiAxisMoveAbs(axes, pos)
+	cb := func(axes []string, pos []float64) {
+		err := ctl.MultiAxisMoveAbs(axes, pos)
+		if err != nil {
+			log.Println(err)
+		}
 	}
 	dist := &fsm.Disturbance{
 		Callback: cb,
