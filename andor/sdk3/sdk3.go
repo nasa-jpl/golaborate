@@ -244,6 +244,7 @@ func (c *Camera) GetAOITop() (int, error) {
 // calculated from the difference of the sensor dimensions and top-left if they
 // are zero
 func (c *Camera) SetAOI(aoi camera.AOI) error {
+	defer c.Allocate()
 	var err error
 	if aoi.Left == 0 {
 		aoi.Left, err = c.GetAOILeft()
@@ -277,12 +278,6 @@ func (c *Camera) SetAOI(aoi camera.AOI) error {
 	if err != nil {
 		return err
 	}
-
-	err = c.Allocate()
-	if err != nil {
-		return err
-	}
-	err = c.QueueBuffer()
 	return err
 }
 
