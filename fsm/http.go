@@ -66,6 +66,8 @@ func (hd HTTPDisturbance) Control(w http.ResponseWriter, r *http.Request) {
 	case "start":
 		hd.d.Play()
 	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 // Cursor sends back the current counter

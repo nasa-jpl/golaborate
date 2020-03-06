@@ -9,13 +9,11 @@ import (
 	"sync"
 
 	"github.com/brandondube/pctl"
-
-	"github.jpl.nasa.gov/HCIT/go-hcit/mccdaq"
 )
 
 // ControlLoop is a struct which operates a control loop
 type ControlLoop struct {
-	DAC *mccdaq.DAC
+	// DAC *mccdaq.DAC
 
 	sync.Mutex
 }
@@ -27,7 +25,8 @@ type ControlLoop struct {
 func (c *ControlLoop) Update(target float64) error {
 	c.Lock()
 	defer c.Unlock()
-	return c.DAC.Write(1, target)
+	return nil
+	// return c.DAC.Write(1, target)
 }
 
 // Disturbance is a pre-recorded sequence to be played back, paused, or stopped
