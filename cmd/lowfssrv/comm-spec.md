@@ -36,7 +36,7 @@ If you do not wish to roll your own, then the python API should be used as thus:
 
 
 ```python
-from lowfsclient import lowfs
+from lowfs import lowfs
 
 # set up communication to the server
 lowfs.connect()
