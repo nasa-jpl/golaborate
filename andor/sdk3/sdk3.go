@@ -14,7 +14,6 @@ import "C"
 import (
 	"fmt"
 	"image"
-	"math"
 	"reflect"
 	"time"
 	"unsafe"
@@ -158,51 +157,6 @@ type Camera struct {
 
 	// Handle holds the int that points to a specific camera
 	Handle int
-
-	// exposureTime is the currently programmed exposure time.
-	exposureTime time.Duration
-
-	// aoiStride is the stride of the padded data within the AOI
-	aoiStride int
-
-	// aoiWidth is the width of the AOI in pixels
-	aoiWidth int
-
-	// aoiHeight is the height of the AOI in pixels
-	aoiHeight int
-
-	// aoiLeft is the left pixel index (1-based) of the AoI
-	aoiLeft int
-
-	// aoiTop is the top pixel index (1-based) of the AOI
-	aoiTop int
-
-	// binning is a cross-compatible representation of AOIBinning
-	binning camera.Binning
-
-	// imageSizeBytes is the size of the image buffer in bytes
-	imageSizeBytes int
-
-	// sensorWidth holds the width of the sensor in pixels
-	sensorWidth int
-
-	// sensorHeight holds the height of the sensor in pixels
-	sensorHeight int
-
-	// sdkver holds the sdk version
-	sdkver string
-
-	// fwver holds the firmware version
-	fwver string
-
-	// drvver holds the driver version
-	drvver string
-
-	// model holds the model number
-	model string
-
-	// serial holds the serial number
-	serial string
 }
 
 // Open opens a connection to the camera.  Typically, a real camera
@@ -242,120 +196,48 @@ func (c *Camera) Allocate() error {
 // allows us to cache the value without going to the SDK for it.
 // Use GetInt directly if you want to guarantee there are no desync bugs.
 func (c *Camera) ImageSizeBytes() (int, error) {
-	var i int
-	var err error
-	if c.imageSizeBytes == 0 {
-		i, err = GetInt(c.Handle, "ImageSizeBytes")
-		c.imageSizeBytes = i
-	} else {
-		i = c.imageSizeBytes
-		err = nil
-	}
-	return i, err
+	return GetInt(c.Handle, "ImageSizeBytes")
 }
 
 // GetSensorWidth gets the width of the sensor in pixels
 func (c *Camera) GetSensorWidth() (int, error) {
-	var i int
-	var err error
-	if c.sensorWidth == 0 {
-		i, err = GetInt(c.Handle, "SensorWidth")
-		c.sensorWidth = i
-	} else {
-		i = c.sensorWidth
-		err = nil
-	}
-	return i, err
+	return GetInt(c.Handle, "SensorWidth")
 }
 
 // GetSensorHeight gets the height of the sensor in pixels
 func (c *Camera) GetSensorHeight() (int, error) {
-	var i int
-	var err error
-	if c.sensorHeight == 0 {
-		i, err = GetInt(c.Handle, "SensorHeight")
-		c.sensorHeight = i
-	} else {
-		i = c.sensorHeight
-		err = nil
-	}
-	return i, err
+	return GetInt(c.Handle, "SensorHeight")
 }
 
 // GetAOIStride is the stride of one row in the image buffer in bytes.  This
 // function allows us to cache the value without going to the SDK for it.
 // Use GetInt directly if you want to guarantee there are no desync bugs.
 func (c *Camera) GetAOIStride() (int, error) {
-	var i int
-	var err error
-	if c.aoiStride == 0 {
-		i, err = GetInt(c.Handle, "AOIStride")
-		c.aoiStride = i
-	} else {
-		i = c.aoiStride
-		err = nil
-	}
-	return i, err
+	return GetInt(c.Handle, "AOIStride")
 }
 
 // GetAOIWidth is the width of one row in the image buffer in pixels.  This
 // function allows us to cache the value without going to the SDK for it.
 // Use GetInt directly if you want to guarantee there are no desync bugs.
 func (c *Camera) GetAOIWidth() (int, error) {
-	var i int
-	var err error
-	if c.aoiWidth == 0 {
-		i, err = GetInt(c.Handle, "AOIWidth")
-		c.aoiWidth = i
-	} else {
-		i = c.aoiWidth
-		err = nil
-	}
-	return i, err
+	return GetInt(c.Handle, "AOIWidth")
 }
 
 // GetAOIHeight is the height of one column in the image buffer in pixels.  This
 // function allows us to cache the value without going to the SDK for it.
 // Use GetInt directly if you want to guarantee there are no desync bugs.
 func (c *Camera) GetAOIHeight() (int, error) {
-	var i int
-	var err error
-	if c.aoiHeight == 0 {
-		i, err = GetInt(c.Handle, "AOIHeight")
-		c.aoiHeight = i
-	} else {
-		i = c.aoiHeight
-		err = nil
-	}
-	return i, err
+	return GetInt(c.Handle, "AOIHeight")
 }
 
 // GetAOILeft gets the left pixel of the AOI.  Starts at 1.
 func (c *Camera) GetAOILeft() (int, error) {
-	var i int
-	var err error
-	if c.aoiLeft == 0 {
-		i, err = GetInt(c.Handle, "AOILeft")
-		c.aoiLeft = i
-	} else {
-		i = c.aoiLeft
-		err = nil
-	}
-	return i, err
+	return GetInt(c.Handle, "AOILeft")
 }
 
 // GetAOITop gets the top pixel index of the AOI.  Starts at 1.
 func (c *Camera) GetAOITop() (int, error) {
-	var i int
-	var err error
-	if c.aoiTop == 0 {
-		i, err = GetInt(c.Handle, "AOITop")
-		c.aoiTop = i
-	} else {
-		i = c.aoiTop
-		err = nil
-	}
-	return i, err
+	return GetInt(c.Handle, "AOITop")
 }
 
 // SetAOI updates the AOI and re-allocates the buffer.  Width and height are
@@ -396,13 +278,6 @@ func (c *Camera) SetAOI(aoi camera.AOI) error {
 		return err
 	}
 
-	// blow the cached values
-	c.imageSizeBytes = 0
-	c.aoiTop = 0
-	c.aoiLeft = 0
-	c.aoiWidth = 0
-	c.aoiHeight = 0
-	c.aoiStride = 0
 	err = c.Allocate()
 	if err != nil {
 		return err
@@ -424,104 +299,46 @@ func (c *Camera) GetAOI() (camera.AOI, error) {
 
 // GetSDKVersion gets the software version of the SDK
 func (c *Camera) GetSDKVersion() (string, error) {
-	var s string
-	var err error
-	if c.sdkver == "" {
-		s, err = SoftwareVersion()
-		c.sdkver = s
-	} else {
-		s = c.sdkver
-		err = nil
-	}
-	return s, err
+	return SoftwareVersion()
 }
 
 // GetBinning gets the binning
 func (c *Camera) GetBinning() (camera.Binning, error) {
-	if c.binning.H == 0 {
-		b := camera.Binning{}
-		// uninitialized, fetch from SDK
-		s, err := GetEnumString(c.Handle, "AOIBinning")
-		if err != nil {
-			return b, err
-		}
-		b = camera.HxVToBin(s)
-		c.binning = b
+	s, err := GetEnumString(c.Handle, "AOIBinning")
+	if err != nil {
+		return camera.Binning{}, err
 	}
-	return c.binning, nil
+	return camera.HxVToBin(s), nil
 }
 
 // SetBinning sets the AOIBinning feature
 func (c *Camera) SetBinning(b camera.Binning) error {
-	// blow the image size cache
-	c.imageSizeBytes = 0
 	str := b.HxV()
 	err := enrich(SetEnumString(c.Handle, "AOIBinning", str), "AOIBinning")
 	if err != nil {
 		return err
 	}
-	// blow the cache on some AoI parameters
-	c.aoiWidth = 0
-	c.aoiHeight = 0
-	c.aoiStride = 0
-	c.binning = b
 	return c.Allocate()
 }
 
 // GetFirmwareVersion gets the firmware version of the camera
 func (c *Camera) GetFirmwareVersion() (string, error) {
-	var s string
-	var err error
-	if c.fwver == "" {
-		s, err = GetString(c.Handle, "FirmwareVersion")
-		c.fwver = s
-	} else {
-		s = c.fwver
-		err = nil
-	}
-	return s, err
+	return GetString(c.Handle, "FirmwareVersion")
 }
 
 // GetDriverVersion gets the software version of the SDK
 func (c *Camera) GetDriverVersion() (string, error) {
-	var s string
-	var err error
-	if c.drvver == "" {
-		s, err = GetString(c.Handle, "DriverVersion")
-		c.drvver = s
-	} else {
-		s = c.drvver
-		err = nil
-	}
-	return s, err
+	return GetString(c.Handle, "DriverVersion")
 }
 
 // GetModel returns the model string
 func (c *Camera) GetModel() (string, error) {
-	var model string
-	var err error
-	if c.model == "" {
-		model, err = GetString(c.Handle, "CameraModel")
-		c.model = model
-	} else {
-		model = c.model
-		err = nil
-	}
-	return model, err
+	return GetString(c.Handle, "CameraModel")
 }
 
 // GetSerialNumber return the serial number
 func (c *Camera) GetSerialNumber() (string, error) {
-	var serial string
-	var err error
-	if c.serial == "" {
-		serial, err = GetString(c.Handle, "SerialNumber")
-		c.serial = serial
-	} else {
-		serial = c.serial
-		err = nil
-	}
-	return serial, err
+	return GetString(c.Handle, "SerialNumber")
 }
 
 // QueueBuffer puts the Camera's internal buffer into the write queue for the SDK
@@ -703,27 +520,17 @@ func (c *Camera) unpadBuffer() ([]byte, error) {
 
 // GetExposureTime gets the current exposure time as a duration
 func (c *Camera) GetExposureTime() (time.Duration, error) {
-	var err error
-	if c.exposureTime == time.Duration(0) { // zero value, uninitialized
-		tS, err := GetFloat(c.Handle, "ExposureTime")
-		// convert to ns then round to int and make a duration
-		tNsI := int(math.Round(tS * 1e9)) // * 1e9 seconds -> ns
-		dur := time.Duration(tNsI) * time.Nanosecond
-		if err == nil {
-			c.exposureTime = dur
-		}
-	}
-	return c.exposureTime, err
+	tS, err := GetFloat(c.Handle, "ExposureTime")
+	// convert to ns then round to int and make a duration
+	tNsI := int64(tS * 1e9) // * 1e9 seconds -> ns
+	dur := time.Duration(tNsI)
+	return dur, err
 }
 
 // SetExposureTime sets the exposure time as a duration
 func (c *Camera) SetExposureTime(d time.Duration) error {
 	ts := d.Seconds()
-	err := SetFloat(c.Handle, "ExposureTime", ts)
-	if err == nil {
-		c.exposureTime = d
-	}
-	return err
+	return SetFloat(c.Handle, "ExposureTime", ts)
 }
 
 // GetCooling gets if temperature control is currently active or not
