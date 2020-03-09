@@ -8,12 +8,14 @@ The following hardware is supported:
 
 DMs:
 - JPL Gen 5 DM controllers
+- BMC kiloDM mini controllers
 - BMC commercial DM controllers
 
 Motion:
 - Newport ESP 300 and 301 motion controllers
 - Newport XPS motion controllers
 - Aerotech Epaq and Ensemble motion controllers
+- PI GCS2 compatible controllers (E-5xx and E-7xx, C.xxx.xx, C-xxx, PIglide, ...)
 
 Light sources:
 - NKT SuperK supercontinuum lasers
@@ -78,31 +80,3 @@ a binary to use it.
 To view the documentation for the `Go` code, cd to the root of this repository under `$GOPATH`, then run `godoc -http=:6060` and visit http://localhost:6060/pkg/github.jpl.nasa.gov/HCIT/go-hcit/ in your browser.
 
 To view the documentation for HTTP clients, you can build envsrv and visit http://<envsrv-url>/static/docs.html, or use [swagger-ui](https://github.com/swagger-api/swagger-ui) to view and edit the docs locally.
-
-## development status
-
-| Device            | driver | server |
-| :---              | :----: |  ---:  |
-| Gen5 DM Controller|        |        |
-| MiniDM Controller |        |        |
-| BMC commercial    | X      |  X     |
-| Andor cameras     | X      |  X     |
-| other cameras (?) |        |        |
-| Newport EPS       |  X     |  X     |
-| Newport XPS       |  X     |  X     |
-| Aerotech Ensemble |  X     |  X     |
-| PI motion         |        |        |
-| Lakeshore temp    |  X     |        |
-| Fluke temp/RH     |  X     |  X     |
-| Lesker pressure   |  X     |  X     |
-| GP pressure       |  X     |  X     |
-| Cryo-Con thermal  |  X     |  X     |
-| Omega flowmeter   |        |        |
-| Omega temp        |        |        |
-| APC UPS           |        |        |
-| Pfeiffer turbo    |        |        |
-| NKT               |  X     |  X     |
-| IXL diode         |  X     |  X     |
-| Thermocube chiller|        |        |
-| Zygo              |  X     | X      |
-| 4D (?)            |        |        |
