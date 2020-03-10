@@ -73,7 +73,7 @@ func (hd HTTPDisturbance) Control(w http.ResponseWriter, r *http.Request) {
 // Cursor sends back the current counter
 // (useful after an error has stopped the loop)
 func (hd HTTPDisturbance) Cursor(w http.ResponseWriter, r *http.Request) {
-	hp := server.HumanPayload{T: types.Int, Int: hd.d.cursor}
+	hp := server.HumanPayload{T: types.Int, Int: hd.d.Cursor}
 	hp.EncodeAndRespond(w, r)
 }
 

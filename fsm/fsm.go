@@ -34,8 +34,8 @@ type Disturbance struct {
 	// data is the list of data points, assumed to be of uniform spacing in time
 	data [][]float64
 
-	// cursor is the index into data
-	cursor int
+	// Cursor is the index into data
+	Cursor int
 
 	// signal is the internal channel used to manipulate the playback
 	signal chan string
@@ -62,8 +62,8 @@ type Disturbance struct {
 // loops to the beginning when the data stream is exhausted
 func (d *Disturbance) Play() {
 	d.fixchannel()
-	if d.cursor == len(d.data) {
-		d.cursor = 0
+	if d.Cursor == len(d.data) {
+		d.Cursor = 0
 	} // avoid running off the edge of the waveform
 
 	go func() {
@@ -80,7 +80,7 @@ func (d *Disturbance) Play() {
 					d.paused = false
 				case "stop":
 					d.paused = false
-					d.cursor = 0
+					d.Cursor = 0
 					return
 				}
 			default:
@@ -88,14 +88,14 @@ func (d *Disturbance) Play() {
 					continue
 				}
 				d.PL.Start()
-				d.Callback(d.Axes, d.data[d.cursor])
-				d.cursor++
-				if d.cursor == len(d.data) {
+				d.Callback(d.Axes, d.data[d.Cursor])
+				d.Cursor++
+				if d.Cursor == len(d.data) {
 					if !d.Repeat {
 						d.PL.Stop()
 						return
 					}
-					d.cursor = 0
+					d.Cursor = 0
 				}
 				d.PL.Stop()
 			}
@@ -105,11 +105,11 @@ func (d *Disturbance) Play() {
 
 func (d *Disturbance) fixchannel() {
 	if d.signal == nil {
-		d.signal = make(chan string)
+		d.signal = make(chan string, 1)
 	}
 }
 
-// Pause stops the loop where it is, but does not reset the cursor.
+// Pause stops the loop where it is, but does not reset the Cursor.
 // Resume can pick up where Pause leaves off.
 func (d *Disturbance) Pause() {
 	d.fixchannel()
@@ -122,7 +122,7 @@ func (d *Disturbance) Resume() {
 	d.signal <- "resume"
 }
 
-// Stop ceases the loop and resets the cursor
+// Stop ceases the loop and resets the Cursor
 func (d *Disturbance) Stop() {
 	d.fixchannel()
 	d.signal <- "stop"
@@ -144,6 +144,7 @@ func (d *Disturbance) LoadCSV(r io.Reader) error {
 		}
 		if skip {
 			skip = false
+			d.Axes = record
 			continue
 		}
 		local := make([]float64, len(record))
@@ -159,6 +160,6 @@ func (d *Disturbance) LoadCSV(r io.Reader) error {
 		}
 		d.data = append(d.data, local)
 	}
-	d.cursor = 0
+	d.Cursor = 0
 	return nil
 }
