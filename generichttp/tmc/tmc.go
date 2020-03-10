@@ -141,6 +141,9 @@ type FunctionGenerator interface {
 
 	// GetOutput queries if the generator output is active
 	GetOutput() (bool, error)
+
+	// SetOutputLoad sets the output load of the generator in ohms
+	SetOutputLoad(float64) error
 }
 
 // HTTPFunctionGenerator injects an HTTP interface to a function generator into a route table
@@ -159,6 +162,8 @@ func HTTPFunctionGenerator(fg FunctionGenerator, table server.RouteTable) {
 
 	rt[pat.Get("/output")] = GetOutput(fg)
 	rt[pat.Post("/output")] = SetOutput(fg)
+
+	rt[pat.Post("/output-load")] = SetOutputLoad(fg)
 }
 
 // SetFunction exposes an HTTP interface to the SetFunction method
@@ -206,7 +211,32 @@ func SetOutput(fg FunctionGenerator) http.HandlerFunc {
 	return setBool(fg.EnableOutput, fg.DisableOutput)
 }
 
-// GetOutput exposes an HTTP interface to the GetOutput
+// GetOutput exposes an HTTP interface to the GetOutput method
 func GetOutput(fg FunctionGenerator) http.HandlerFunc {
 	return getBool(fg.GetOutput)
+}
+
+// SetOutputLoad exposes an HTTP interface to the SetOutputLoad method
+func SetOutputLoad(fg FunctionGenerator) http.HandlerFunc {
+	return setFloat(fg.SetOutputLoad)
+}
+
+// HTTPFunctionGeneratorT holds an HTTP wrapper to a function generator
+type HTTPFunctionGeneratorT struct {
+	FG FunctionGenerator
+
+	RouteTable server.RouteTable
+}
+
+// RT makes this server.httper compliant
+func (h HTTPFunctionGeneratorT) RT() server.RouteTable {
+	return h.RouteTable
+}
+
+// NewHTTPFunctionGenerator wraps a function generator in an HTTP interface
+func NewHTTPFunctionGenerator(fg FunctionGenerator) HTTPFunctionGeneratorT {
+	rt := server.RouteTable{}
+	gen := HTTPFunctionGeneratorT{FG: fg, RouteTable: rt}
+	HTTPFunctionGenerator(fg, rt)
+	return gen
 }

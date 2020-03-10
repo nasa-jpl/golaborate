@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.jpl.nasa.gov/HCIT/go-hcit/agilent"
 	"github.jpl.nasa.gov/HCIT/go-hcit/pi"
 	"github.jpl.nasa.gov/HCIT/go-hcit/server/middleware/locker"
 	"github.jpl.nasa.gov/HCIT/go-hcit/thermocube"
@@ -33,6 +34,7 @@ import (
 	"github.jpl.nasa.gov/HCIT/go-hcit/generichttp/ascii"
 	"github.jpl.nasa.gov/HCIT/go-hcit/generichttp/laser"
 	"github.jpl.nasa.gov/HCIT/go-hcit/generichttp/motion"
+	"github.jpl.nasa.gov/HCIT/go-hcit/generichttp/tmc"
 
 	"github.com/go-yaml/yaml"
 	"goji.io"
@@ -168,6 +170,9 @@ func BuildMux(c Config) *goji.Mux {
 			dewK := fluke.NewDewK(node.Addr, node.Serial)
 			httper = fluke.NewHTTPWrapper(*dewK)
 
+		case "function-generator", "fg":
+			gen := agilent.NewFunctionGenerator(node.Addr, node.Serial)
+			httper = tmc.NewHTTPFunctionGenerator(gen)
 		case "convectron", "gpconvectron":
 			cv := granvillephillips.NewSensor(node.Addr, node.Serial)
 			httper = commonpressure.NewHTTPWrapper(*cv)
