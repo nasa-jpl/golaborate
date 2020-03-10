@@ -21,19 +21,31 @@ func main() {
 	args := os.Args[1:]
 	// create the PI device and HTTP wrapper to it
 	ctl := pi.NewController(args[0], false)
+	dV := float64(25)
+	ctl.DV = &dV
 	wrap := motion.NewHTTPMotionController(ctl)
+
+	dist := &fsm.Disturbance{
+		PL:     pctl.PhaseLock{Interval: 40 * time.Millisecond},
+		Repeat: false}
 
 	// now create the disturbance engine and its HTTP wrapper
 	cb := func(axes []string, pos []float64) {
-		err := ctl.MultiAxisMoveAbs(axes, pos)
+		var err error
+		if len(axes) == 1 {
+			// err = ctl.SetVoltageSafe(axes[0], pos[0])
+			err = ctl.SetVoltage(axes[0], pos[0])
+		} else {
+			err = ctl.MultiAxisMoveAbs(axes, pos)
+		}
 		if err != nil {
 			log.Println(err)
 		}
+		if dist.Cursor%100 == 0 {
+			err = ctl.PopError()
+		}
 	}
-	dist := &fsm.Disturbance{
-		Callback: cb,
-		PL:       pctl.PhaseLock{Interval: 40 * time.Millisecond},
-		Repeat:   false}
+	dist.Callback = cb
 	wrap2 := fsm.NewHTTPDisturbance(dist)
 	// set up the HTTP bindings to the server
 	mainMux := goji.NewMux()
