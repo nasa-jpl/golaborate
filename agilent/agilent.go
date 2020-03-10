@@ -2,6 +2,9 @@
 package agilent
 
 import (
+	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/tarm/serial"
@@ -33,80 +36,126 @@ func NewFunctionGenerator(addr string, serial bool) *FunctionGenerator {
 	return &FunctionGenerator{&rd}
 }
 
+func (f *FunctionGenerator) writeOnlyBus(cmds ...string) error {
+	err := f.RemoteDevice.Open()
+	if err != nil {
+		return err
+	}
+	defer f.CloseEventually()
+	s := strings.Join(cmds, " ")
+	return f.RemoteDevice.Send([]byte(s))
+}
+
+func (f *FunctionGenerator) readString(cmds ...string) (string, error) {
+	f.writeOnlyBus(cmds...)
+	resp, err := f.RemoteDevice.Recv()
+	if err != nil {
+		return "", err
+	}
+	return string(resp), nil
+}
+
+func (f *FunctionGenerator) readFloat(cmds ...string) (float64, error) {
+	f.writeOnlyBus(cmds...)
+	resp, err := f.RemoteDevice.Recv()
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseFloat(string(resp), 64)
+}
+
+func (f *FunctionGenerator) readBool(cmds ...string) (bool, error) {
+	f.writeOnlyBus(cmds...)
+	resp, err := f.RemoteDevice.Recv()
+	if err != nil {
+		return false, err
+	}
+	return strconv.ParseBool(string(resp))
+}
+
 // SetFunction configures the output function used by the generator
 func (f *FunctionGenerator) SetFunction(fcn string) error {
 	// FUNC: SHAP <fcn>
-	return nil
+	return f.writeOnlyBus("FUNC: SHAP", fcn)
 }
 
 // GetFunction returns the current function type used by the generator
 func (f *FunctionGenerator) GetFunction() (string, error) {
 	// FUNC?
-	return "", nil
+	return f.readString("FUNC: SHAP?")
 }
 
 // SetFrequency configures the output frequency of the generator in Hz
 func (f *FunctionGenerator) SetFrequency(hz float64) error {
 	// FREQ <Hz>
-	return nil
+	s := strconv.FormatFloat(hz, 'G', -1, 64)
+	return f.writeOnlyBus("FREQ", s)
 }
 
 // GetFrequency returns the frequency of the generator in Hz
 func (f *FunctionGenerator) GetFrequency() (float64, error) {
 	// FREQ?
-	return 0, nil
+	return f.readFloat("FREQ?")
 }
 
 // SetVoltage configures the output voltage (Vpp) of the signal
 func (f *FunctionGenerator) SetVoltage(volts float64) error {
 	// VOLT <volts Vpp>; UNIT VPP
-	return nil
+	s := strconv.FormatFloat(volts, 'G', -1, 64)
+	return f.writeOnlyBus("VOLT", s, "; UNIT VPP")
 }
 
 // GetVoltage returns the current output votlage of the generator
 func (f *FunctionGenerator) GetVoltage() (float64, error) {
 	// VOLT?
-	return 0, nil
+	return f.readFloat("VOLT?")
 }
 
 // SetOffset configures the output voltage offset
 func (f *FunctionGenerator) SetOffset(volts float64) error {
 	// VOLT: OFF <volts>
-	return nil
+	s := strconv.FormatFloat(volts, 'G', -1, 64)
+	return f.writeOnlyBus("VOLT: OFF", s)
 }
 
 // GetOffset gets the current voltage offset
 func (f *FunctionGenerator) GetOffset() (float64, error) {
 	// VOLT: OFF?
-	return 0, nil
+	return f.readFloat("VOLT: OFF?")
 }
 
 // SetOutputLoad configures the adjustments inside the generator for the
 // impedance of the load circuit
 func (f *FunctionGenerator) SetOutputLoad(ohms float64) error {
 	// OUT: LOAD <ohms>
-	return nil
+	s := strconv.FormatFloat(ohms, 'G', -1, 64)
+	return f.writeOnlyBus("OUT: LOAD", s)
 }
 
 // EnableOutput enables the output on the front connector of the function generator
 func (f *FunctionGenerator) EnableOutput() error {
 	// OUT ON
-	return nil
+	return f.writeOnlyBus("OUT: ON")
 }
 
 // DisableOutput disables the output on the front connector of the function generator
 func (f *FunctionGenerator) DisableOutput() error {
 	// OUT OFF
-	return nil
+	return f.writeOnlyBus("OUT: OFF")
 }
 
+// GetOutput returns True if the generator is currently outputting a signal
 func (f *FunctionGenerator) GetOutput() (bool, error) {
 	// OUT? I'm assuming.
-	return false, nil
+	return f.readBool("OUT?")
 }
 
 // PopError gets a single error from the queue on the generator
 func (f *FunctionGenerator) PopError() error {
 	// SYST: ERR?
-	return nil
+	s, err := f.readString("SYST: ERR?")
+	if err != nil {
+		return err
+	}
+	return fmt.Errorf(s)
 }
