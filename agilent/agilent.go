@@ -30,7 +30,7 @@ type FunctionGenerator struct {
 // NewFunctionGenerator creates a new FunctionGenerator instance with
 // the communuication set up
 func NewFunctionGenerator(addr string, serial bool) *FunctionGenerator {
-	term := &comm.Terminators{Rx: '\r', Tx: '\r'}
+	term := &comm.Terminators{Rx: 10, Tx: 10}
 	cfg := makeSerConf(addr)
 	rd := comm.NewRemoteDevice(addr, serial, term, cfg)
 	return &FunctionGenerator{&rd}
@@ -76,13 +76,14 @@ func (f *FunctionGenerator) readBool(cmds ...string) (bool, error) {
 // SetFunction configures the output function used by the generator
 func (f *FunctionGenerator) SetFunction(fcn string) error {
 	// FUNC: SHAP <fcn>
-	return f.writeOnlyBus("FUNC: SHAP", fcn)
+	s := strings.Join([]string{"FUNC:", fcn}, "")
+	return f.writeOnlyBus(s)
 }
 
 // GetFunction returns the current function type used by the generator
 func (f *FunctionGenerator) GetFunction() (string, error) {
 	// FUNC?
-	return f.readString("FUNC: SHAP?")
+	return f.readString("FUNC:SHAP?")
 }
 
 // SetFrequency configures the output frequency of the generator in Hz
@@ -102,7 +103,7 @@ func (f *FunctionGenerator) GetFrequency() (float64, error) {
 func (f *FunctionGenerator) SetVoltage(volts float64) error {
 	// VOLT <volts Vpp>; UNIT VPP
 	s := strconv.FormatFloat(volts, 'G', -1, 64)
-	return f.writeOnlyBus("VOLT", s, "; UNIT VPP")
+	return f.writeOnlyBus("VOLT", s, "VPP")
 }
 
 // GetVoltage returns the current output votlage of the generator
@@ -115,13 +116,13 @@ func (f *FunctionGenerator) GetVoltage() (float64, error) {
 func (f *FunctionGenerator) SetOffset(volts float64) error {
 	// VOLT: OFF <volts>
 	s := strconv.FormatFloat(volts, 'G', -1, 64)
-	return f.writeOnlyBus("VOLT: OFF", s)
+	return f.writeOnlyBus("VOLT:OFFSET", s)
 }
 
 // GetOffset gets the current voltage offset
 func (f *FunctionGenerator) GetOffset() (float64, error) {
 	// VOLT: OFF?
-	return f.readFloat("VOLT: OFF?")
+	return f.readFloat("VOLT:OFFSET?")
 }
 
 // SetOutputLoad configures the adjustments inside the generator for the
@@ -129,31 +130,31 @@ func (f *FunctionGenerator) GetOffset() (float64, error) {
 func (f *FunctionGenerator) SetOutputLoad(ohms float64) error {
 	// OUT: LOAD <ohms>
 	s := strconv.FormatFloat(ohms, 'G', -1, 64)
-	return f.writeOnlyBus("OUT: LOAD", s)
+	return f.writeOnlyBus("OUTPUT: LOAD", s)
 }
 
 // EnableOutput enables the output on the front connector of the function generator
 func (f *FunctionGenerator) EnableOutput() error {
 	// OUT ON
-	return f.writeOnlyBus("OUT: ON")
+	return f.writeOnlyBus("OUTPUT ON")
 }
 
 // DisableOutput disables the output on the front connector of the function generator
 func (f *FunctionGenerator) DisableOutput() error {
 	// OUT OFF
-	return f.writeOnlyBus("OUT: OFF")
+	return f.writeOnlyBus("OUTPUT OFF")
 }
 
 // GetOutput returns True if the generator is currently outputting a signal
 func (f *FunctionGenerator) GetOutput() (bool, error) {
 	// OUT? I'm assuming.
-	return f.readBool("OUT?")
+	return f.readBool("OUTPUT?")
 }
 
 // PopError gets a single error from the queue on the generator
 func (f *FunctionGenerator) PopError() error {
 	// SYST: ERR?
-	s, err := f.readString("SYST: ERR?")
+	s, err := f.readString("SYSTem:ERRor?") // unclear why the case needs to be this way
 	if err != nil {
 		return err
 	}
