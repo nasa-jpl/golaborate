@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"go/types"
 	"net/http"
+	"reflect"
+	"unsafe"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/server"
 	"goji.io/pat"
@@ -33,6 +35,37 @@ func setFloat(fcn func(float64) error) http.HandlerFunc {
 			return
 		}
 		err = fcn(f.F64)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+func getInt(fcn func() (int, error)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		i, err := fcn()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		hp := server.HumanPayload{T: types.Int, Int: i}
+		hp.EncodeAndRespond(w, r)
+		return
+	}
+}
+
+func setInt(fcn func(int) error) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		f := server.IntT{}
+		err := json.NewDecoder(r.Body).Decode(&f)
+		defer r.Body.Close()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		err = fcn(f.Int)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -238,5 +271,182 @@ func NewHTTPFunctionGenerator(fg FunctionGenerator) HTTPFunctionGeneratorT {
 	rt := server.RouteTable{}
 	gen := HTTPFunctionGeneratorT{FG: fg, RouteTable: rt}
 	HTTPFunctionGenerator(fg, rt)
+	return gen
+}
+
+// Oscilloscope describes an interface to a digital oscilloscope
+type Oscilloscope interface {
+	// SetScale configures the full vertical range of a channel
+	SetScale(string, float64) error
+
+	// GetScale returns the full vertical range of a channel
+	GetScale(string) (float64, error)
+
+	// SetTimebase configures the full vertical range of a channel
+	SetTimebase(float64) error
+
+	// GetTimebase returns the full vertical range of a channel
+	GetTimebase() (float64, error)
+
+	// SetBandwidthLimit turns the bandwidth limit for a channel on or off
+	SetBandwidthLimit(string, bool) error
+
+	// SetBitDepth configures the bit depth of a scope
+	SetBitDepth(int) error
+
+	// GetBitDepth retrieves the bit depth of the scope
+	GetBitDepth() (int, error)
+
+	// SetSampleRate configures the analog sampling rate of the scope
+	SetSampleRate(int) error
+
+	// GetSampleRate returns the analog sampling rate of the scope
+	GetSampleRate() (int, error)
+
+	// SetAcqLength configures the number of data points to capture
+	SetAcqLength(int) error
+
+	// GetAcqLength retrieves the number of data points to be captured
+	GetAcqLength() (int, error)
+
+	// SetAcqMode configures the acquisition mode used by the scope
+	SetAcqMode(string) error
+
+	// GetAcqMode returns the acquisition mode used by the scope
+	GetAcqMode() (string, error)
+
+	// StartAcq begins DAQ
+	StartAcq() error
+
+	// DownloadData returns the data stored in the scope's memory bank
+	DownloadData() ([]int16, error)
+}
+
+// SetTimebase exposes an HTTP interface to SetTimebase
+func SetTimebase(o Oscilloscope) http.HandlerFunc {
+	return setFloat(o.SetTimebase)
+}
+
+// GetTimebase exposes an HTTP interface to GetTimebase
+func GetTimebase(o Oscilloscope) http.HandlerFunc {
+	return getFloat(o.GetTimebase)
+}
+
+// SetBitDepth exposes an HTTP interface to SetBitDepth
+func SetBitDepth(o Oscilloscope) http.HandlerFunc {
+	return setInt(o.SetBitDepth)
+}
+
+// GetBitDepth exposes an HTTP interface to GetBitDepth
+func GetBitDepth(o Oscilloscope) http.HandlerFunc {
+	return getInt(o.GetBitDepth)
+}
+
+// SetSampleRate exposes an HTTP interface to SetSampleRate
+func SetSampleRate(o Oscilloscope) http.HandlerFunc {
+	return setInt(o.SetSampleRate)
+}
+
+// GetSampleRate exposes an HTTP interface to GetSampleRate
+func GetSampleRate(o Oscilloscope) http.HandlerFunc {
+	return getInt(o.GetSampleRate)
+}
+
+// SetAcqLength exposes an HTTP interface to SetAcqLength
+func SetAcqLength(o Oscilloscope) http.HandlerFunc {
+	return setInt(o.SetAcqLength)
+}
+
+// GetAcqLength exposes an HTTP interface to GetAcqLength
+func GetAcqLength(o Oscilloscope) http.HandlerFunc {
+	return getInt(o.GetAcqLength)
+}
+
+// SetAcqMode exposes an HTTP interface to SetAcqMode
+func SetAcqMode(o Oscilloscope) http.HandlerFunc {
+	return setString(o.SetAcqMode)
+}
+
+// GetAcqMode exposes an HTTP interface to GetAcqMode
+func GetAcqMode(o Oscilloscope) http.HandlerFunc {
+	return getString(o.GetAcqMode)
+}
+
+// now the few weird ones
+
+// StartAcq triggers DAQ on the scope
+func StartAcq(o Oscilloscope) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		err := o.StartAcq()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+// DownloadData transfers the data from the oscilloscope to the user
+func DownloadData(o Oscilloscope) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		data, err := o.DownloadData()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		ary := []byte{}
+		hdr := (*reflect.SliceHeader)(unsafe.Pointer(&data))
+		hdr.Data = uintptr(unsafe.Pointer(&data[0]))
+		hdr.Len = len(data) * 2
+		hdr.Cap = cap(data) * 2
+		w.Write(ary)
+	}
+}
+
+// HTTPOscilloscope injects an HTTP interface to an oscilloscope into a route table
+func HTTPOscilloscope(o Oscilloscope, table server.RouteTable) {
+	rt := table
+
+	// rt[pat.Get("/scale")] = GetScale(o)
+	// rt[pat.Post("/scale")] = SetScale(o)
+
+	rt[pat.Get("/timebase")] = GetTimebase(o)
+	rt[pat.Post("/timebase")] = SetTimebase(o)
+
+	rt[pat.Get("/bit-depth")] = GetBitDepth(o)
+	rt[pat.Post("/bit-depth")] = SetBitDepth(o)
+
+	rt[pat.Get("/sample-rate")] = GetSampleRate(o)
+	rt[pat.Post("/sample-rate")] = SetSampleRate(o)
+
+	rt[pat.Get("/acq-length")] = GetAcqLength(o)
+	rt[pat.Post("/acq-length")] = SetAcqLength(o)
+
+	rt[pat.Get("/acq-mode")] = GetAcqMode(o)
+	rt[pat.Post("/acq-mode")] = SetAcqMode(o)
+
+	rt[pat.Get("/acq-start")] = StartAcq(o)
+	rt[pat.Get("/acq-data")] = DownloadData(o)
+
+}
+
+// HTTPOscilloscopeT holds an HTTP wrapper to a function generator
+type HTTPOscilloscopeT struct {
+	FG Oscilloscope
+
+	RouteTable server.RouteTable
+}
+
+// RT makes this server.httper compliant
+func (h HTTPOscilloscopeT) RT() server.RouteTable {
+	return h.RouteTable
+}
+
+// NewHTTPOscilloscope wraps a function generator in an HTTP interface
+func NewHTTPOscilloscope(fg Oscilloscope) HTTPOscilloscopeT {
+	rt := server.RouteTable{}
+	gen := HTTPOscilloscopeT{FG: fg, RouteTable: rt}
+	HTTPOscilloscope(fg, rt)
 	return gen
 }

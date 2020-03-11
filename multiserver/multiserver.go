@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/agilent"
+	"github.jpl.nasa.gov/HCIT/go-hcit/keysight"
 	"github.jpl.nasa.gov/HCIT/go-hcit/pi"
 	"github.jpl.nasa.gov/HCIT/go-hcit/server/middleware/locker"
 	"github.jpl.nasa.gov/HCIT/go-hcit/thermocube"
@@ -170,7 +171,10 @@ func BuildMux(c Config) *goji.Mux {
 			dewK := fluke.NewDewK(node.Addr, node.Serial)
 			httper = fluke.NewHTTPWrapper(*dewK)
 
-		case "function-generator", "fg":
+		case "keysight-scope":
+			scope := keysight.NewScope(node.Addr)
+			httper = tmc.NewHTTPOscilloscope(scope)
+		case "agilent-function-generator":
 			gen := agilent.NewFunctionGenerator(node.Addr, node.Serial)
 			httper = tmc.NewHTTPFunctionGenerator(gen)
 		case "convectron", "gpconvectron":
