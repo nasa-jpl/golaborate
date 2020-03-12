@@ -25,9 +25,9 @@ type HTTPWrapper struct {
 func NewHTTPWrapper(m TemperatureMonitor) HTTPWrapper {
 	w := HTTPWrapper{TemperatureMonitor: m}
 	rt := server.RouteTable{
-		pat.Get("read"):     w.ReadAll,
-		pat.Get("read/:ch"): w.ReadChan,
-		pat.Get("version"):  w.Version,
+		pat.Get("/read"):     w.ReadAll,
+		pat.Get("/read/:ch"): w.ReadChan,
+		pat.Get("/version"):  w.Version,
 	}
 	w.RouteTable = rt
 	return w
