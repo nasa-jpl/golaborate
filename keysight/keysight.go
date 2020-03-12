@@ -230,16 +230,34 @@ func (s *Scope) DownloadData() ([]int16, error) {
 	if veryLargeBuffer[0] != '#' {
 		return ret, fmt.Errorf("first byte in response from scope was %v, expected #", veryLargeBuffer[0])
 	}
-	if veryLargeBuffer[1] != '#' {
-		return ret, fmt.Errorf("second byte in response from scope was %v, expected 0", veryLargeBuffer[1])
+	nbytesText := int(veryLargeBuffer[1]) - 48 // shift down by 48, ASCII->int
+	upper := 2 + nbytesText
+	nbytes, err := strconv.Atoi(string(veryLargeBuffer[2:upper]))
+	if err != nil {
+		return ret, err
 	}
+	veryLargeBuffer = veryLargeBuffer[upper:]
+	if len(veryLargeBuffer) < nbytes { // this if may be removable
+		for len(veryLargeBuffer) < nbytes {
+			buf, err := s.RemoteDevice.Recv()
+			if err != nil {
+				return ret, err
+			}
+			veryLargeBuffer = append(veryLargeBuffer, buf...)
+		}
+	}
+	// if veryLargeBuffer[1] != '0' {
+	// 	return ret, fmt.Errorf("second byte in response from scope was %v, expected 0", veryLargeBuffer[1])
+	// }
 
 	// now we do some slice hacking to convert the buffer to int16s
-	secretlyint16s := veryLargeBuffer[2:]
+	// secretlyint16s := veryLargeBuffer[2:]
+	secretlyint16s := veryLargeBuffer
 	ary := []int16{}
-	hdr := (*reflect.SliceHeader)(unsafe.Pointer(&secretlyint16s))
+	hdr := (*reflect.SliceHeader)(unsafe.Pointer(&ary))
 	hdr.Data = uintptr(unsafe.Pointer(&secretlyint16s[0]))
 	hdr.Len = len(secretlyint16s) / 2
 	hdr.Cap = cap(secretlyint16s) / 2
+	fmt.Println(ary)
 	return ary, nil
 }
