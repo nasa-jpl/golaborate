@@ -373,6 +373,45 @@ func GetAcqMode(o Oscilloscope) http.HandlerFunc {
 }
 
 // now the few weird ones
+type scalechan struct {
+	Scale float64 `json:"scale"`
+
+	Channel string `json:"channel"`
+}
+
+// GetScale returns the scale of a channel
+func GetScale(o Oscilloscope) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		sc := scalechan{}
+		err := json.NewDecoder(r.Body).Decode(&sc)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		scale, err := o.GetScale(sc.Channel)
+		hp := server.HumanPayload{T: types.Float64, Float: scale}
+		hp.EncodeAndRespond(w, r)
+	}
+}
+
+// SetScale sets the scale of a channel
+func SetScale(o Oscilloscope) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		sc := scalechan{}
+		err := json.NewDecoder(r.Body).Decode(&sc)
+		defer r.Body.Close()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		err = o.SetScale(sc.Channel, sc.Scale)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
 
 // StartAcq triggers DAQ on the scope
 func StartAcq(o Oscilloscope) http.HandlerFunc {
@@ -396,7 +435,7 @@ func DownloadData(o Oscilloscope) http.HandlerFunc {
 		}
 		w.WriteHeader(http.StatusOK)
 		ary := []byte{}
-		hdr := (*reflect.SliceHeader)(unsafe.Pointer(&data))
+		hdr := (*reflect.SliceHeader)(unsafe.Pointer(&ary))
 		hdr.Data = uintptr(unsafe.Pointer(&data[0]))
 		hdr.Len = len(data) * 2
 		hdr.Cap = cap(data) * 2
@@ -408,8 +447,8 @@ func DownloadData(o Oscilloscope) http.HandlerFunc {
 func HTTPOscilloscope(o Oscilloscope, table server.RouteTable) {
 	rt := table
 
-	// rt[pat.Get("/scale")] = GetScale(o)
-	// rt[pat.Post("/scale")] = SetScale(o)
+	rt[pat.Get("/scale")] = GetScale(o)
+	rt[pat.Post("/scale")] = SetScale(o)
 
 	rt[pat.Get("/timebase")] = GetTimebase(o)
 	rt[pat.Post("/timebase")] = SetTimebase(o)
@@ -426,7 +465,7 @@ func HTTPOscilloscope(o Oscilloscope, table server.RouteTable) {
 	rt[pat.Get("/acq-mode")] = GetAcqMode(o)
 	rt[pat.Post("/acq-mode")] = SetAcqMode(o)
 
-	rt[pat.Get("/acq-start")] = StartAcq(o)
+	rt[pat.Post("/acq-start")] = StartAcq(o)
 	rt[pat.Get("/acq-data")] = DownloadData(o)
 
 }
