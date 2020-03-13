@@ -3,11 +3,13 @@ package tmc
 
 import (
 	"encoding/json"
+	"fmt"
 	"go/types"
 	"net/http"
-	"reflect"
-	"unsafe"
 
+	"github.jpl.nasa.gov/HCIT/go-hcit/generichttp/ascii"
+
+	"github.jpl.nasa.gov/HCIT/go-hcit/oscilloscope"
 	"github.jpl.nasa.gov/HCIT/go-hcit/server"
 	"goji.io/pat"
 )
@@ -197,6 +199,11 @@ func HTTPFunctionGenerator(fg FunctionGenerator, table server.RouteTable) {
 	rt[pat.Post("/output")] = SetOutput(fg)
 
 	rt[pat.Post("/output-load")] = SetOutputLoad(fg)
+
+	if rawer, ok := interface{}(fg).(ascii.RawCommunicator); ok {
+		RW := ascii.RawWrapper{Comm: rawer}
+		rt[pat.Post("/raw")] = RW.HTTPRaw
+	}
 }
 
 // SetFunction exposes an HTTP interface to the SetFunction method
@@ -318,8 +325,8 @@ type Oscilloscope interface {
 	// StartAcq begins DAQ
 	StartAcq() error
 
-	// DownloadData returns the data stored in the scope's memory bank
-	DownloadData() ([]int16, error)
+	// AcquireWaveform triggers a measurement on the scope and returns the data
+	AcquireWaveform([]string) (oscilloscope.Waveform, error)
 }
 
 // SetTimebase exposes an HTTP interface to SetTimebase
@@ -384,11 +391,13 @@ func GetScale(o Oscilloscope) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		sc := scalechan{}
 		err := json.NewDecoder(r.Body).Decode(&sc)
+		fmt.Println(sc)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		scale, err := o.GetScale(sc.Channel)
+		fmt.Println(scale)
 		hp := server.HumanPayload{T: types.Float64, Float: scale}
 		hp.EncodeAndRespond(w, r)
 	}
@@ -425,21 +434,31 @@ func StartAcq(o Oscilloscope) http.HandlerFunc {
 	}
 }
 
-// DownloadData transfers the data from the oscilloscope to the user
-func DownloadData(o Oscilloscope) http.HandlerFunc {
+type channels struct {
+	Chans []string `json:"channels"`
+}
+
+// AcquireWaveform transfers the data from the oscilloscope to the user
+func AcquireWaveform(o Oscilloscope) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		data, err := o.DownloadData()
+		chans := channels{}
+		err := json.NewDecoder(r.Body).Decode(&chans)
+		defer r.Body.Close()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		data, err := o.AcquireWaveform(chans.Chans)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		ary := []byte{}
-		hdr := (*reflect.SliceHeader)(unsafe.Pointer(&ary))
-		hdr.Data = uintptr(unsafe.Pointer(&data[0]))
-		hdr.Len = len(data) * 2
-		hdr.Cap = cap(data) * 2
-		w.Write(ary)
+		err = json.NewEncoder(w).Encode(data)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	}
 }
 
@@ -466,7 +485,12 @@ func HTTPOscilloscope(o Oscilloscope, table server.RouteTable) {
 	rt[pat.Post("/acq-mode")] = SetAcqMode(o)
 
 	rt[pat.Post("/acq-start")] = StartAcq(o)
-	rt[pat.Get("/acq-data")] = DownloadData(o)
+	rt[pat.Get("/acq-waveform")] = AcquireWaveform(o)
+
+	if rawer, ok := interface{}(o).(ascii.RawCommunicator); ok {
+		RW := ascii.RawWrapper{Comm: rawer}
+		rt[pat.Post("/raw")] = RW.HTTPRaw
+	}
 
 }
 

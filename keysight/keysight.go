@@ -4,12 +4,13 @@ package keysight
 import (
 	"encoding/binary"
 	"fmt"
-	"reflect"
 	"strconv"
 	"strings"
+	"time"
 	"unsafe"
 
 	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
+	"github.jpl.nasa.gov/HCIT/go-hcit/oscilloscope"
 )
 
 var nativeEndian binary.ByteOrder
@@ -37,6 +38,7 @@ type Scope struct {
 func NewScope(addr string) *Scope {
 	term := comm.Terminators{Tx: '\n', Rx: '\n'}
 	rd := comm.NewRemoteDevice(addr, false, &term, nil)
+	rd.Timeout = 24 * time.Hour
 	return &Scope{&rd}
 }
 
@@ -48,6 +50,7 @@ func (s *Scope) writeOnlyBus(cmds ...string) error {
 	}
 	defer s.CloseEventually()
 	str := strings.Join(cmds, " ")
+	fmt.Println(str)
 	return s.RemoteDevice.Send([]byte(str))
 }
 
@@ -96,6 +99,18 @@ func (s *Scope) SetScale(channel string, voltsFullScale float64) error {
 // GetScale returns the scale of the scope in volts full scale
 func (s *Scope) GetScale(channel string) (float64, error) {
 	str := fmt.Sprintf(":CHANnel%s:RANGe?", channel)
+	return s.readFloat(str)
+}
+
+// SetOffset sets the vertical offset of the scope
+func (s *Scope) SetOffset(channel string, voltsOffZero float64) error {
+	str := fmt.Sprintf(":CHANnel%s:OFFSet %E", channel, voltsOffZero)
+	return s.writeOnlyBus(str)
+}
+
+// GetOffset returns the vertical offset of a channel on the scope
+func (s *Scope) GetOffset(channel string) (float64, error) {
+	str := fmt.Sprintf(":CHANnel%s:OFFset?", channel)
 	return s.readFloat(str)
 }
 
@@ -153,13 +168,14 @@ func (s *Scope) GetSampleRate() (int, error) {
 
 // SetAcqLength sets the total number of samples in an acquisition
 func (s *Scope) SetAcqLength(points int) error {
-	str := fmt.Sprintf("ACQuire:POINts:ANAlog %d", points)
+	// ACQuire:POINts:ANAlog -> WAVform:POINts 2020-03-11 in lab w/ MSO7104A
+	str := fmt.Sprintf("WAVform:POINts %d", points)
 	return s.writeOnlyBus(str)
 }
 
 // GetAcqLength returns the total number of points that will be acquired in a sequence
 func (s *Scope) GetAcqLength() (int, error) {
-	return s.readInt("ACQuire:POINts:ANAlog?")
+	return s.readInt("WAVform:POINts?")
 }
 
 // SetAcqMode sets the acquisition mode used by the scope
@@ -194,70 +210,162 @@ func (s *Scope) GetStreaming() (bool, error) {
 	return s.readBool(":WAVeform:STReaming?")
 }
 
-// DownloadData returns the data from the scope, after a StartAcq command
-func (s *Scope) DownloadData() ([]int16, error) {
+// XIncrement gets the time delta of the scope's data record
+func (s *Scope) XIncrement() (float64, error) {
+	return s.readFloat(":WAVeform:XINCrement?")
+}
+
+// getBuffer transfers the data buffer from the scope handling all internal details
+func (s *Scope) getBuffer() ([]byte, error) {
+	s.writeOnlyBus(":WAVeform:DATA?")
+	var ret []byte
+	buf := make([]byte, 9000) // as of 2020, even jumbo frames aren't bigger than this
+	n, err := s.RemoteDevice.Conn.Read(buf)
+	if err != nil {
+		return ret, err
+	}
+	if n < 2 {
+		return ret, fmt.Errorf("response from scope was only %d bytes, expected >2", n)
+	}
+	if buf[0] != '#' {
+		return ret, fmt.Errorf("first byte in response from scope was %v, expected #", buf[0])
+	}
+	nbytesText := int(buf[1]) - 48 // shift down by 48, ASCII->int
+	upper := 2 + nbytesText
+	dataBuf := buf[:n]
+	nbytes, err := strconv.Atoi(string(dataBuf[2:upper]))
+	if err != nil {
+		return ret, err
+	}
+	dataBuf = dataBuf[upper:]
+	s.RemoteDevice.Lock()
+	defer s.RemoteDevice.Unlock()
+	if len(dataBuf) < nbytes { // this if may be removable
+		for len(dataBuf) < nbytes {
+			buf := make([]byte, 9000) // as of 2020, even jumbo frames aren't bigger than this
+			n, err = s.RemoteDevice.Conn.Read(buf)
+			s.RemoteDevice.LastComm = time.Now()
+			if err != nil {
+				return ret, err
+			}
+			dataBuf = append(dataBuf, buf[:n]...)
+		}
+	}
+	// now we need to pop off the terminator
+	dataBuf = dataBuf[:len(dataBuf)-1]
+	return dataBuf, nil
+}
+
+// AcquireWaveform configures the settings on the scope to digitize a waveform
+// and return the data as a Waveform object with all information
+// needed to convert to appropriate volts and time
+func (s *Scope) AcquireWaveform(channels []string) (oscilloscope.Waveform, error) {
 	var (
 		byteCmd string
-		ret     []int16
+		ret     oscilloscope.Waveform
 	)
+	ret.Data = make(map[string][]byte)
+	ret.Scale = make(map[string]float64)
+	ret.Offset = make(map[string]float64)
+	// first, make sure the scope is sending data in our machine byte order
 	if nativeEndian == binary.LittleEndian {
 		byteCmd = "LSBFirst"
 	} else {
 		byteCmd = "MSBFirst"
 	}
-
+	fmt.Println("byte order")
 	err := s.writeOnlyBus(":WAVeform:BYTeorder", byteCmd)
 	if err != nil {
 		return ret, err
 	}
 
-	err = s.SetStreaming(true)
+	// now, trigger digitization
+	chunks := []string{":DIGitize"}
+
+	chanS := make([]string, len(channels))
+	for i := 0; i < len(channels); i++ {
+		str := "CHANnel" + channels[i]
+		chunks = append(chunks, str)
+		chanS[i] = str
+	}
+
+	// get how long to sleep
+	timebase, err := s.GetTimebase()
+	if err != nil {
+		return ret, err
+	}
+	fmt.Println("digi")
+	fmt.Println(chunks)
+	err = s.writeOnlyBus(chunks...)
 	if err != nil {
 		return ret, err
 	}
 
-	err = s.writeOnlyBus("WAVeform:DATA?")
+	time.Sleep(time.Duration(timebase * 1e9))
+
+	// now while we wait for ACQ to complete, we can get all
+	// of the metadata
+	fmt.Println("xinc")
+	ret.DT, err = s.XIncrement()
 	if err != nil {
 		return ret, err
 	}
-	veryLargeBuffer, err := s.RemoteDevice.Recv()
+	fmt.Println("unsigned")
+	unsigned, err := s.readBool(":WAVeform:UNSigned?")
 	if err != nil {
 		return ret, err
 	}
-	if len(veryLargeBuffer) < 2 {
-		return ret, fmt.Errorf("response from scope was only %d bytes, expected >2", len(veryLargeBuffer))
+	if unsigned {
+		ret.Dtype = "uint16"
+	} else {
+		ret.Dtype = "int16"
 	}
-	if veryLargeBuffer[0] != '#' {
-		return ret, fmt.Errorf("first byte in response from scope was %v, expected #", veryLargeBuffer[0])
-	}
-	nbytesText := int(veryLargeBuffer[1]) - 48 // shift down by 48, ASCII->int
-	upper := 2 + nbytesText
-	nbytes, err := strconv.Atoi(string(veryLargeBuffer[2:upper]))
-	if err != nil {
-		return ret, err
-	}
-	veryLargeBuffer = veryLargeBuffer[upper:]
-	if len(veryLargeBuffer) < nbytes { // this if may be removable
-		for len(veryLargeBuffer) < nbytes {
-			buf, err := s.RemoteDevice.Recv()
-			if err != nil {
-				return ret, err
-			}
-			veryLargeBuffer = append(veryLargeBuffer, buf...)
+
+	for i := 0; i < len(chanS); i++ {
+		fmt.Println("source")
+		// change the source so we can query for each channel
+		err = s.writeOnlyBus(":WAVeform:SOURce", chanS[i])
+		if err != nil {
+			return ret, err
 		}
-	}
-	// if veryLargeBuffer[1] != '0' {
-	// 	return ret, fmt.Errorf("second byte in response from scope was %v, expected 0", veryLargeBuffer[1])
-	// }
+		// get the vertical offset
+		fmt.Println("yorigin")
+		yoff, err := s.readFloat(":WAVeform:YORigin?")
+		if err != nil {
+			return ret, err
+		}
+		ret.Offset[channels[i]] = yoff
 
-	// now we do some slice hacking to convert the buffer to int16s
-	// secretlyint16s := veryLargeBuffer[2:]
-	secretlyint16s := veryLargeBuffer
-	ary := []int16{}
-	hdr := (*reflect.SliceHeader)(unsafe.Pointer(&ary))
-	hdr.Data = uintptr(unsafe.Pointer(&secretlyint16s[0]))
-	hdr.Len = len(secretlyint16s) / 2
-	hdr.Cap = cap(secretlyint16s) / 2
-	fmt.Println(ary)
-	return ary, nil
+		// and the scale
+		fmt.Println("yinc")
+		yscale, err := s.readFloat(":WAVeform:YINCrement?")
+		if err != nil {
+			return ret, err
+		}
+		ret.Scale[channels[i]] = yscale
+	}
+
+	for i := 0; i < len(chanS); i++ {
+		fmt.Println("source")
+		err = s.writeOnlyBus(":WAVeform:SOURce", chanS[i])
+		if err != nil {
+			return ret, err
+		}
+		fmt.Println("data")
+		buf, err := s.getBuffer()
+		if err != nil {
+			return ret, err
+		}
+		ret.Data[channels[i]] = buf
+	}
+	return ret, nil
+}
+
+// Raw sends a command to the scope and returns a response if it was a query,
+// else a blank string
+func (s *Scope) Raw(str string) (string, error) {
+	if strings.Contains(str, "?") {
+		return s.readString(str)
+	}
+	return "", s.writeOnlyBus(str)
 }

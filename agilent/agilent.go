@@ -41,7 +41,7 @@ func (f *FunctionGenerator) writeOnlyBus(cmds ...string) error {
 	if err != nil {
 		return err
 	}
-	defer f.CloseEventually()
+	// defer f.CloseEventually()
 	s := strings.Join(cmds, " ")
 	return f.RemoteDevice.Send([]byte(s))
 }
@@ -159,4 +159,13 @@ func (f *FunctionGenerator) PopError() error {
 		return err
 	}
 	return fmt.Errorf(s)
+}
+
+// Raw sends a command to the scope and returns a response if it was a query,
+// else a blank string
+func (f *FunctionGenerator) Raw(str string) (string, error) {
+	if strings.Contains(str, "?") {
+		return f.readString(str)
+	}
+	return "", f.writeOnlyBus(str)
 }

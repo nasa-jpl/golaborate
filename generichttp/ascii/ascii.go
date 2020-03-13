@@ -15,12 +15,13 @@ type RawCommunicator interface {
 	Raw(string) (string, error)
 }
 
-// rawWrapper is a wrapper around a raw communicator
-type rawWrapper struct {
-	comm RawCommunicator
+// RawWrapper is a wrapper around a raw communicator
+type RawWrapper struct {
+	Comm RawCommunicator
 }
 
-func (rw *rawWrapper) httpraw(w http.ResponseWriter, r *http.Request) {
+// HTTPRaw provides access to the raw function over http
+func (rw *RawWrapper) HTTPRaw(w http.ResponseWriter, r *http.Request) {
 	str := server.StrT{}
 	err := json.NewDecoder(r.Body).Decode(&str)
 	defer r.Body.Close()
@@ -28,7 +29,7 @@ func (rw *rawWrapper) httpraw(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	resp, err := rw.comm.Raw(str.Str)
+	resp, err := rw.Comm.Raw(str.Str)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -40,7 +41,7 @@ func (rw *rawWrapper) httpraw(w http.ResponseWriter, r *http.Request) {
 
 // InjectRawComm injects a /raw POST route into the route table of an HTTPer
 func InjectRawComm(other server.HTTPer, raw RawCommunicator) {
-	wrap := rawWrapper{comm: raw}
+	wrap := RawWrapper{Comm: raw}
 	rt := other.RT()
-	rt[pat.Post("/raw")] = wrap.httpraw
+	rt[pat.Post("/raw")] = wrap.HTTPRaw
 }
