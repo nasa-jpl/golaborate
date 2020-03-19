@@ -4,6 +4,7 @@ package keysight
 import (
 	"encoding/binary"
 	"fmt"
+	"reflect"
 	"strconv"
 	"time"
 	"unsafe"
@@ -216,17 +217,18 @@ func (s *Scope) AcquireWaveform(channels []string) (oscilloscope.Waveform, error
 		byteCmd string
 		ret     oscilloscope.Waveform
 	)
-	ret.Data = make(map[string][]byte)
-	ret.Scale = make(map[string]float64)
-	ret.Offset = make(map[string]float64)
+	ret.Channels = map[string]oscilloscope.Channel{}
 	// first, make sure the scope is sending data in our machine byte order
 	if nativeEndian == binary.LittleEndian {
 		byteCmd = "LSBFirst"
 	} else {
 		byteCmd = "MSBFirst"
 	}
-	fmt.Println("byte order")
-	err := s.Write(":WAVeform:BYTeorder", byteCmd)
+	err := s.Write(":WAVeform:FORMAT WORD")
+	if err != nil {
+		return ret, err
+	}
+	err = s.Write(":WAVeform:BYTeorder", byteCmd)
 	if err != nil {
 		return ret, err
 	}
@@ -246,8 +248,6 @@ func (s *Scope) AcquireWaveform(channels []string) (oscilloscope.Waveform, error
 	if err != nil {
 		return ret, err
 	}
-	fmt.Println("digi")
-	fmt.Println(chunks)
 	err = s.Write(chunks...)
 	if err != nil {
 		return ret, err
@@ -255,60 +255,60 @@ func (s *Scope) AcquireWaveform(channels []string) (oscilloscope.Waveform, error
 
 	time.Sleep(time.Duration(timebase * 1e9))
 
-	// now while we wait for ACQ to complete, we can get all
-	// of the metadata
-	fmt.Println("xinc")
 	ret.DT, err = s.XIncrement()
 	if err != nil {
 		return ret, err
 	}
-	fmt.Println("unsigned")
 	unsigned, err := s.ReadBool(":WAVeform:UNSigned?")
 	if err != nil {
 		return ret, err
 	}
-	if unsigned {
-		ret.Dtype = "uint16"
-	} else {
-		ret.Dtype = "int16"
-	}
 
 	for i := 0; i < len(chanS); i++ {
-		fmt.Println("source")
 		// change the source so we can query for each channel
 		err = s.Write(":WAVeform:SOURce", chanS[i])
 		if err != nil {
 			return ret, err
 		}
 		// get the vertical offset
-		fmt.Println("yorigin")
 		yoff, err := s.ReadFloat(":WAVeform:YORigin?")
 		if err != nil {
 			return ret, err
 		}
-		ret.Offset[channels[i]] = yoff
 
 		// and the scale
-		fmt.Println("yinc")
 		yscale, err := s.ReadFloat(":WAVeform:YINCrement?")
 		if err != nil {
 			return ret, err
 		}
-		ret.Scale[channels[i]] = yscale
-	}
 
-	for i := 0; i < len(chanS); i++ {
-		fmt.Println("source")
-		err = s.Write(":WAVeform:SOURce", chanS[i])
+		// reference, because old scopes...
+		yref, err := s.ReadFloat(":WAVeform:YREFerence?")
 		if err != nil {
 			return ret, err
 		}
-		fmt.Println("data")
+
 		buf, err := s.getBuffer()
 		if err != nil {
 			return ret, err
 		}
-		ret.Data[channels[i]] = buf
+		ch := oscilloscope.Channel{Scale: yscale, Offset: yoff, Reference: yref}
+		if unsigned {
+			ary := []uint16{}
+			hdr := (*reflect.SliceHeader)(unsafe.Pointer(&ary))
+			hdr.Data = uintptr(unsafe.Pointer(&buf[0]))
+			hdr.Len = len(buf) / 2
+			hdr.Cap = cap(buf) / 2
+			ch.Data = ary
+		} else {
+			ary := []int16{}
+			hdr := (*reflect.SliceHeader)(unsafe.Pointer(&ary))
+			hdr.Data = uintptr(unsafe.Pointer(&buf[0]))
+			hdr.Len = len(buf) / 2
+			hdr.Cap = cap(buf) / 2
+			ch.Data = ary
+		}
+		ret.Channels[chanS[i]] = ch
 	}
 	return ret, nil
 }

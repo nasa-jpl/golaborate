@@ -2,36 +2,162 @@
 package oscilloscope
 
 import (
-	"time"
+	"bufio"
+	"encoding/csv"
+	"io"
+	"strconv"
 )
 
-/*Waveform describes a waveform recording from a scope
-To convert to physical scales:
-
-  1.  Cast the data buffer to the appropriate dtype, then convert to a
-      floating point representation
-  2.  Subtract the Offset
-  3.  Multiply by Scale
-  4.  The abscissa is range(len(cast_data)) * dT
-*/
+// Waveform describes a waveform recording from a scope
 type Waveform struct {
-	// Trigger is the moment the waveform recording began
-	Trigger time.Time `json:"trigger"`
-
 	// DT is the temporal sample spacing in seconds
 	DT float64 `json:"dt"`
 
-	// Dtype is the type of data represented by the buffers,
-	// in machine native byte order
-	Dtype string `json:"dtype"`
+	// Channels holds named data streams
+	Channels map[string]Channel
+}
 
-	// Data contains the buffer(s) of scope data, keyed by the channel
-	// the bytes typically represent uint16s or int16s
-	Data map[string][]byte `json:"data"`
+// Channel represents a stream of data from an ADC.  To convert to physical units,
+// compute (data-offset)*scale
+type Channel struct {
+	// Data is the actual buffer, []byte, []int16, []uint16, or similar
+	Data Data
 
-	// Scale contains the voltage of each unit step in the data, per channel
-	Scale map[string]float64 `json:"scale"`
+	// Scale is the vertical scale of the data or size of a single increment
+	// in Data's native dtype
+	Scale float64
 
-	// Offset contains the offset (in Dtype steps) for each channel
-	Offset map[string]float64 `json:"offset"`
+	// Offset is the offset applied to the data
+	Offset float64
+
+	// Reference is the reference value for the given channel in DN
+	Reference float64
+}
+
+// Physical computes the data scaled to real units
+func (c Channel) Physical() []float64 {
+	// a lot of copy paste, but this gets us around the type system
+	switch v := c.Data.(type) {
+	case []uint8:
+		length := len(v)
+		ret := make([]float64, length)
+		for i := 0; i < length; i++ {
+			ret[i] = ((float64(v[i]) - c.Reference) * c.Scale) + c.Offset
+		}
+		return ret
+	case []uint16:
+		length := len(v)
+		ret := make([]float64, length)
+		for i := 0; i < length; i++ {
+			// ret[i] = ((float64(v[i]) - c.Reference) * c.Scale) + c.Offset
+			ret[i] = float64(v[i])
+		}
+		return ret
+	case []uint32:
+		length := len(v)
+		ret := make([]float64, length)
+		for i := 0; i < length; i++ {
+			ret[i] = ((float64(v[i]) - c.Reference) * c.Scale) + c.Offset
+		}
+		return ret
+	case []uint64:
+		length := len(v)
+		ret := make([]float64, length)
+		for i := 0; i < length; i++ {
+			ret[i] = ((float64(v[i]) - c.Reference) * c.Scale) + c.Offset
+		}
+		return ret
+	case []int8:
+		length := len(v)
+		ret := make([]float64, length)
+		for i := 0; i < length; i++ {
+			ret[i] = ((float64(v[i]) - c.Reference) * c.Scale) + c.Offset
+		}
+		return ret
+	case []int16:
+		length := len(v)
+		ret := make([]float64, length)
+		for i := 0; i < length; i++ {
+			ret[i] = ((float64(v[i]) - c.Reference) * c.Scale) + c.Offset
+		}
+		return ret
+	case []int32:
+		length := len(v)
+		ret := make([]float64, length)
+		for i := 0; i < length; i++ {
+			ret[i] = ((float64(v[i]) - c.Reference) * c.Scale) + c.Offset
+		}
+		return ret
+	case []int64:
+		length := len(v)
+		ret := make([]float64, length)
+		for i := 0; i < length; i++ {
+			ret[i] = ((float64(v[i]) - c.Reference) * c.Scale) + c.Offset
+		}
+		return ret
+	case []float32:
+		length := len(v)
+		ret := make([]float64, length)
+		for i := 0; i < length; i++ {
+			ret[i] = ((float64(v[i]) - c.Reference) * c.Scale) + c.Offset
+		}
+		return ret
+	case []float64:
+		length := len(v)
+		ret := make([]float64, length)
+		for i := 0; i < length; i++ {
+			ret[i] = ((float64(v[i]) - c.Reference) * c.Scale) + c.Offset
+		}
+		return ret
+	default:
+		panic("attempt to convert non numerical data to physical units")
+	}
+}
+
+// Data is a moniker for an empty interface, expected to be a slice of a concrete
+// numerical type
+type Data interface{}
+
+// EncodeCSV converts the waveform data to physical units
+// and writes it to a CSV in streaming fashion
+func (wav *Waveform) EncodeCSV(w io.Writer) error {
+	// first, assemble the floating point data and timestamps
+	// so we have definite length to work with
+	labels := make([]string, len(wav.Channels))
+	i := 0
+	for k := range wav.Channels {
+		labels[i] = k
+		i++
+	}
+	data := make([][]float64, i) // i is leaked from the loop above and can be reused
+	for j := 0; j < i; j++ {
+		data[j] = wav.Channels[labels[j]].Physical()
+	}
+	timestamps := make([]string, len(data[0]))
+	for i := 0; i < len(data[0]); i++ {
+		timestamps[i] = strconv.FormatFloat(float64(i)*wav.DT, 'G', -1, 64)
+	}
+	labels = append([]string{"time"}, labels...)
+
+	// use a shitload of atomic writes through a buffer
+	w2 := bufio.NewWriter(w)
+	w3 := csv.NewWriter(w2)
+	writer := csv.NewWriter(bufio.NewWriter(w))
+	err := writer.Write(labels)
+	if err != nil {
+		return err
+	}
+	for i := 0; i < len(data[0]); i++ {
+		labels[0] = timestamps[i]
+		for j := 0; j < len(data); j++ {
+			labels[j+1] = strconv.FormatFloat(data[j][i], 'G', -1, 64)
+		}
+		err := w3.Write(labels)
+		if err != nil {
+			return err
+		}
+	}
+	w3.Flush()
+	w2.Flush()
+	return nil
 }

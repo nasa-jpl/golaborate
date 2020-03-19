@@ -453,9 +453,9 @@ func AcquireWaveform(o Oscilloscope) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "text/csv")
 		w.WriteHeader(http.StatusOK)
-		err = json.NewEncoder(w).Encode(data)
+		err = data.EncodeCSV(w)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
