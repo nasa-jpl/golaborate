@@ -214,47 +214,6 @@ func (h *HTTPWrapper) SetFeature(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-	case "AOIWidth", "AOIHeight", "AOITop", "AOILeft":
-		// get the parameter from the client and create the struct
-		i := server.IntT{}
-		err := json.NewDecoder(r.Body).Decode(&i)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		defer r.Body.Close()
-		aoi := camera.AOI{}
-		switch feature {
-		case "AOIWidth":
-			aoi.Width = i.Int
-		case "AOIHeight":
-			aoi.Height = i.Int
-		case "AOILeft":
-			aoi.Left = i.Int
-		case "AOITop":
-			aoi.Top = i.Int
-		}
-		err = h.Camera.SetAOI(aoi)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-	case "AOIBinning":
-		s := server.StrT{}
-		err := json.NewDecoder(r.Body).Decode(&s)
-		defer r.Body.Close()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		b := camera.HxVToBin(s.Str)
-		err = h.Camera.SetBinning(b)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		return
 	default:
 		switch typ {
 		case "command":
