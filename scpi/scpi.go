@@ -32,7 +32,7 @@ func (s *SCPI) Write(cmds ...string) error {
 	defer s.CloseEventually()
 	if s.Handshaking {
 		cmds = append([]string{"*CLS;"}, cmds...)
-		cmds = append(cmds, ";SYSTem:ERRor?")
+		cmds = append(cmds, ";:SYSTem:ERRor?")
 	}
 	str := strings.Join(cmds, " ")
 	if s.Handshaking {
