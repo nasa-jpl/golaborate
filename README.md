@@ -1,4 +1,4 @@
-# go-hcit
+# golab
 
 This monorepo contains a number of packages written predominantly in the Go programming language for interacting with lab hardware -- sensors, motion controllers, cameras, and deformable mirrors.  These packages include HTTP server extensions that allow simple and painless communication with a server driving the hardware.  The Andor, BMC, and Thorlabs ITC code uses CGo and is less portable for that reason.
 
@@ -52,13 +52,13 @@ Golang has the convention that all of your code has to be on the `$GOPATH` under
 ```sh
 cd ~/go/src
 mkdir github.jpl.nasa.gov && cd github.jpl.nasa.gov
-mkdir HCIT && cd HCIT
-git clone https://github.jpl.nasa.gov/HCIT/go-hcit
+mkdir bdube && cd bdube
+git clone https://github.jpl.nasa.gov/bdube/golab
 ```
 
 All external dependencies are bundled in the `vendor` directory, so you will always be able to download go 1.x and compile a program.
 
-If you need to modify a program, cd from `go-hcit` to `/cmd/<the program>` and edit `main.go`.  Then `cd ..` and compile:
+If you need to modify a program, cd from `golab` to `/cmd/<the program>` and edit `main.go`.  Then `cd ..` and compile:
 
 ```sh
 env GOOS=linux GOARCH=amd64 go build main.go
@@ -77,6 +77,6 @@ a binary to use it.
 
 ## Documentation
 
-To view the documentation for the `Go` code, cd to the root of this repository under `$GOPATH`, then run `godoc -http=:6060` and visit http://localhost:6060/pkg/github.jpl.nasa.gov/HCIT/go-hcit/ in your browser.
+To view the documentation for the `Go` code, cd to the root of this repository under `$GOPATH`, then run `godoc -http=:6060` and visit http://localhost:6060/pkg/github.jpl.nasa.gov/bdube/golab/ in your browser.
 
 To view the documentation for HTTP clients, you can build envsrv and visit http://<envsrv-url>/static/docs.html, or use [swagger-ui](https://github.com/swagger-api/swagger-ui) to view and edit the docs locally.
