@@ -92,14 +92,16 @@ func (s *Scope) GetBitDepth() (int, error) {
 }
 
 // SetSampleRate sets the sampling rate of the scope in samples per second
-func (s *Scope) SetSampleRate(samplesPerSecond int) error {
-	str := fmt.Sprintf("ACQuire:SRATe:ANALog %d", samplesPerSecond)
+func (s *Scope) SetSampleRate(samplesPerSecond float64) error {
+	i := int(samplesPerSecond)
+	str := fmt.Sprintf("ACQuire:SRATe:ANALog %d", i)
 	return s.Write(str)
 }
 
 // GetSampleRate returns the sampling rate of the scope
-func (s *Scope) GetSampleRate() (int, error) {
-	return s.ReadInt("ACQuire:SRATe:ANAlog?")
+func (s *Scope) GetSampleRate() (float64, error) {
+	i, err := s.ReadInt("ACQuire:SRATe:ANAlog?")
+	return float64(i), err
 }
 
 // SetAcqLength sets the total number of samples in an acquisition

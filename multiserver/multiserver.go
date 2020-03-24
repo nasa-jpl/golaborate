@@ -177,6 +177,9 @@ func BuildMux(c Config) *goji.Mux {
 		case "agilent-function-generator":
 			gen := agilent.NewFunctionGenerator(node.Addr, node.Serial)
 			httper = tmc.NewHTTPFunctionGenerator(gen)
+		case "keysight-daq":
+			daq := keysight.NewDAQ(node.Addr)
+			httper = tmc.NewHTTPDAQ(daq)
 		case "convectron", "gpconvectron":
 			cv := granvillephillips.NewSensor(node.Addr, node.Serial)
 			httper = commonpressure.NewHTTPWrapper(*cv)

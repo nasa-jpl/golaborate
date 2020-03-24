@@ -284,10 +284,20 @@ func NewHTTPFunctionGenerator(fg FunctionGenerator) HTTPFunctionGeneratorT {
 // SampleRateManipulator can manipulate their sampling rate
 type SampleRateManipulator interface {
 	// SetSampleRate configures the analog sampling rate of the scope
-	SetSampleRate(int) error
+	SetSampleRate(float64) error
 
 	// GetSampleRate returns the analog sampling rate of the scope
-	GetSampleRate() (int, error)
+	GetSampleRate() (float64, error)
+}
+
+// SetSampleRate exposes an HTTP interface to SetSampleRate
+func SetSampleRate(m SampleRateManipulator) http.HandlerFunc {
+	return setFloat(m.SetSampleRate)
+}
+
+// GetSampleRate exposes an HTTP interface to GetSampleRate
+func GetSampleRate(m SampleRateManipulator) http.HandlerFunc {
+	return getFloat(m.GetSampleRate)
 }
 
 // Oscilloscope describes an interface to a digital oscilloscope
@@ -351,16 +361,6 @@ func SetBitDepth(o Oscilloscope) http.HandlerFunc {
 // GetBitDepth exposes an HTTP interface to GetBitDepth
 func GetBitDepth(o Oscilloscope) http.HandlerFunc {
 	return getInt(o.GetBitDepth)
-}
-
-// SetSampleRate exposes an HTTP interface to SetSampleRate
-func SetSampleRate(o Oscilloscope) http.HandlerFunc {
-	return setInt(o.SetSampleRate)
-}
-
-// GetSampleRate exposes an HTTP interface to GetSampleRate
-func GetSampleRate(o Oscilloscope) http.HandlerFunc {
-	return getInt(o.GetSampleRate)
 }
 
 // SetAcqLength exposes an HTTP interface to SetAcqLength
@@ -633,6 +633,9 @@ func NewHTTPDAQ(d DAQ) HTTPDAQ {
 	rt := server.RouteTable{}
 	rt[pat.Get("/channel-label")] = GetChannelLabel(d)
 	rt[pat.Post("/channel-label")] = SetChannelLabel(d)
+
+	rt[pat.Get("/sample-rate")] = GetSampleRate(d)
+	rt[pat.Post("/sample-rate")] = SetSampleRate(d)
 
 	rt[pat.Get("/recording-length")] = GetRecordingLength(d)
 	rt[pat.Post("/recording-length")] = SetRecordingLength(d)
