@@ -296,6 +296,8 @@ type BurstWrapper struct {
 
 	// B is the bursty camera
 	B Burster
+
+	frames int
 }
 
 // SetupBurst returns a function which triggers the burst on the camera
@@ -349,10 +351,40 @@ func (b *BurstWrapper) ReadFrame(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ReadAllFrames reads all of the frames from the camera and writes them as a
+// cube to a single FITS file
+func (b *BurstWrapper) ReadAllFrames(w http.ResponseWriter, r *http.Request) {
+	images := []image.Image{}
+	for img := range b.ch {
+		images = append(images, img)
+	}
+	// get the error if there is one, otherwise use nil as the
+	// default
+	err := <-b.errCh
+	var errS string
+	if err != nil {
+		errS = err.Error()
+	}
+	hdr := w.Header()
+	hdr.Set("Content-Type", "image/fits")
+	hdr.Set("Content-Disposition", "attachment; filename=image.fits")
+	w.WriteHeader(http.StatusOK)
+	err = WriteFits(w, []fitsio.Card{
+		fitsio.Card{
+			Name:    "ERR",
+			Value:   errS,
+			Comment: "error encountered capturing burst"}}, images)
+	if err == nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
 // Inject puts burst management routes on a table
 func (b *BurstWrapper) Inject(table server.RouteTable) {
 	table[pat.Post("/burst/setup")] = b.SetupBurst
 	table[pat.Get("/burst/frame")] = b.ReadFrame
+	table[pat.Get("/burst/all-frames")] = b.ReadAllFrames
 }
 
 // MetadataMaker can produce an array of FITS cards

@@ -418,7 +418,9 @@ func (c *Camera) GetFrame() (image.Image, error) {
 	return dst, nil
 }
 
-// Burst performs a burst by taking N images at M fps.  The images are streamed to ch, and are image.Gray16.
+// Burst performs a burst by taking N images at M fps.
+// The images are streamed to ch, and are image.Gray16.
+// the channel is always closed after
 func (c *Camera) Burst(frames int, fps float64, ch chan<- image.Image) error {
 
 	// get the previous framerate so we can reset to this like a good neighbor
@@ -457,6 +459,7 @@ func (c *Camera) Burst(frames int, fps float64, ch chan<- image.Image) error {
 		IssueCommand(c.Handle, "AcquisitionStop")
 		SetFloat(c.Handle, "FrameRate", prevFps)
 		SetEnumString(c.Handle, "CycleMode", prevCycle)
+		close(ch)
 	}()
 
 	// get the exposure time so we know how long to wait for a buffer
