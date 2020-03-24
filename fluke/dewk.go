@@ -3,7 +3,7 @@ package fluke
 import (
 	"strings"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
+	"github.jpl.nasa.gov/bdube/golab/comm"
 )
 
 // DewK talks to a DewK 1620 temperature and humidity sensor

@@ -6,7 +6,7 @@ import (
 
 	"goji.io/pat"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/server"
+	"github.jpl.nasa.gov/bdube/golab/server"
 )
 
 func httpWriteOnly(f errOnlyFunc, w http.ResponseWriter, r *http.Request) {

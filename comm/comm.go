@@ -85,7 +85,7 @@ type Recver interface {
 	Recv() ([]byte, error)
 }
 
-// SendRecver can send and recieve, and provides a method that sends then recieves
+// SendRecver can send and receive, and provides a method that sends then receives
 type SendRecver interface {
 	Sender
 	Recver

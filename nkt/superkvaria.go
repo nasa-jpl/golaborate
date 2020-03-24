@@ -3,7 +3,7 @@ package nkt
 import (
 	"math"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
+	"github.jpl.nasa.gov/bdube/golab/comm"
 )
 
 // this file contains values relevant to the SuperK Varia accessory

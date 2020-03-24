@@ -2,7 +2,7 @@
 package granvillephillips
 
 import (
-	cp "github.jpl.nasa.gov/HCIT/go-hcit/commonpressure"
+	cp "github.jpl.nasa.gov/bdube/golab/commonpressure"
 )
 
 // NewSensor re-exports commonpressure newsensor

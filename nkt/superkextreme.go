@@ -1,7 +1,7 @@
 package nkt
 
 import (
-	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
+	"github.jpl.nasa.gov/bdube/golab/comm"
 )
 
 // this file contains values relevant to the SuperK Extreme modules

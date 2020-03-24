@@ -9,7 +9,7 @@ package ixllightwave
 import (
 	"strconv"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
+	"github.jpl.nasa.gov/bdube/golab/comm"
 )
 
 // the controller terminates with <CR> <NL> <END>

@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/util"
+	"github.jpl.nasa.gov/bdube/golab/util"
 
 	"github.com/tarm/serial"
-	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
+	"github.jpl.nasa.gov/bdube/golab/comm"
 )
 
 // file gsc2 contains a generichttp/motion compliant implementation of this

@@ -11,8 +11,8 @@ info:
     (testbeds) because they are missing hardware.  We complete them all here for
     completeness.  Trying the /route-graph endpoint will let you know what routes
     will complete for a given server.
-    
-    
+
+
     The /zygo/measure route only works on the mock server since its real url
     is an IP on the HCIT network and the "brain" running on misery has no
     knowledge of it.
@@ -21,7 +21,7 @@ info:
   version: "1"
 externalDocs:
   description: source code
-  url: https://github.jpl.nasa.gov/HCIT/go-hcit
+  url: https://github.jpl.nasa.gov/bdube/golab
 servers:
 - url: http://misery.jpl.nasa.gov:8080/mock
 - url: http://misery.jpl.nasa.gov:8080/omc
@@ -820,7 +820,7 @@ paths:
             compound-time:
               value: 1h30m
               summary: expose for 90 minutes
-          
+
       responses:
         200:
           description: OK
@@ -1034,7 +1034,7 @@ paths:
                 str:
                   value: {'str': "foo"}
                   summary: a string return
-                  
+
     post:
       description: "set the current value of a feature.  The payload should be an object with a single key.  That key can be int, str, f64, or bool depending on the datatype of the feature.  You can know a priori what the key must be from the values of the map returned from /feature (the node above this in the tree)."
       parameters:
@@ -1061,7 +1061,7 @@ paths:
                 summary: an integer return
               str:
                 value: {'str': "foo"}
-                summary: a string return                
+                summary: a string return
       responses:
         200:
           description: OK

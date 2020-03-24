@@ -1,7 +1,7 @@
 package aerotech
 
 import (
-	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
+	"github.jpl.nasa.gov/bdube/golab/comm"
 )
 
 /* this file contains some code that handles the branching logic needed to talk

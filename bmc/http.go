@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"encoding/json"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/server"
+	"github.jpl.nasa.gov/bdube/golab/server"
 )
 
 // HTTPWrapper wraps a DM in an HTTP control interface

@@ -12,7 +12,7 @@ import (
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/structs"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/multiserver"
+	"github.jpl.nasa.gov/bdube/golab/multiserver"
 
 	yml "gopkg.in/yaml.v2"
 )

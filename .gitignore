@@ -22,6 +22,7 @@
 
 # VS code
 .vscode
+.idea
 
 # main binaries
 main

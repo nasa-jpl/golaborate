@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/andor/sdk2"
-	"github.jpl.nasa.gov/HCIT/go-hcit/generichttp/camera"
-	"github.jpl.nasa.gov/HCIT/go-hcit/imgrec"
+	"github.jpl.nasa.gov/bdube/golab/andor/sdk2"
+	"github.jpl.nasa.gov/bdube/golab/generichttp/camera"
+	"github.jpl.nasa.gov/bdube/golab/imgrec"
 
 	"goji.io/pat"
 
@@ -19,7 +19,7 @@ import (
 	"github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/structs"
-	"github.jpl.nasa.gov/HCIT/go-hcit/server"
+	"github.jpl.nasa.gov/bdube/golab/server"
 
 	yml "gopkg.in/yaml.v2"
 )

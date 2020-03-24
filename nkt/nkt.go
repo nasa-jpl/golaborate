@@ -11,10 +11,10 @@ import (
 	"go/types"
 	"time"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
+	"github.jpl.nasa.gov/bdube/golab/comm"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/server"
-	"github.jpl.nasa.gov/HCIT/go-hcit/util"
+	"github.jpl.nasa.gov/bdube/golab/server"
+	"github.jpl.nasa.gov/bdube/golab/util"
 	"golang.org/x/time/rate"
 
 	"github.com/tarm/serial"

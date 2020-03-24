@@ -4,8 +4,11 @@ package oscilloscope
 import (
 	"bufio"
 	"encoding/csv"
+	"fmt"
 	"io"
 	"strconv"
+	"strings"
+	"time"
 )
 
 // Waveform describes a waveform recording from a scope
@@ -160,4 +163,37 @@ func (wav *Waveform) EncodeCSV(w io.Writer) error {
 	w3.Flush()
 	w2.Flush()
 	return nil
+}
+
+// Recording is a sequence of data from the DAQ
+type Recording struct {
+	// RelTimes is the relative time of each sample
+	RelTimes []float64
+
+	// AbsTimes is the absolute time of each sample
+	AbsTimes []time.Time
+
+	// Measurement is the actual numeric data
+	Measurement []float64
+
+	// Name is the label to use for the data
+	Name string
+}
+
+// EncodeCSV writes the recording to a CSV file
+// if either of the time columns are empty or nil,
+// the ther is used, or no time column in the event
+// that both are empty or nil
+func (r Recording) EncodeCSV(w io.Writer) error {
+	if (len(r.AbsTimes) == 0) && (len(r.RelTimes) == 0) {
+		encoded := make([]string, len(r.Measurement)+1)
+		encoded[0] = r.Name
+		for i := 0; i < len(r.Measurement); i++ {
+			encoded[i+1] = strconv.FormatFloat(r.Measurement[i], 'G', -1, 64)
+		}
+		payload := []byte(strings.Join(encoded, "\n"))
+		_, err := w.Write(payload)
+		return err
+	}
+	return fmt.Errorf("timestamped writing not implemented")
 }

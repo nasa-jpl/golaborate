@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/server"
-	"github.jpl.nasa.gov/HCIT/go-hcit/util"
+	"github.jpl.nasa.gov/bdube/golab/server"
+	"github.jpl.nasa.gov/bdube/golab/util"
 	"goji.io/pat"
 )
 

@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/generichttp/camera"
-	"github.jpl.nasa.gov/HCIT/go-hcit/imgrec"
-	"github.jpl.nasa.gov/HCIT/go-hcit/server"
+	"github.jpl.nasa.gov/bdube/golab/generichttp/camera"
+	"github.jpl.nasa.gov/bdube/golab/imgrec"
+	"github.jpl.nasa.gov/bdube/golab/server"
 	"goji.io/pat"
 )
 

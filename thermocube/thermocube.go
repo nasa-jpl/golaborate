@@ -10,11 +10,11 @@ import (
 	"time"
 
 	"github.com/tarm/serial"
-	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
-	"github.jpl.nasa.gov/HCIT/go-hcit/generichttp/thermal"
-	"github.jpl.nasa.gov/HCIT/go-hcit/server"
-	"github.jpl.nasa.gov/HCIT/go-hcit/temperature"
-	"github.jpl.nasa.gov/HCIT/go-hcit/util"
+	"github.jpl.nasa.gov/bdube/golab/comm"
+	"github.jpl.nasa.gov/bdube/golab/generichttp/thermal"
+	"github.jpl.nasa.gov/bdube/golab/server"
+	"github.jpl.nasa.gov/bdube/golab/temperature"
+	"github.jpl.nasa.gov/bdube/golab/util"
 	"goji.io/pat"
 )
 

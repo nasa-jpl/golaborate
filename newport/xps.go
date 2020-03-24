@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
+	"github.jpl.nasa.gov/bdube/golab/comm"
 )
 
 type xpsResponse struct {

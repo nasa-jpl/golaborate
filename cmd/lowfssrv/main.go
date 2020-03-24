@@ -13,8 +13,8 @@ import (
 
 	"goji.io"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/andor/sdk3"
-	"github.jpl.nasa.gov/HCIT/go-hcit/server"
+	"github.jpl.nasa.gov/bdube/golab/andor/sdk3"
+	"github.jpl.nasa.gov/bdube/golab/server"
 	"goji.io/pat"
 
 	"github.com/brandondube/pctl"

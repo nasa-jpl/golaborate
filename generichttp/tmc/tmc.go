@@ -7,10 +7,10 @@ import (
 	"go/types"
 	"net/http"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/generichttp/ascii"
+	"github.jpl.nasa.gov/bdube/golab/generichttp/ascii"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/oscilloscope"
-	"github.jpl.nasa.gov/HCIT/go-hcit/server"
+	"github.jpl.nasa.gov/bdube/golab/oscilloscope"
+	"github.jpl.nasa.gov/bdube/golab/server"
 	"goji.io/pat"
 )
 
@@ -281,8 +281,18 @@ func NewHTTPFunctionGenerator(fg FunctionGenerator) HTTPFunctionGeneratorT {
 	return gen
 }
 
+// SampleRateManipulator can manipulate their sampling rate
+type SampleRateManipulator interface {
+	// SetSampleRate configures the analog sampling rate of the scope
+	SetSampleRate(int) error
+
+	// GetSampleRate returns the analog sampling rate of the scope
+	GetSampleRate() (int, error)
+}
+
 // Oscilloscope describes an interface to a digital oscilloscope
 type Oscilloscope interface {
+	SampleRateManipulator
 	// SetScale configures the full vertical range of a channel
 	SetScale(string, float64) error
 
@@ -303,12 +313,6 @@ type Oscilloscope interface {
 
 	// GetBitDepth retrieves the bit depth of the scope
 	GetBitDepth() (int, error)
-
-	// SetSampleRate configures the analog sampling rate of the scope
-	SetSampleRate(int) error
-
-	// GetSampleRate returns the analog sampling rate of the scope
-	GetSampleRate() (int, error)
 
 	// SetAcqLength configures the number of data points to capture
 	SetAcqLength(int) error
@@ -462,10 +466,21 @@ func AcquireWaveform(o Oscilloscope) http.HandlerFunc {
 	}
 }
 
-// HTTPOscilloscope injects an HTTP interface to an oscilloscope into a route table
-func HTTPOscilloscope(o Oscilloscope, table server.RouteTable) {
-	rt := table
+// HTTPOscilloscope holds an HTTP wrapper to a function generator
+type HTTPOscilloscope struct {
+	O Oscilloscope
 
+	RouteTable server.RouteTable
+}
+
+// RT makes this server.httper compliant
+func (h HTTPOscilloscope) RT() server.RouteTable {
+	return h.RouteTable
+}
+
+// NewHTTPOscilloscope wraps a function generator in an HTTP interface
+func NewHTTPOscilloscope(o Oscilloscope) HTTPOscilloscope {
+	rt := server.RouteTable{}
 	rt[pat.Get("/scale")] = GetScale(o)
 	rt[pat.Post("/scale")] = SetScale(o)
 
@@ -491,25 +506,146 @@ func HTTPOscilloscope(o Oscilloscope, table server.RouteTable) {
 		RW := ascii.RawWrapper{Comm: rawer}
 		rt[pat.Post("/raw")] = RW.HTTPRaw
 	}
-
+	scope := HTTPOscilloscope{O: o, RouteTable: rt}
+	return scope
 }
 
-// HTTPOscilloscopeT holds an HTTP wrapper to a function generator
-type HTTPOscilloscopeT struct {
-	FG Oscilloscope
+// DAQ is the interface of a data acquisition device
+type DAQ interface {
+	SampleRateManipulator
+
+	// SetChannelLabel sets the label used for a given channel
+	SetChannelLabel(int, string) error
+	// GetChannelLabel retrieves the label used by a given channel
+	GetChannelLabel(int) (string, error)
+
+	// SetRecordingLength sets the number of samples used
+	// in a recording
+	SetRecordingLength(int) error
+	// GetRecordingLength retrieves the number of samples used
+	// in a recording
+	GetRecordingLength() (int, error)
+
+	// SetRecordingChannel sets the channel used
+	// to record data
+	SetRecordingChannel(int) error
+	// GetRecordingChannel retrieves the channel
+	// used to record data
+	GetRecordingChannel() (int, error)
+
+	// Record captures data
+	Record() (oscilloscope.Recording, error)
+}
+
+type labelChan struct {
+	Chan int `json:"chan"`
+
+	Label string `json:"label"`
+}
+
+// SetChannelLabel sets the channel label on a DAQ
+func SetChannelLabel(d DAQ) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		lc := labelChan{}
+		err := json.NewDecoder(r.Body).Decode(&lc)
+		defer r.Body.Close()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		err = d.SetChannelLabel(lc.Chan, lc.Label)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+// GetChannelLabel retrieves the label associated with a channel over HTTP
+func GetChannelLabel(d DAQ) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		i := server.IntT{}
+		err := json.NewDecoder(r.Body).Decode(&i)
+		defer r.Body.Close()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		str, err := d.GetChannelLabel(i.Int)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		hp := server.HumanPayload{T: types.String, String: str}
+		hp.EncodeAndRespond(w, r)
+	}
+}
+
+// SetRecordingLength sets the length of a recording in samples
+func SetRecordingLength(d DAQ) http.HandlerFunc {
+	return setInt(d.SetRecordingLength)
+}
+
+// GetRecordingLength returns the length of a recording in samples
+func GetRecordingLength(d DAQ) http.HandlerFunc {
+	return getInt(d.GetRecordingLength)
+}
+
+// SetRecordingChannel sets the channel of a recording in samples
+func SetRecordingChannel(d DAQ) http.HandlerFunc {
+	return setInt(d.SetRecordingChannel)
+}
+
+// GetRecordingChannel returns the channel of a recording in samples
+func GetRecordingChannel(d DAQ) http.HandlerFunc {
+	return getInt(d.GetRecordingChannel)
+}
+
+// Record causes the DAQ to record and sends the result back as a CSV file
+func Record(d DAQ) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		recording, err := d.Record()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/csv")
+		w.WriteHeader(http.StatusOK)
+		recording.EncodeCSV(w)
+	}
+}
+
+// HTTPDAQ is an HTTP adapter to a DAQ
+type HTTPDAQ struct {
+	D DAQ
 
 	RouteTable server.RouteTable
 }
 
-// RT makes this server.httper compliant
-func (h HTTPOscilloscopeT) RT() server.RouteTable {
+// RT satisfies server.HTTPer
+func (h HTTPDAQ) RT() server.RouteTable {
 	return h.RouteTable
 }
 
-// NewHTTPOscilloscope wraps a function generator in an HTTP interface
-func NewHTTPOscilloscope(fg Oscilloscope) HTTPOscilloscopeT {
+// NewHTTPDAQ returns a newly HTTP wrapped DAQ
+func NewHTTPDAQ(d DAQ) HTTPDAQ {
 	rt := server.RouteTable{}
-	gen := HTTPOscilloscopeT{FG: fg, RouteTable: rt}
-	HTTPOscilloscope(fg, rt)
-	return gen
+	rt[pat.Get("/channel-label")] = GetChannelLabel(d)
+	rt[pat.Post("/channel-label")] = SetChannelLabel(d)
+
+	rt[pat.Get("/recording-length")] = GetRecordingLength(d)
+	rt[pat.Post("/recording-length")] = SetRecordingLength(d)
+
+	rt[pat.Get("/recording-channel")] = GetRecordingChannel(d)
+	rt[pat.Post("/recording-channel")] = SetRecordingChannel(d)
+
+	rt[pat.Get("/record")] = Record(d)
+
+	if rawer, ok := interface{}(d).(ascii.RawCommunicator); ok {
+		RW := ascii.RawWrapper{Comm: rawer}
+		rt[pat.Post("/raw")] = RW.HTTPRaw
+	}
+
+	return HTTPDAQ{D: d, RouteTable: rt}
 }

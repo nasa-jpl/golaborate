@@ -33,8 +33,8 @@ import (
 	"unsafe"
 
 	"github.com/astrogo/fitsio"
-	"github.jpl.nasa.gov/HCIT/go-hcit/generichttp/camera"
-	"github.jpl.nasa.gov/HCIT/go-hcit/util"
+	"github.jpl.nasa.gov/bdube/golab/generichttp/camera"
+	"github.jpl.nasa.gov/bdube/golab/util"
 )
 
 // Enum behaves a bit like a C enum

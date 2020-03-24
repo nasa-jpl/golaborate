@@ -12,9 +12,9 @@ import (
 	"goji.io"
 	"goji.io/pat"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/fsm"
-	"github.jpl.nasa.gov/HCIT/go-hcit/generichttp/motion"
-	"github.jpl.nasa.gov/HCIT/go-hcit/pi"
+	"github.jpl.nasa.gov/bdube/golab/fsm"
+	"github.jpl.nasa.gov/bdube/golab/generichttp/motion"
+	"github.jpl.nasa.gov/bdube/golab/pi"
 )
 
 func main() {

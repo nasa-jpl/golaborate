@@ -15,9 +15,9 @@ import (
 	"time"
 
 	"github.com/astrogo/fitsio"
-	"github.jpl.nasa.gov/HCIT/go-hcit/imgrec"
-	"github.jpl.nasa.gov/HCIT/go-hcit/server"
-	"github.jpl.nasa.gov/HCIT/go-hcit/util"
+	"github.jpl.nasa.gov/bdube/golab/imgrec"
+	"github.jpl.nasa.gov/bdube/golab/server"
+	"github.jpl.nasa.gov/bdube/golab/util"
 	"goji.io/pat"
 )
 

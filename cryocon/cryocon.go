@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
-	"github.jpl.nasa.gov/HCIT/go-hcit/temperature"
+	"github.jpl.nasa.gov/bdube/golab/comm"
+	"github.jpl.nasa.gov/bdube/golab/temperature"
 )
 
 const (

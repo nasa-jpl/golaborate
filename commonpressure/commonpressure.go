@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/tarm/serial"
-	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
+	"github.jpl.nasa.gov/bdube/golab/comm"
 )
 
 const (

@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/util"
+	"github.jpl.nasa.gov/bdube/golab/util"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
+	"github.jpl.nasa.gov/bdube/golab/comm"
 )
 
 // the Aerotech ASCII interface may seem like nonsense, and it partially is.

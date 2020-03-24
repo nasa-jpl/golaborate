@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
+	"github.jpl.nasa.gov/bdube/golab/comm"
 )
 
 // SCPI is a type for encapsulating SCPI communication

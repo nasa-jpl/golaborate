@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.jpl.nasa.gov/HCIT/go-hcit/server"
+	"github.jpl.nasa.gov/bdube/golab/server"
 	"goji.io/pat"
 )
 

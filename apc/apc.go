@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/tarm/serial"
-	"github.jpl.nasa.gov/HCIT/go-hcit/comm"
+	"github.jpl.nasa.gov/bdube/golab/comm"
 )
 
 // makeSerConf makes a new serial.Config with correct parity, baud, etc, set.
