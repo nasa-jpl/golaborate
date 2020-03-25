@@ -538,7 +538,7 @@ type DAQ interface {
 }
 
 type labelChan struct {
-	Chan int `json:"chan"`
+	Chan int `json:"channel"`
 
 	Label string `json:"label"`
 }
