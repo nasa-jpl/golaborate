@@ -29,7 +29,11 @@ func (s *SCPI) Write(cmds ...string) error {
 	if err != nil {
 		return err
 	}
-	defer s.CloseEventually()
+	s.RemoteDevice.Lock()
+	defer func() {
+		s.RemoteDevice.Unlock()
+		s.RemoteDevice.CloseEventually()
+	}()
 	if s.Handshaking {
 		cmds = append([]string{"*CLS;"}, cmds...)
 		cmds = append(cmds, ";:SYSTem:ERRor?")
@@ -57,14 +61,18 @@ func (s *SCPI) Write(cmds ...string) error {
 // calls use this underlying mechanism
 func (s *SCPI) WriteRead(cmds ...string) ([]byte, error) {
 	var ret []byte
+	s.RemoteDevice.Lock()
+	defer func() {
+		s.RemoteDevice.Unlock()
+		s.RemoteDevice.CloseEventually()
+	}()
 	err := s.RemoteDevice.Open()
 	if err != nil {
 		return ret, err
 	}
-	defer s.CloseEventually()
 	if s.Handshaking {
 		cmds = append([]string{"*CLS;"}, cmds...)
-		cmds = append(cmds, ";SYSTem:ERRor?")
+		cmds = append(cmds, ";:SYSTem:ERRor?")
 	}
 	str := strings.Join(cmds, " ")
 	err = s.RemoteDevice.Send([]byte(str))

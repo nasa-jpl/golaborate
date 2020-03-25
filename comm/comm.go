@@ -181,8 +181,6 @@ func (rd *RemoteDevice) Open() error {
 	if rd.Conn != nil {
 		return nil
 	}
-	rd.Lock()
-	defer rd.Unlock()
 	// we use an exponential backoff, the NKT sources
 	// do not like being connection thrashed
 	wasTimeout := false
