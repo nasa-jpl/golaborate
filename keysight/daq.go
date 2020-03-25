@@ -57,10 +57,12 @@ func (d *DAQ) GetSampleRate() (float64, error) {
 	if err != nil {
 		return 0, err
 	}
+	fmt.Println(s, err)
 	if s == "IMM" {
 		return 0, nil
 	}
 	period, err := d.ReadFloat(":TRIGGER:TIM?")
+	fmt.Println(period, err)
 	return 1 / period, err
 }
 
@@ -79,12 +81,13 @@ func (d *DAQ) SetRecordingLength(samples int) error {
 
 // GetRecordingLength returns the number of samples in a recording
 func (d *DAQ) GetRecordingLength() (int, error) {
-	return d.ReadInt("TRIGGER:COUNT?")
+	f, err := d.ReadFloat(":TRIGGER:COUNT?") // it's an int written like a float...
+	return int(f), err
 }
 
 // SetRecordingChannel sets the channel used when recording data
 func (d *DAQ) SetRecordingChannel(channel int) error {
-	return d.Write(fmt.Sprintf(":RANGE:SCAN (@%d)", channel))
+	return d.Write(fmt.Sprintf(":ROUTE:SCAN (@%d)", channel))
 }
 
 // GetRecordingChannel retrieves the channel used to record with the DAQ
@@ -93,7 +96,7 @@ func (d *DAQ) GetRecordingChannel() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	ses := strings.Split(s, "(")
+	ses := strings.Split(s, "@")
 	s = ses[len(ses)-1] // #16(101) -> 101)
 	s = s[:len(s)-1]    // 101) -> 101
 	i, err := strconv.Atoi(s)
@@ -114,19 +117,19 @@ func (d *DAQ) Record() (oscilloscope.Recording, error) {
 	// this does not at the moment include the timestamps on the wrapper
 	// but we leave the format as something we can grow into later
 	var ret oscilloscope.Recording
-	err := d.Write("FORMAT:READING:TIME OFF")
+	err := d.Write(":FORMAT:READING:TIME OFF")
 	if err != nil {
 		return ret, err
 	}
-	err = d.Write("FORMAT:READING:CHANNEL OFF")
+	err = d.Write(":FORMAT:READING:CHANNEL OFF")
 	if err != nil {
 		return ret, err
 	}
-	err = d.Write("FORMAT:READING:ALARM OFF")
+	err = d.Write(":FORMAT:READING:ALARM OFF")
 	if err != nil {
 		return ret, err
 	}
-	err = d.Write("FORMAT:READING:UNIT OFF")
+	err = d.Write(":FORMAT:READING:UNIT OFF")
 	if err != nil {
 		return ret, err
 	}
@@ -142,7 +145,7 @@ func (d *DAQ) Record() (oscilloscope.Recording, error) {
 	if err != nil {
 		return ret, err
 	}
-	s, err := d.ReadString("INIT;FETCH?")
+	s, err := d.ReadString(":INIT;FETCH?")
 	if err != nil {
 		return ret, err
 	}
