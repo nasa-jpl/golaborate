@@ -441,10 +441,11 @@ func (c *Camera) Burst(frames int, fps float64, ch chan<- image.Image) error {
 		return err
 	}
 
-	err = c.QueueBuffer()
+	stride, err := c.GetAOIStride()
 	if err != nil {
 		return err
 	}
+
 	err = SetEnumString(c.Handle, "CycleMode", "Continuous")
 	if err != nil {
 		return err
@@ -480,10 +481,13 @@ func (c *Camera) Burst(frames int, fps float64, ch chan<- image.Image) error {
 		if err != nil {
 			return err
 		}
-		buf, err := c.unpadBuffer()
+		buf, err := c.Buffer()
 		if err != nil {
 			return err
 		}
+		// H, W swapped in unpadbuffer, rotation built into SDK3 but needs to
+		// be subvertedhere
+		buf = UnpadBuffer(buf, stride, aoi.Height, aoi.Width)
 		im := &image.Gray16{Pix: buf, Stride: aoi.Height * 2, Rect: image.Rect(0, 0, aoi.Height, aoi.Width)} // swap W, H -- still in detector coordinates
 		g := gift.New(
 			gift.Rotate90(),
@@ -513,7 +517,7 @@ func (c *Camera) unpadBuffer() ([]byte, error) {
 	if err != nil {
 		return []byte{}, err
 	}
-	return UnpadBuffer(buf, stride, width, height)
+	return UnpadBuffer(buf, stride, width, height), nil
 }
 
 // GetExposureTime gets the current exposure time as a duration
@@ -734,7 +738,7 @@ func (c *Camera) Configure(settings map[string]interface{}) error {
 }
 
 // UnpadBuffer strips padding bytes from a buffer
-func UnpadBuffer(buf []byte, aoistride, aoiwidth, aoiheight int) ([]byte, error) {
+func UnpadBuffer(buf []byte, aoistride, aoiwidth, aoiheight int) []byte {
 	// TODO: this allocates something bigger than needed
 	// can improve performance a little bit by changing this
 	out := make([]byte, 0, len(buf))
@@ -751,7 +755,7 @@ func UnpadBuffer(buf []byte, aoistride, aoiwidth, aoiheight int) ([]byte, error)
 		// finally, move
 		bidx += aoistride // stride is the padded stride
 	}
-	return out, nil
+	return out
 }
 
 func bytesToUint(b []byte) []uint16 {
