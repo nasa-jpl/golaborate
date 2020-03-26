@@ -32,7 +32,7 @@ const (
 
 	// WRAPVER is the andor wrapper code version.
 	// Incremement this when pkg sdk3 is updated.
-	WRAPVER = 5
+	WRAPVER = 6
 )
 
 // ErrFeatureNotFound is generated when a feature is looked up in the Features
