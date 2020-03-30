@@ -67,6 +67,7 @@ type LOWFS struct {
 // Loop runs the loop, reading frames from the camera and
 // passing replies to the FSM
 func (l *LOWFS) Loop() {
+	fmt.Println("starting loop")
 	socket := l.Conn
 	for {
 		msg := <-l.CommIn // implicitly assume only stop comes from in or outside
