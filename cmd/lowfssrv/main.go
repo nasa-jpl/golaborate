@@ -340,22 +340,13 @@ func main() {
 
 	root := goji.NewMux()
 	mux := goji.SubMux()
-	rt2 := w.RT()
 	rt[pat.Post("/start-continuous-loop")] = lowfs.Start
 	rt[pat.Post("/stop-continuous-loop")] = lowfs.Stop
 	rt[pat.Get("/interval")] = getInterval
 	rt[pat.Post("/interval")] = setInterval
-	root.HandleFunc(pat.Get("/endpoints"), func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		err := json.NewEncoder(w).Encode(rt)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-	})
-	rt.Bind(root)
-	rt2.Bind(mux)
-	root.Handle(pat.New("/camera"), mux)
 
+	rt.Bind(root)
+	w.RT().Bind(mux)
+	root.Handle(pat.New("/camera"), mux)
 	http.ListenAndServe(":8000", root)
 }
