@@ -32,7 +32,7 @@ const (
 
 	// WRAPVER is the andor wrapper code version.
 	// Incremement this when pkg sdk3 is updated.
-	WRAPVER = 6
+	WRAPVER = 7
 )
 
 // ErrFeatureNotFound is generated when a feature is looked up in the Features
@@ -180,6 +180,7 @@ func (c *Camera) Close() error {
 
 // Allocate creates the buffer that will be populated by the SDK
 // it should be called at init, and whenever the AOI or encoding changes
+// AT_Flush is called to ensure stale buffers are not held by the SDK
 func (c *Camera) Allocate() error {
 	sze, err := c.ImageSizeBytes()
 	if err != nil {
@@ -189,7 +190,8 @@ func (c *Camera) Allocate() error {
 	c.gptr = unsafe.Pointer(&c.buffer[0])
 	c.cptr = (*C.AT_U8)(c.gptr)
 	c.cptrsize = C.int(sze)
-	return nil
+	return enrich(Error(int(C.AT_Flush(C.AT_H(c.Handle))), "AT_Flush")
+	// return nil
 }
 
 // ImageSizeBytes is the size of the image buffer in bytes.  This function

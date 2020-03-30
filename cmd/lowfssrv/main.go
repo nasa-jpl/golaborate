@@ -273,7 +273,8 @@ func openCamera() (*sdk3.Camera, error) {
 		"TriggerMode":              "Internal",
 		"MetadataEnable":           false,
 		"SensorCooling":            true,
-		"SpuriousNoiseFilter":      false}
+		"SpuriousNoiseFilter":      false,
+		"StaticBlemishCorrection":  false}
 	err = c.Configure(cfg)
 	if err != nil {
 		log.Fatal(err)

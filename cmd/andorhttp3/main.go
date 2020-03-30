@@ -25,7 +25,7 @@ import (
 
 var (
 	// Version is the version number.  Typically injected via ldflags with git build
-	Version = "8"
+	Version = "9"
 
 	// ConfigFileName is what it sounds like
 	ConfigFileName = "andor-http.yml"
@@ -62,7 +62,8 @@ func setupconfig() {
 			"TriggerMode":              "Internal",
 			"MetadataEnable":           false,
 			"SensorCooling":            true,
-			"SpuriousNoiseFilter":      false}}, "koanf"), nil)
+			"SpuriousNoiseFilter":      false,
+			"StaticBlemishCorrection":  false}}, "koanf"), nil)
 	if err := k.Load(file.Provider(ConfigFileName), yaml.Parser()); err != nil {
 		errtxt := err.Error()
 		if !strings.Contains(errtxt, "no such") { // file missing, who cares
