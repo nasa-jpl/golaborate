@@ -348,5 +348,5 @@ func main() {
 	root.Handle(pat.New("/camera"), mux)
 	rt2.Bind(mux)
 	rt.Bind(root)
-	http.ListenAndServe(":8000", mux)
+	http.ListenAndServe(":8000", root)
 }
