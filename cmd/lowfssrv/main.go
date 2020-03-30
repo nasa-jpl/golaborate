@@ -323,8 +323,8 @@ func main() {
 		log.Fatal(err)
 	}
 	defer socket.Close()
-	err = socket.Bind("ipc:///tmp/lowfszmq")
-	// err = socket.Bind("tcp://*:8001")
+	// err = socket.Bind("ipc:///tmp/lowfszmq")
+	err = socket.Bind("tcp://*:8001")
 	if err != nil {
 		log.Fatal(err)
 	}
