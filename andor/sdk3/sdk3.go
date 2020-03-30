@@ -78,18 +78,23 @@ var (
 		"TimestampClockFrequency": "int",
 
 		// bools
-		"CameraAcquiring":         "bool",
-		"EventEnable":             "bool",
-		"FullAOIControl":          "bool",
-		"IOInvert":                "bool",
-		"MetadataEnable":          "bool",
-		"MetadataFrame":           "bool",
-		"MetadataTimestamp":       "bool",
-		"Overlap":                 "bool", // TODO: see if enabling this fixes fast shutter problems
-		"SensorCooling":           "bool",
-		"SpuriousNoiseFilter":     "bool",
-		"StaticBlemishCorrection": "bool",
-		"SynchronousTriggering":   "bool",
+		"AlternatingReadoutDirection": "bool",
+		"CameraAcquiring":             "bool",
+		"EventEnable":                 "bool",
+		"FastAOIFrameRateEnable":      "bool",
+		"FullAOIControl":              "bool",
+		"IOInvert":                    "bool",
+		"MetadataEnable":              "bool",
+		"MetadataFrame":               "bool",
+		"MetadataTimestamp":           "bool",
+		"Overlap":                     "bool", // TODO: see if enabling this fixes fast shutter problems
+		"RollingShutterGlobalClear":   "bool",
+		"ScanSpeedControlEnable ":     "bool",
+		"SensorCooling":               "bool",
+		"SpuriousNoiseFilter":         "bool",
+		"StaticBlemishCorrection":     "bool",
+		"SynchronousTriggering":       "bool",
+		"VerticallyCentreAOI":         "bool",
 
 		// commands
 		"AcquisitionStart":    "command",
@@ -102,6 +107,7 @@ var (
 		"BytesPerPixel":            "float",
 		"ExposureTime":             "float",
 		"FrameRate":                "float",
+		"LineScanSpeed":            "float",
 		"MaxInterfaceTransferRate": "float",
 		"PixelHeight":              "float",
 		"PixelWidth":               "float",
@@ -121,6 +127,7 @@ var (
 		"TemperatureControl":       "enum",
 		"TemperatureStatus":        "enum",
 		"TriggerMode":              "enum",
+		"SensorReadoutMode ":       "enum",
 		"SimplePreAmpGainControl":  "enum",
 
 		// strings

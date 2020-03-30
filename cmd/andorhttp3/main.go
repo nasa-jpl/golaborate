@@ -207,7 +207,6 @@ func run() {
 		log.Fatal(err)
 	}
 	c.Allocate()
-	err = c.QueueBuffer()
 
 	args := cfg.Recorder
 	r := &imgrec.Recorder{Root: args.Root, Prefix: args.Prefix}
