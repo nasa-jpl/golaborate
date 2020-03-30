@@ -190,7 +190,7 @@ func (c *Camera) Allocate() error {
 	c.gptr = unsafe.Pointer(&c.buffer[0])
 	c.cptr = (*C.AT_U8)(c.gptr)
 	c.cptrsize = C.int(sze)
-	return enrich(Error(int(C.AT_Flush(C.AT_H(c.Handle))), "AT_Flush")
+	return enrich(Error(int(C.AT_Flush(C.AT_H(c.Handle)))), "AT_Flush")
 	// return nil
 }
 
