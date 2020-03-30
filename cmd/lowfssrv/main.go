@@ -338,6 +338,7 @@ func main() {
 	}
 	w := sdk3.NewHTTPWrapper(c, nil)
 	lowfs := LOWFS{Conn: socket, Cam: c}
+	lowfs.HandleSocket()
 
 	root := goji.NewMux()
 	mux := goji.SubMux()
@@ -347,5 +348,5 @@ func main() {
 	root.Handle(pat.New("/camera"), mux)
 	rt2.Bind(mux)
 	rt.Bind(root)
-	go http.ListenAndServe(":8000", mux)
+	http.ListenAndServe(":8000", mux)
 }
