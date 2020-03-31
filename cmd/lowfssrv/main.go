@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"go/types"
 	"log"
 	"net/http"
@@ -125,7 +124,6 @@ func (l *LOWFS) HandleSocket() {
 	go func() {
 		for {
 			msg, err := l.Conn.Recv(0)
-			fmt.Println("got message from socket", msg)
 			if err != nil {
 				log.Println(err)
 			}
@@ -317,8 +315,8 @@ func main() {
 		log.Fatal(err)
 	}
 	defer socket.Close()
-	// err = socket.Bind("ipc:///tmp/lowfszmq")
-	err = socket.Bind("tcp://*:7999")
+	err = socket.Bind("ipc:///tmp/lowfszmq")
+	// err = socket.Bind("tcp://*:7999")
 	if err != nil {
 		log.Fatal(err)
 	}
