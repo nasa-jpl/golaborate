@@ -25,11 +25,11 @@ import (
 const (
 	// RESPOK is the response sent to the reconstruction client
 	// if the command was accepted
-	RESPOK = "O"
+	RESPOK = 'O'
 
 	// RESPNOK is the response sent to the reconstruction client
 	// if the command was not accepted
-	RESPNOK = "N"
+	RESPNOK = 'N'
 )
 
 // LOWFS is a type that manages the camera generating data and
@@ -48,7 +48,7 @@ type LOWFS struct {
 	CommIn chan string
 
 	// CommOut is the channel used to feed back to the controller
-	CommOut chan string
+	CommOut chan []byte
 
 	// LastSourceSocket indicates if the command came from the outside
 	// this is used to indicate if a reply should be sent
@@ -67,8 +67,6 @@ type LOWFS struct {
 // Loop runs the loop, reading frames from the camera and
 // passing replies to the FSM
 func (l *LOWFS) Loop() {
-	fmt.Println("starting loop")
-	socket := l.Conn
 	for {
 		msg := <-l.CommIn // implicitly assume only stop comes from in or outside
 		// would use switch, but want to partially compare
@@ -77,7 +75,6 @@ func (l *LOWFS) Loop() {
 		// 	continue
 		// }
 		if msg == "frame?" {
-			fmt.Println("get me a frame yessiree")
 			err := l.Cam.QueueBuffer()
 			if err != nil {
 				log.Println(err)
@@ -91,11 +88,7 @@ func (l *LOWFS) Loop() {
 				log.Println(err)
 			}
 			buf = sdk3.UnpadBuffer(buf, l.stride, l.aoi.Width, l.aoi.Height)
-			_, err = socket.SendBytes(buf, 0)
-			if err != nil {
-				log.Println(err)
-			}
-			// get frame from camera
+			l.CommOut <- buf
 		} else if msg[:3] == "fsm" {
 			// msg is CSV floats to send to the control loop
 			// split off the front
@@ -112,15 +105,15 @@ func (l *LOWFS) Loop() {
 			}
 			// some kind of FSM command implementation
 			// fsmchan <- floats
-			socket.Send(RESPOK, 0) // 6 == ACK
+			l.CommOut <- []byte{RESPOK}
 		} else if msg == "stop" {
 			if l.LastSourceSocket {
-				socket.Send(RESPOK, 0)
+				l.CommOut <- []byte{RESPOK}
 			}
 			return
 		} else {
 			if l.LastSourceSocket {
-				socket.SendBytes([]byte{21}, 0) // 21 == NACK
+				l.CommOut <- []byte{RESPNOK}
 			}
 		}
 	}
@@ -138,16 +131,7 @@ func (l *LOWFS) HandleSocket() {
 			}
 			l.CommIn <- msg
 			l.LastSourceSocket = true
-		}
-	}()
-	go func() {
-		for {
-			msg := <-l.CommOut
-			fmt.Println(msg)
-			_, err := l.Conn.Send(msg, 0)
-			if err != nil {
-				log.Println(err)
-			}
+			l.Conn.SendBytes(<-l.CommOut, 0)
 		}
 	}()
 }
@@ -345,7 +329,7 @@ func main() {
 		log.Fatal(err)
 	}
 	w := sdk3.NewHTTPWrapper(c, nil)
-	lowfs := LOWFS{Conn: socket, Cam: c, CommIn: make(chan string), CommOut: make(chan string), PL: pl}
+	lowfs := LOWFS{Conn: socket, Cam: c, CommIn: make(chan string), CommOut: make(chan []byte), PL: pl}
 	lowfs.HandleSocket()
 
 	root := goji.NewMux()
