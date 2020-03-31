@@ -342,7 +342,7 @@ func main() {
 		log.Fatal(err)
 	}
 	w := sdk3.NewHTTPWrapper(c, nil)
-	lowfs := LOWFS{Conn: socket, Cam: c}
+	lowfs := LOWFS{Conn: socket, Cam: c, CommIn: make(chan string), CommOut: make(chan string), PL: pl}
 	lowfs.HandleSocket()
 
 	root := goji.NewMux()
