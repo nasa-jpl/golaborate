@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"go/types"
 	"log"
 	"net/http"
@@ -74,6 +75,7 @@ func (l *LOWFS) Loop() {
 		// 	continue
 		// }
 		if msg == "frame?" {
+			start := time.Now()
 			err := l.Cam.QueueBuffer()
 			if err != nil {
 				log.Println(err)
@@ -88,6 +90,8 @@ func (l *LOWFS) Loop() {
 			}
 			buf = sdk3.UnpadBuffer(buf, l.stride, l.aoi.Width, l.aoi.Height)
 			l.CommOut <- buf
+			end := time.Now()
+			fmt.Println("got and sent buffer in", end.Sub(start))
 		} else if msg[:3] == "fsm" {
 			// msg is CSV floats to send to the control loop
 			// split off the front
