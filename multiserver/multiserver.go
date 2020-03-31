@@ -195,9 +195,8 @@ func BuildMux(c Config) *goji.Mux {
 			httper = commonpressure.NewHTTPWrapper(*kjc)
 
 		case "nkt", "superk":
-			skE := nkt.NewSuperKExtreme(node.Addr, node.Serial)
-			skV := nkt.NewSuperKVaria(node.Addr, node.Serial)
-			httper = nkt.NewHTTPWrapper(*skE, *skV)
+			sk := nkt.NewSuperK(node.Addr, node.Serial)
+			httper = nkt.NewHTTPWrapper(sk)
 
 		case "itc4000", "tl-laser-diode":
 			itc, err := thorlabs.NewITC4000()
@@ -212,7 +211,10 @@ func BuildMux(c Config) *goji.Mux {
 			httper = thermocube.NewHTTPChiller(chiller)
 
 		default:
-			continue // could be an empty entry in the list of nodes
+			if typ == "" {
+				continue
+			} // could be an empty entry in the list of nodes
+			log.Fatal("type", typ, "not understood")
 		}
 
 		// prepare the URL, "omc/nkt" => "/omc/nkt/*"

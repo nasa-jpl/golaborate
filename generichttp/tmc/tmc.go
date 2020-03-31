@@ -7,140 +7,13 @@ import (
 	"go/types"
 	"net/http"
 
+	"github.jpl.nasa.gov/bdube/golab/generichttp"
 	"github.jpl.nasa.gov/bdube/golab/generichttp/ascii"
 
 	"github.jpl.nasa.gov/bdube/golab/oscilloscope"
 	"github.jpl.nasa.gov/bdube/golab/server"
 	"goji.io/pat"
 )
-
-func getFloat(fcn func() (float64, error)) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		f, err := fcn()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		hp := server.HumanPayload{T: types.Float64, Float: f}
-		hp.EncodeAndRespond(w, r)
-		return
-	}
-}
-
-func setFloat(fcn func(float64) error) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		f := server.FloatT{}
-		err := json.NewDecoder(r.Body).Decode(&f)
-		defer r.Body.Close()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		err = fcn(f.F64)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	}
-}
-
-func getInt(fcn func() (int, error)) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		i, err := fcn()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		hp := server.HumanPayload{T: types.Int, Int: i}
-		hp.EncodeAndRespond(w, r)
-		return
-	}
-}
-
-func setInt(fcn func(int) error) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		f := server.IntT{}
-		err := json.NewDecoder(r.Body).Decode(&f)
-		defer r.Body.Close()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		err = fcn(f.Int)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	}
-}
-
-func getString(fcn func() (string, error)) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		s, err := fcn()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		hp := server.HumanPayload{T: types.String, String: s}
-		hp.EncodeAndRespond(w, r)
-		return
-	}
-}
-
-func setString(fcn func(string) error) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		s := server.StrT{}
-		err := json.NewDecoder(r.Body).Decode(&s)
-		defer r.Body.Close()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		err = fcn(s.Str)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	}
-}
-
-func getBool(fcn func() (bool, error)) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		b, err := fcn()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		hp := server.HumanPayload{T: types.Bool, Bool: b}
-		hp.EncodeAndRespond(w, r)
-		return
-	}
-}
-
-func setBool(enable, disable func() error) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		b := server.BoolT{}
-		err := json.NewDecoder(r.Body).Decode(&b)
-		defer r.Body.Close()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if b.Bool {
-			err = enable()
-		} else {
-			err = disable()
-		}
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	}
-}
 
 // FunctionGenerator describes an interface to a function generator
 type FunctionGenerator interface {
@@ -168,11 +41,8 @@ type FunctionGenerator interface {
 	// GetOffset retrieves the offset of the output waveform
 	GetOffset() (float64, error)
 
-	// EnableOutput begins outputting the signal on the output connector
-	EnableOutput() error
-
-	// DisableOutput ceases output on the output connector
-	DisableOutput() error
+	// SetPutput configures if the generator output is active
+	SetOutput(bool) error
 
 	// GetOutput queries if the generator output is active
 	GetOutput() (bool, error)
@@ -208,57 +78,57 @@ func HTTPFunctionGenerator(fg FunctionGenerator, table server.RouteTable) {
 
 // SetFunction exposes an HTTP interface to the SetFunction method
 func SetFunction(fg FunctionGenerator) http.HandlerFunc {
-	return setString(fg.SetFunction)
+	return generichttp.SetString(fg.SetFunction)
 }
 
 // GetFunction exposes an HTTP interface to the GetFunction method
 func GetFunction(fg FunctionGenerator) http.HandlerFunc {
-	return getString(fg.GetFunction)
+	return generichttp.GetString(fg.GetFunction)
 }
 
 // SetFrequency exposes an HTTP interface to the SetFrequency method
 func SetFrequency(fg FunctionGenerator) http.HandlerFunc {
-	return setFloat(fg.SetFrequency)
+	return generichttp.SetFloat(fg.SetFrequency)
 }
 
 // GetFrequency exposes an HTTP interface to the GetFrequency method
 func GetFrequency(fg FunctionGenerator) http.HandlerFunc {
-	return getFloat(fg.GetFrequency)
+	return generichttp.GetFloat(fg.GetFrequency)
 }
 
 // SetVoltage exposes an HTTP interface to the SetVoltage method
 func SetVoltage(fg FunctionGenerator) http.HandlerFunc {
-	return setFloat(fg.SetVoltage)
+	return generichttp.SetFloat(fg.SetVoltage)
 }
 
 // GetVoltage exposes an HTTP interface to the GetVoltage method
 func GetVoltage(fg FunctionGenerator) http.HandlerFunc {
-	return getFloat(fg.GetVoltage)
+	return generichttp.GetFloat(fg.GetVoltage)
 }
 
 // SetOffset exposes an HTTP interface to the SetOffset method
 func SetOffset(fg FunctionGenerator) http.HandlerFunc {
-	return setFloat(fg.SetOffset)
+	return generichttp.SetFloat(fg.SetOffset)
 }
 
 // GetOffset exposes an HTTP interface to the GetOffset method
 func GetOffset(fg FunctionGenerator) http.HandlerFunc {
-	return getFloat(fg.GetOffset)
+	return generichttp.GetFloat(fg.GetOffset)
 }
 
 // SetOutput exposes an HTTP interface to the Output control methods
 func SetOutput(fg FunctionGenerator) http.HandlerFunc {
-	return setBool(fg.EnableOutput, fg.DisableOutput)
+	return generichttp.SetBool(fg.SetOutput)
 }
 
 // GetOutput exposes an HTTP interface to the GetOutput method
 func GetOutput(fg FunctionGenerator) http.HandlerFunc {
-	return getBool(fg.GetOutput)
+	return generichttp.GetBool(fg.GetOutput)
 }
 
 // SetOutputLoad exposes an HTTP interface to the SetOutputLoad method
 func SetOutputLoad(fg FunctionGenerator) http.HandlerFunc {
-	return setFloat(fg.SetOutputLoad)
+	return generichttp.SetFloat(fg.SetOutputLoad)
 }
 
 // HTTPFunctionGeneratorT holds an HTTP wrapper to a function generator
@@ -292,12 +162,12 @@ type SampleRateManipulator interface {
 
 // SetSampleRate exposes an HTTP interface to SetSampleRate
 func SetSampleRate(m SampleRateManipulator) http.HandlerFunc {
-	return setFloat(m.SetSampleRate)
+	return generichttp.SetFloat(m.SetSampleRate)
 }
 
 // GetSampleRate exposes an HTTP interface to GetSampleRate
 func GetSampleRate(m SampleRateManipulator) http.HandlerFunc {
-	return getFloat(m.GetSampleRate)
+	return generichttp.GetFloat(m.GetSampleRate)
 }
 
 // Oscilloscope describes an interface to a digital oscilloscope
@@ -345,42 +215,42 @@ type Oscilloscope interface {
 
 // SetTimebase exposes an HTTP interface to SetTimebase
 func SetTimebase(o Oscilloscope) http.HandlerFunc {
-	return setFloat(o.SetTimebase)
+	return generichttp.SetFloat(o.SetTimebase)
 }
 
 // GetTimebase exposes an HTTP interface to GetTimebase
 func GetTimebase(o Oscilloscope) http.HandlerFunc {
-	return getFloat(o.GetTimebase)
+	return generichttp.GetFloat(o.GetTimebase)
 }
 
 // SetBitDepth exposes an HTTP interface to SetBitDepth
 func SetBitDepth(o Oscilloscope) http.HandlerFunc {
-	return setInt(o.SetBitDepth)
+	return generichttp.SetInt(o.SetBitDepth)
 }
 
 // GetBitDepth exposes an HTTP interface to GetBitDepth
 func GetBitDepth(o Oscilloscope) http.HandlerFunc {
-	return getInt(o.GetBitDepth)
+	return generichttp.GetInt(o.GetBitDepth)
 }
 
 // SetAcqLength exposes an HTTP interface to SetAcqLength
 func SetAcqLength(o Oscilloscope) http.HandlerFunc {
-	return setInt(o.SetAcqLength)
+	return generichttp.SetInt(o.SetAcqLength)
 }
 
 // GetAcqLength exposes an HTTP interface to GetAcqLength
 func GetAcqLength(o Oscilloscope) http.HandlerFunc {
-	return getInt(o.GetAcqLength)
+	return generichttp.GetInt(o.GetAcqLength)
 }
 
 // SetAcqMode exposes an HTTP interface to SetAcqMode
 func SetAcqMode(o Oscilloscope) http.HandlerFunc {
-	return setString(o.SetAcqMode)
+	return generichttp.SetString(o.SetAcqMode)
 }
 
 // GetAcqMode exposes an HTTP interface to GetAcqMode
 func GetAcqMode(o Oscilloscope) http.HandlerFunc {
-	return getString(o.GetAcqMode)
+	return generichttp.GetString(o.GetAcqMode)
 }
 
 // now the few weird ones
@@ -584,22 +454,22 @@ func GetChannelLabel(d DAQ) http.HandlerFunc {
 
 // SetRecordingLength sets the length of a recording in samples
 func SetRecordingLength(d DAQ) http.HandlerFunc {
-	return setInt(d.SetRecordingLength)
+	return generichttp.SetInt(d.SetRecordingLength)
 }
 
 // GetRecordingLength returns the length of a recording in samples
 func GetRecordingLength(d DAQ) http.HandlerFunc {
-	return getInt(d.GetRecordingLength)
+	return generichttp.GetInt(d.GetRecordingLength)
 }
 
 // SetRecordingChannel sets the channel of a recording in samples
 func SetRecordingChannel(d DAQ) http.HandlerFunc {
-	return setInt(d.SetRecordingChannel)
+	return generichttp.SetInt(d.SetRecordingChannel)
 }
 
 // GetRecordingChannel returns the channel of a recording in samples
 func GetRecordingChannel(d DAQ) http.HandlerFunc {
-	return getInt(d.GetRecordingChannel)
+	return generichttp.GetInt(d.GetRecordingChannel)
 }
 
 // Record causes the DAQ to record and sends the result back as a CSV file

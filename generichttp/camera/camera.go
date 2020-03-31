@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/astrogo/fitsio"
+	"github.jpl.nasa.gov/bdube/golab/generichttp"
 	"github.jpl.nasa.gov/bdube/golab/imgrec"
 	"github.jpl.nasa.gov/bdube/golab/server"
 	"github.jpl.nasa.gov/bdube/golab/util"
@@ -118,64 +119,22 @@ func HTTPThermalManager(t ThermalManager, table server.RouteTable) {
 
 // GetCooling returns an HTTP handler func that returns the cooling status of the camera
 func GetCooling(t ThermalManager) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		cool, err := t.GetCooling()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		hp := server.HumanPayload{T: types.Bool, Bool: cool}
-		hp.EncodeAndRespond(w, r)
-		return
-	}
+	return generichttp.GetBool(t.GetCooling)
 }
 
 // SetCooling returns an HTTP handler func that turns the fan on or off over HTTP
 func SetCooling(t ThermalManager) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		b := server.BoolT{}
-		err := json.NewDecoder(r.Body).Decode(&b)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		defer r.Body.Close()
-		err = t.SetCooling(b.Bool)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		return
-	}
+	return generichttp.SetBool(t.SetCooling)
 }
 
 // GetTemperature returns an HTTP handler func that returns the temperature over HTTP
 func GetTemperature(t ThermalManager) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		t, err := t.GetTemperature()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		hp := server.HumanPayload{T: types.Float64, Float: t}
-		hp.EncodeAndRespond(w, r)
-		return
-	}
+	return generichttp.GetFloat(t.GetTemperature)
 }
 
 // GetTemperatureSetpoint returns an HTTP handler func that returns the temperature setpoint over HTTP
 func GetTemperatureSetpoint(t ThermalManager) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		setpt, err := t.GetTemperatureSetpoint()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		hp := server.HumanPayload{T: types.String, String: setpt}
-		hp.EncodeAndRespond(w, r)
-		return
-	}
+	return generichttp.GetString(t.GetTemperatureSetpoint)
 }
 
 // GetTemperatureSetpoints returns an HTTP handler func that returns the temperature setpoint over HTTP
@@ -198,79 +157,27 @@ func GetTemperatureSetpoints(t ThermalManager) http.HandlerFunc {
 
 // SetTemperatureSetpoint returns an HTTP handler func that sets the temperature setpoint over HTTP
 func SetTemperatureSetpoint(t ThermalManager) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		str := server.StrT{}
-		err := json.NewDecoder(r.Body).Decode(&str)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		defer r.Body.Close()
-		err = t.SetTemperatureSetpoint(str.Str)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		return
-	}
+	return generichttp.SetString(t.SetTemperatureSetpoint)
 }
 
 // GetTemperatureStatus returns an HTTP handler func that returns the cooling status over HTTP
 func GetTemperatureStatus(t ThermalManager) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		stat, err := t.GetTemperatureStatus()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		hp := server.HumanPayload{T: types.String, String: stat}
-		hp.EncodeAndRespond(w, r)
-		return
-	}
+	return generichttp.GetString(t.GetTemperatureStatus)
 }
 
 // GetFan returns an HTTP handler func that returns the fan status over HTTP
 func GetFan(t ThermalManager) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		on, err := t.GetFan()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		hp := server.HumanPayload{T: types.Bool, Bool: on}
-		hp.EncodeAndRespond(w, r)
-		return
-	}
+	return generichttp.GetBool(t.GetFan)
 }
 
 // SetFan returns an HTTP handler func that sets the fan status over hTTP
 func SetFan(t ThermalManager) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		b := server.BoolT{}
-		err := json.NewDecoder(r.Body).Decode(&b)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		defer r.Body.Close()
-		err = t.SetFan(b.Bool)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		return
-	}
+	return generichttp.SetBool(t.SetFan)
 }
 
 // PictureTaker describes an interface to a camera which can capture images
 type PictureTaker interface {
-	// GetFrame triggers capture of a frame and returns the strided image data as 16-bit integers
-	GetFrame() (image.Image, error)
-
-	//GetFrameSize returns the image (width, height)
-	GetFrameSize() (int, int, error)
+	Camera
 
 	// SetExposureTime sets the exposure time
 	SetExposureTime(time.Duration) error
@@ -684,35 +591,12 @@ type EMGainManager interface {
 
 // GetEMGainMode returns the EM gain mode over HTTP as JSON
 func GetEMGainMode(e EMGainManager) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		mode, err := e.GetEMGainMode()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		hp := server.HumanPayload{T: types.String, String: mode}
-		hp.EncodeAndRespond(w, r)
-		return
-	}
+	return generichttp.GetString(e.GetEMGainMode)
 }
 
 // SetEMGainMode sets the EM gain mode over HTTP as JSON
 func SetEMGainMode(e EMGainManager) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		str := server.StrT{}
-		err := json.NewDecoder(r.Body).Decode(&str)
-		defer r.Body.Close()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		err = e.SetEMGainMode(str.Str)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	}
+	return generichttp.SetString(e.SetEMGainMode)
 }
 
 // GetEMGainRange returns the min/max EM gain over HTTP as JSON
@@ -739,34 +623,12 @@ func GetEMGainRange(e EMGainManager) http.HandlerFunc {
 
 // GetEMGain gets the EM gain over HTTP as JSON
 func GetEMGain(e EMGainManager) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		i, err := e.GetEMGain()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		hp := server.HumanPayload{T: types.Int, Int: i}
-		hp.EncodeAndRespond(w, r)
-		return
-	}
+	return generichttp.GetInt(e.GetEMGain)
 }
 
 // SetEMGain sets the EM gain over HTTP as JSON
 func SetEMGain(e EMGainManager) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		iT := server.IntT{}
-		err := json.NewDecoder(r.Body).Decode(&iT)
-		defer r.Body.Close()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		err = e.SetEMGain(iT.Int)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-	}
+	return generichttp.SetInt(e.SetEMGain)
 }
 
 // HTTPEMGainManager binds routes that control EM gain to the table
@@ -789,35 +651,12 @@ type ShutterController interface {
 
 // SetShutter opens or closes the shutter over HTTP as JSON
 func SetShutter(s ShutterController) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		b := server.BoolT{}
-		err := json.NewDecoder(r.Body).Decode(&b)
-		defer r.Body.Close()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		err = s.SetShutter(b.Bool)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	}
+	return generichttp.SetBool(s.SetShutter)
 }
 
 // GetShutter returns if the shutter is currently open over HTTP as JSON
 func GetShutter(s ShutterController) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		open, err := s.GetShutter()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		hp := server.HumanPayload{T: types.Bool, Bool: open}
-		hp.EncodeAndRespond(w, r)
-		return
-	}
+	return generichttp.GetBool(s.GetShutter)
 }
 
 // HTTPShutterController binds routes to control the shutter to a route table
@@ -830,9 +669,6 @@ func HTTPShutterController(s ShutterController, table server.RouteTable) {
 type Camera interface {
 	// GetFrame returns a frame from the device as a strided array
 	GetFrame() (image.Image, error)
-
-	//GetFrameSize gets the (W, H) of a frame
-	GetFrameSize() (int, int, error)
 }
 
 // HTTPCamera is a camera which exposes an HTTP interface to itself

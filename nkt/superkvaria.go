@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"github.jpl.nasa.gov/bdube/golab/comm"
+	"github.jpl.nasa.gov/bdube/golab/generichttp/laser"
 )
 
 // this file contains values relevant to the SuperK Varia accessory
@@ -75,4 +76,63 @@ func NewSuperKVaria(addr string, serial bool) *SuperKVaria {
 		RemoteDevice: &rd,
 		AddrDev:      variaDefaultAddr,
 		Info:         SuperKVariaInfo}}
+}
+
+// GetShortWave retrieves the short wavelength setpoint of the Varia
+func (sk *SuperKVaria) GetShortWave() (float64, error) {
+	return sk.GetFloat("Short Wave Setpoint")
+}
+
+// SetShortWave retrieves the short wavelength setpoint of the Varia
+func (sk *SuperKVaria) SetShortWave(nanometers float64) error {
+	return sk.SetFloat("Short Wave Setpoint", nanometers)
+}
+
+// GetND retrieves the ND filter setpoint of the Varia
+func (sk *SuperKVaria) GetND() (float64, error) {
+	return sk.GetFloat("ND Setpoint")
+}
+
+// SetND retrieves the ND filter setpoint of the Varia
+func (sk *SuperKVaria) SetND(nanometers float64) error {
+	return sk.SetFloat("ND Setpoint", nanometers)
+}
+
+// GetLongWave retrieves the long wavelength setpoint of the Varia
+func (sk *SuperKVaria) GetLongWave() (float64, error) {
+	return sk.GetFloat("Long Wave Setpoint")
+}
+
+// SetLongWave retrieves the long wavelength setpoint of the Varia
+func (sk *SuperKVaria) SetLongWave(nanometers float64) error {
+	return sk.SetFloat("Long Wave Setpoint", nanometers)
+}
+
+// GetCenterBandwidth retrieves the center wavelength and bandwidth of the varia
+func (sk *SuperKVaria) GetCenterBandwidth() (laser.CenterBandwidth, error) {
+	var ret laser.CenterBandwidth
+	short, err := sk.GetShortWave()
+	if err != nil {
+		return ret, err
+	}
+	long, err := sk.GetLongWave()
+	if err != nil {
+		return ret, err
+	}
+	ret = laser.ShortLongToCB(short, long)
+	return ret, err
+}
+
+// SetCenterBandwidth sets the center wavelength and bandwidth of the laser
+func (sk *SuperKVaria) SetCenterBandwidth(cbw laser.CenterBandwidth) error {
+	short, long := cbw.ToShortLong()
+	err := sk.SetShortWave(short)
+	if err != nil {
+		return err
+	}
+	err = sk.SetLongWave(long)
+	if err != nil {
+		return err
+	}
+	return nil
 }

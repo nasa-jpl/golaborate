@@ -149,8 +149,17 @@ func (ldc *ITC4000) EmissionOff() error {
 	return ldc.writeOnlyBus("OUTPUT OFF")
 }
 
-// EmissionIsOn checks if the LDC is on or off
-func (ldc *ITC4000) EmissionIsOn() (bool, error) {
+// SetEmission turns emission on or off
+func (ldc *ITC4000) SetEmission(on bool) error {
+	predicate := "OFF"
+	if on {
+		predicate = "ON"
+	}
+	return ldc.writeOnlyBus("OUTPUT " + predicate)
+}
+
+// GetEmission queries if emission is on or off
+func (ldc *ITC4000) GetEmission() (bool, error) {
 	resp, err := ldc.writeReadBus("OUTPUT?")
 	return resp == "1", err
 }

@@ -3,29 +3,190 @@ package laser
 
 import (
 	"encoding/json"
-	"go/types"
+	"math"
 	"net/http"
 
+	"github.jpl.nasa.gov/bdube/golab/generichttp"
 	"github.jpl.nasa.gov/bdube/golab/server"
 	"goji.io/pat"
 )
 
+// CenterBandwidth is a struct holding the center wavelength (nm) and full bandwidth (nm) of a VARIA
+type CenterBandwidth struct {
+	Center    float64 `json:"center"`
+	Bandwidth float64 `json:"bandwidth"`
+}
+
+// ShortLongToCB converts short, long wavelengths to a CenterBandwidth struct
+func ShortLongToCB(short, long float64) CenterBandwidth {
+	center := (short + long) / 2
+	bw := math.Round(math.Abs(long-short)*10) / 10 // *10/10 to round to nearest tenth
+	return CenterBandwidth{Center: center, Bandwidth: bw}
+}
+
+// ToShortLong converts a CenterBandwidth to (short, long)
+func (cb CenterBandwidth) ToShortLong() (float64, float64) {
+	hb := cb.Bandwidth / 2
+	low := cb.Center - hb
+	high := cb.Center + hb
+	return high, low
+}
+
 // Controller is a basic interface for laser controllers
 type Controller interface {
-	// EmissionOn turns emission On
-	EmissionOn() error
+	// SetEmission turns emission on or off
+	SetEmission(bool) error
 
-	// EmissionOff turns emission Off
-	EmissionOff() error
+	// GetEmission queries if the laser is currently outputting
+	GetEmission() (bool, error)
+}
 
-	// EmissionIsOne returns if the laser is emitting
-	EmissionIsOn() (bool, error)
+// SetEmission configures the output state of the laser
+func SetEmission(c Controller) http.HandlerFunc {
+	return generichttp.SetBool(c.SetEmission)
+}
 
+// GetEmission queries the output state of the laser
+func GetEmission(c Controller) http.HandlerFunc {
+	return generichttp.GetBool(c.GetEmission)
+}
+
+// CurrentController can control its output current
+type CurrentController interface {
 	// SetCurrent sets the output current setpoint of the controller
 	SetCurrent(float64) error
 
 	// GetCurrent retrieves the output current setpoint of the controller
 	GetCurrent() (float64, error)
+}
+
+// SetCurrent configures the output current of the laser
+func SetCurrent(c CurrentController) http.HandlerFunc {
+	return generichttp.SetFloat(c.SetCurrent)
+}
+
+// GetCurrent queries the output current of the laser
+func GetCurrent(c CurrentController) http.HandlerFunc {
+	return generichttp.GetFloat(c.GetCurrent)
+}
+
+// PowerController can control its output power
+type PowerController interface {
+	// SetPower sets the output power level of the the device
+	SetPower(float64) error
+
+	// GetPower retrieves the output power level of the device
+	GetPower() (float64, error)
+}
+
+// SetPower configures the output power of the laser
+func SetPower(c PowerController) http.HandlerFunc {
+	return generichttp.SetFloat(c.SetPower)
+}
+
+// GetPower queries the output power of the laser
+func GetPower(c PowerController) http.HandlerFunc {
+	return generichttp.GetFloat(c.GetPower)
+}
+
+// NDController can control the strength of an ND filter
+type NDController interface {
+	// GetND retrieves the strength of the ND
+	GetND() (float64, error)
+
+	// SetND sets the strength of the ND
+	SetND(float64) error
+}
+
+// SetND configures the output ND of the laser
+func SetND(c NDController) http.HandlerFunc {
+	return generichttp.SetFloat(c.SetND)
+}
+
+// GetND queries the output ND of the laser
+func GetND(c NDController) http.HandlerFunc {
+	return generichttp.GetFloat(c.GetND)
+}
+
+// BandwidthController can control the its output bandwidth
+type BandwidthController interface {
+	// GetShortWave gets the short wavelength of the controller
+	// if the output band is set to 500-600 nm, this returns 500.
+	GetShortWave() (float64, error)
+
+	// SetShortWave sets the short wavelength cutoff of the controller
+	SetShortWave(float64) error
+
+	// GetShortWave gets the short wavelength of the controller
+	// if the output band is set to 500-600 nm, this returns 600.
+	GetLongWave() (float64, error)
+
+	// SetShortWave sets the long wavelength cutoff of the controller
+	SetLongWave(float64) error
+
+	// GetCenterBandwidth returns the center wavelength and (full) bandwidth
+	// of a controller.  To set the output to 500-600nm, Center=550, Bandwidth=100.
+	GetCenterBandwidth() (CenterBandwidth, error)
+
+	// SetCenterBandwidth sets the center wavelength and (full) bandwidth
+	// of a controller. If output is 500-600nm, Center=550, Bandwidth=100.
+	SetCenterBandwidth(CenterBandwidth) error
+}
+
+// SetShortWave configures the lower cutoff wavelength of the controller
+func SetShortWave(c BandwidthController) http.HandlerFunc {
+	return generichttp.SetFloat(c.SetShortWave)
+}
+
+// GetShortWave retrieves the lower cutoff wavelength of the controller
+func GetShortWave(c BandwidthController) http.HandlerFunc {
+	return generichttp.GetFloat(c.GetShortWave)
+}
+
+// SetLongWave configures the upper cutoff wavelength of the controller
+func SetLongWave(c BandwidthController) http.HandlerFunc {
+	return generichttp.SetFloat(c.SetLongWave)
+}
+
+// GetLongWave retrieves the lower cutoff wavelength of the controller
+func GetLongWave(c BandwidthController) http.HandlerFunc {
+	return generichttp.GetFloat(c.GetLongWave)
+}
+
+// GetCenterBandwidth retrieves the center/bandwidth as JSON
+func GetCenterBandwidth(c BandwidthController) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		cbw, err := c.GetCenterBandwidth()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		err = json.NewEncoder(w).Encode(cbw)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+}
+
+// SetCenterBandwidth configures the center/bandwidth as JSON
+func SetCenterBandwidth(c BandwidthController) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		cbw := CenterBandwidth{}
+		err := json.NewDecoder(r.Body).Decode(&cbw)
+		defer r.Body.Close()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		err = c.SetCenterBandwidth(cbw)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
 }
 
 // HTTPLaserController wraps a LaserController in an HTTP route table
@@ -41,10 +202,30 @@ type HTTPLaserController struct {
 func NewHTTPLaserController(ctl Controller) HTTPLaserController {
 	h := HTTPLaserController{Ctl: ctl}
 	rt := server.RouteTable{
-		pat.Get("/emission"):  h.GetEmission,
-		pat.Post("/emission"): h.SetEmission,
-		pat.Get("/current"):   h.GetCurrent,
-		pat.Post("/current"):  h.SetCurrent,
+		pat.Get("/emission"):  GetEmission(ctl),
+		pat.Post("/emission"): SetEmission(ctl),
+	}
+	if currentctl, ok := interface{}(ctl).(CurrentController); ok {
+		rt[pat.Get("/current")] = GetCurrent(currentctl)
+		rt[pat.Post("/current")] = SetCurrent(currentctl)
+	}
+	if powerctl, ok := interface{}(ctl).(PowerController); ok {
+		rt[pat.Get("/power")] = GetPower(powerctl)
+		rt[pat.Post("/power")] = SetPower(powerctl)
+	}
+	if ndctl, ok := interface{}(ctl).(NDController); ok {
+		rt[pat.Get("/nd")] = GetND(ndctl)
+		rt[pat.Post("/nd")] = SetND(ndctl)
+	}
+	if bwctl, ok := interface{}(ctl).(BandwidthController); ok {
+		rt[pat.Get("/wvl/short")] = GetShortWave(bwctl)
+		rt[pat.Post("/wvl/short")] = SetShortWave(bwctl)
+
+		rt[pat.Get("/wvl/long")] = GetLongWave(bwctl)
+		rt[pat.Post("/wvl/long")] = SetLongWave(bwctl)
+
+		rt[pat.Get("/wvl/center-bandwidth")] = GetCenterBandwidth(bwctl)
+		rt[pat.Post("/wvl/center-bandwidth")] = SetCenterBandwidth(bwctl)
 	}
 	h.RouteTable = rt
 	return h
@@ -53,64 +234,4 @@ func NewHTTPLaserController(ctl Controller) HTTPLaserController {
 // RT safisfies the server.HTTPer interface
 func (h HTTPLaserController) RT() server.RouteTable {
 	return h.RouteTable
-}
-
-// SetEmission turns emission on or off based on a json payload
-func (h *HTTPLaserController) SetEmission(w http.ResponseWriter, r *http.Request) {
-	bT := server.BoolT{}
-	err := json.NewDecoder(r.Body).Decode(&bT)
-	defer r.Body.Close()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if bT.Bool {
-		err = h.Ctl.EmissionOn()
-	} else {
-		err = h.Ctl.EmissionOff()
-	}
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-}
-
-// GetEmission returns json {'bool': <T/F>} with the current emission status
-func (h *HTTPLaserController) GetEmission(w http.ResponseWriter, r *http.Request) {
-	b, err := h.Ctl.EmissionIsOn()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	bT := server.HumanPayload{Bool: b, T: types.Bool}
-	bT.EncodeAndRespond(w, r)
-}
-
-// SetCurrent sets the output current of the controller in mA
-func (h *HTTPLaserController) SetCurrent(w http.ResponseWriter, r *http.Request) {
-	fT := server.FloatT{}
-	err := json.NewDecoder(r.Body).Decode(&fT)
-	defer r.Body.Close()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	err = h.Ctl.SetCurrent(fT.F64)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-}
-
-// GetCurrent gets the output current of the controller in mA
-func (h *HTTPLaserController) GetCurrent(w http.ResponseWriter, r *http.Request) {
-	f, err := h.Ctl.GetCurrent()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	fT := server.HumanPayload{Float: f, T: types.Float64}
-	fT.EncodeAndRespond(w, r)
 }

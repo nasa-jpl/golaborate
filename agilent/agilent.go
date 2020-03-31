@@ -96,16 +96,13 @@ func (f *FunctionGenerator) SetOutputLoad(ohms float64) error {
 	return f.Write("OUTPUT: LOAD", s)
 }
 
-// EnableOutput enables the output on the front connector of the function generator
-func (f *FunctionGenerator) EnableOutput() error {
-	// OUT ON
-	return f.Write("OUTPUT ON")
-}
-
-// DisableOutput disables the output on the front connector of the function generator
-func (f *FunctionGenerator) DisableOutput() error {
-	// OUT OFF
-	return f.Write("OUTPUT OFF")
+// SetOutput turns Output on or off
+func (f *FunctionGenerator) SetOutput(on bool) error {
+	predicate := "OFF"
+	if on {
+		predicate = "ON"
+	}
+	return f.Write("OUTPUT " + predicate)
 }
 
 // GetOutput returns True if the generator is currently outputting a signal

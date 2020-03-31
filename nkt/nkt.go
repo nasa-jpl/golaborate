@@ -7,11 +7,16 @@ package nkt
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"go/types"
+	"math"
+	"net/http"
 	"time"
 
 	"github.jpl.nasa.gov/bdube/golab/comm"
+	"github.jpl.nasa.gov/bdube/golab/generichttp/laser"
+	"goji.io/pat"
 
 	"github.jpl.nasa.gov/bdube/golab/server"
 	"github.jpl.nasa.gov/bdube/golab/util"
@@ -338,6 +343,22 @@ func (m *Module) SetValueMulti(addrNames []string, data [][]byte) ([]MessagePrim
 	return messages, nil
 }
 
+// SetFloat converts a float to limited precision uint16 and writes it to the module
+func (m *Module) SetFloat(addr string, value float64) error {
+	intt := uint16(math.Round(value * 10))
+	buf := make([]byte, 2, 2)
+	dataOrder.PutUint16(buf, intt)
+	_, err := m.SetValue(addr, buf)
+	return err
+}
+
+// GetFloat returns a floating point value, rounded to nearest 0.1
+// from the module
+func (m *Module) GetFloat(addr string) (float64, error) {
+	resp, err := m.GetValue(addr)
+	return float64(dataOrder.Uint16(resp.Data)) / 10, err
+}
+
 // GetStatus gets the status bitfield and converts it into a map of descriptive strings to booleans
 func (m *Module) GetStatus() (map[string]bool, error) {
 	// declare the response and get the response from the NKT
@@ -370,4 +391,55 @@ func (m *Module) GetStatus() (map[string]bool, error) {
 	}
 	delete(resp, "-")
 	return resp, nil
+}
+
+// SuperK is a struct holding all of the usual modules
+type SuperK struct {
+	*SuperKExtreme
+
+	*SuperKVaria
+}
+
+// NewSuperK returns a new laser with pre-configured varia and extreme modules
+func NewSuperK(addr string, serial bool) *SuperK {
+	extreme := NewSuperKExtreme(addr, serial)
+	varia := NewSuperKVaria(addr, serial)
+	return &SuperK{SuperKExtreme: extreme, SuperKVaria: varia}
+}
+
+// StatusMain retrieves the main module status
+func (sk *SuperK) StatusMain() (map[string]bool, error) {
+	return sk.SuperKExtreme.GetStatus()
+}
+
+// StatusVaria retrieves the Varia module status
+func (sk *SuperK) StatusVaria() (map[string]bool, error) {
+	return sk.SuperKVaria.GetStatus()
+}
+
+func encodeStatus(fcn func() (map[string]bool, error)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		status, err := fcn()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		err = json.NewEncoder(w).Encode(status)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+
+	}
+}
+
+// NewHTTPWrapper creates a new HTTP wrapper and populates the route table
+func NewHTTPWrapper(sk *SuperK) laser.HTTPLaserController {
+	w := laser.NewHTTPLaserController(sk)
+	rt := w.RT()
+	rt[pat.Get("main-module-status")] = encodeStatus(sk.StatusMain)
+	rt[pat.Get("varia-status")] = encodeStatus(sk.StatusVaria)
+	return w
 }

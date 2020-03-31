@@ -92,3 +92,29 @@ func NewSuperKExtreme(addr string, serial bool) *SuperKExtreme {
 		AddrDev:      extremeDefaultAddr,
 		Info:         SuperKExtremeMain}}
 }
+
+// SetEmission turns emission (laser output) on
+func (sk *SuperKExtreme) SetEmission(on bool) error {
+	payload := []byte{0}
+	if on {
+		payload[0] = 3
+	}
+	_, err := sk.SetValue("Emission", payload)
+	return err
+}
+
+// GetEmission queries if emission (laser output) is enabled
+func (sk *SuperKExtreme) GetEmission() (bool, error) {
+	resp, err := sk.GetValue("Emission")
+	return resp.Data[0] > 0, err
+}
+
+// SetPower sets the output power level (0-100) of the laser
+func (sk *SuperKExtreme) SetPower(level float64) error {
+	return sk.SetFloat("Power Level", level)
+}
+
+// GetPower retrieves the power level of the laser
+func (sk *SuperKExtreme) GetPower() (float64, error) {
+	return sk.GetFloat("Power Level")
+}
