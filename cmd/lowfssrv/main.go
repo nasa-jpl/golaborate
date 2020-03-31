@@ -72,7 +72,10 @@ func (l *LOWFS) Loop() {
 	for {
 		msg := <-l.CommIn // implicitly assume only stop comes from in or outside
 		// would use switch, but want to partially compare
-		fmt.Println(len(msg), msg, []byte(msg))
+		// // short circuit blank shots
+		// if msg == "" {
+		// 	continue
+		// }
 		if msg == "frame?" {
 			fmt.Println("get me a frame yessiree")
 			err := l.Cam.QueueBuffer()
@@ -129,7 +132,7 @@ func (l *LOWFS) HandleSocket() {
 	go func() {
 		for {
 			msg, err := l.Conn.Recv(0)
-			fmt.Println(msg)
+			fmt.Println("got message from socket", msg)
 			if err != nil {
 				log.Println(err)
 			}
