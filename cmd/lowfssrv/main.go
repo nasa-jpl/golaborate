@@ -72,7 +72,7 @@ func (l *LOWFS) Loop() {
 	for {
 		msg := <-l.CommIn // implicitly assume only stop comes from in or outside
 		// would use switch, but want to partially compare
-		fmt.Println(msg)
+		fmt.Println(len(msg), msg, []byte(msg))
 		if msg == "frame?" {
 			fmt.Println("get me a frame yessiree")
 			err := l.Cam.QueueBuffer()
