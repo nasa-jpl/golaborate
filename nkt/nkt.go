@@ -356,6 +356,9 @@ func (m *Module) SetFloat(addr string, value float64) error {
 // from the module
 func (m *Module) GetFloat(addr string) (float64, error) {
 	resp, err := m.GetValue(addr)
+	if err != nil {
+		return 0, err
+	}
 	return float64(dataOrder.Uint16(resp.Data)) / 10, err
 }
 
