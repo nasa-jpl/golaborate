@@ -261,7 +261,7 @@ func openCamera() (*sdk3.Camera, error) {
 	// 12-bit (low noise)
 	cfg := map[string]interface{}{
 		"ElectronicShutteringMode": "Rolling",
-		"SimplePreAmpGainControl":  "12-bit (low noise)",
+		"SimplePreAmpGainControl":  "16-bit (low noise & high well capacity)",
 		"FanSpeed":                 "Off",
 		"PixelReadoutRate":         "280 MHz",
 		"PixelEncoding":            "Mono16",
@@ -319,8 +319,8 @@ func main() {
 		log.Fatal(err)
 	}
 	defer socket.Close()
-	err = socket.Bind("ipc:///tmp/lowfszmq")
-	// err = socket.Bind("tcp://*:7999")
+	// err = socket.Bind("ipc:///tmp/lowfszmq")
+	err = socket.Bind("tcp://*:7999")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -336,8 +336,8 @@ func main() {
 
 	root := goji.NewMux()
 	mux := goji.SubMux()
-	rt[pat.Post("/start-continuous-loop")] = lowfs.Start
-	rt[pat.Post("/stop-continuous-loop")] = lowfs.Stop
+	w.RT()[pat.Post("/start-continuous-loop")] = lowfs.Start
+	w.RT()[pat.Post("/stop-continuous-loop")] = lowfs.Stop
 	rt[pat.Get("/interval")] = getInterval
 	rt[pat.Post("/interval")] = setInterval
 
