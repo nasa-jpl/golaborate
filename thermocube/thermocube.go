@@ -275,7 +275,10 @@ func (c *Chiller) GetFaults() (FaultState, error) {
 // GetTankLevelLow returns true if the tank level is low (needs refilling)
 func (c *Chiller) GetTankLevelLow() (bool, error) {
 	fs, err := c.GetFaults()
-	return fs.TankLevelLow, err
+	if err != nil {
+		return false, err
+	}
+	return fs.TankLevelLow, nil
 }
 
 // RemoteStop toggles remote operation off

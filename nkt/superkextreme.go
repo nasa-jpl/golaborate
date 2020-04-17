@@ -106,7 +106,10 @@ func (sk *SuperKExtreme) SetEmission(on bool) error {
 // GetEmission queries if emission (laser output) is enabled
 func (sk *SuperKExtreme) GetEmission() (bool, error) {
 	resp, err := sk.GetValue("Emission")
-	return resp.Data[0] > 0, err
+	if err != nil {
+		return false, err
+	}
+	return resp.Data[0] > 0, nil
 }
 
 // SetPower sets the output power level (0-100) of the laser

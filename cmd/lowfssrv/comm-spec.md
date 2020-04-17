@@ -6,14 +6,14 @@ This document describes communication between the LOWFS server and the greater w
 
 While enabling some new capabilities:
 - enable high flexibility into Zernike (or other mode) estimation (Reconstruction)
-- enable easy maintanance of the system
+- enable easy maintenance of the system
 
 Point of Contact [Brandon Dube (383D)](mailto:brandon.dube@jpl.nasa.gov)
 
 
 ## Communication
 
-The LOWFS server is extremely multi-threaded.  While the languge it is built in (Go) does not use the ideas of threads, we will use threads interchangeably with Goroutines (which the Go runtime multiplexes onto a pool of threads it manages).  The following actions are [concurrent](https://en.wikipedia.org/wiki/Concurrent_computing)
+The LOWFS server is extremely multi-threaded.  While the language it is built in (Go) does not use the ideas of threads, we will use threads interchangeably with Goroutines (which the Go runtime multiplexes onto a pool of threads it manages).  The following actions are [concurrent](https://en.wikipedia.org/wiki/Concurrent_computing).
 
 - HTTP/JSON server providing access to the camera over the standard andorhttp interface
 - HTTP server providing control over meta parameters of the control system,

@@ -283,9 +283,6 @@ func (c *Camera) SetAOI(aoi camera.AOI) error {
 	}
 
 	err = SetInt(c.Handle, "AOITop", int64(aoi.Top))
-	if err != nil {
-		return err
-	}
 	return err
 }
 
@@ -644,7 +641,10 @@ func (c *Camera) Command(cmd string) error {
 // GetFrameSize returns the AOI W, H
 func (c *Camera) GetFrameSize() (int, int, error) {
 	aoi, err := c.GetAOI()
-	return aoi.Height, aoi.Width, err
+	if err != nil {
+		return 0, 0, err
+	}
+	return aoi.Height, aoi.Width, nil
 }
 
 // CollectHeaderMetadata satisfies generichttp/camera and makes a stack of FITS cards

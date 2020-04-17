@@ -106,10 +106,10 @@ func mkconf() {
 		log.Fatal(err)
 	}
 	f, err := os.Create(ConfigFileName)
-	defer f.Close()
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer f.Close()
 	err = yml.NewEncoder(f).Encode(c)
 	if err != nil {
 		log.Fatal(err)

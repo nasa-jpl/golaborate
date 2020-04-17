@@ -124,6 +124,9 @@ func (ldc *ITC4000) writeReadBus(cmd string) (string, error) {
 		return "", err
 	}
 	resp, err := ldc.dev.Read()
+	if err != nil {
+		return "", err
+	}
 	idx := len(resp.Data) - 1
 	if resp.Data[idx] == 0x10 { // Data Link Escape may be last byte, pop it
 		resp.Data = resp.Data[:idx]

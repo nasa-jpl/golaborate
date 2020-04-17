@@ -67,6 +67,9 @@ func (r *Recorder) Write(p []byte) (n int, err error) {
 	fid, err = os.OpenFile(fn, os.O_APPEND|os.O_WRONLY, 0666)
 	if err != nil && os.IsNotExist(err) {
 		fid, err = os.Create(fn)
+		if err != nil {
+			return 0, err
+		}
 	}
 	defer fid.Close()
 	if err != nil {

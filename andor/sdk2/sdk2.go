@@ -947,7 +947,10 @@ func (c *Camera) SetEMAdvanced(b bool) error {
 // GetFrameSize gets the W, H of a frame as recorded in the strided buffer
 func (c *Camera) GetFrameSize() (int, int, error) {
 	aoi, err := c.GetAOI()
-	return aoi.Width, aoi.Height, err
+	if err != nil {
+		return 0, 0, err
+	}
+	return aoi.Width, aoi.Height, nil
 }
 
 // GetFrame returns a frame from the camera as a strided buffer
@@ -1057,6 +1060,9 @@ func (c *Camera) CollectHeaderMetadata() []fitsio.Card {
 	tstat, err := c.GetTemperatureStatus()
 	temp, err := c.GetTemperature()
 	bin, err := c.GetBinning()
+	if err != nil {
+		bin = camera.Binning{}
+	}
 	binS := bin.HxV()
 
 	var metaerr string

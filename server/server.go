@@ -27,12 +27,12 @@ func ReplyWithFile(w http.ResponseWriter, r *http.Request, fn string, fldr strin
 	}
 
 	f, err := os.Open(filePath)
-	defer f.Close()
 	if err != nil {
 		fstr := fmt.Sprintf("source file missing %s", filePath)
 		http.Error(w, fstr, http.StatusNotFound)
 		return
 	}
+	defer f.Close()
 
 	stat, err := f.Stat()
 	if err != nil {

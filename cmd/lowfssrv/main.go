@@ -148,10 +148,6 @@ func (l *LOWFS) Start(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
 
 	aoi, err = l.Cam.GetAOI()
 	if err != nil {

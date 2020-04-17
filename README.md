@@ -22,7 +22,7 @@ If you need to modify a program, cd from `golab` to `/cmd/<the program>` and edi
 env GOOS=linux GOARCH=amd64 go build main.go
 ```
 
-The `env` unix command sets environment variables for the current command only.  `GOOS`, "go operating system" should be appropriate for the machine you intend to run the software on.  `GOARCH` is the processor architecture, which should generally be 386 (32-bit) or amd64 (64-bit).  The complete list of acceptable values for these constants can be found at https://golang.org/doc/install/source#environment
+The `env` unix command sets environment variables for the current command only.  `GOOS`, "go operating system" should be appropriate for the machine you intend to run the software on.  `GOARCH` is the processor architecture, which should generally be 386 (32-bit) or amd64 (64-bit).  The complete list of acceptable values for these constants can be found at https://golang.org/doc/install/source#environment.
 
 Note that go supports cross compilation, so compiling for linux or windows from a mac is a nonissue (excluding the andor module).  Note that as of now (late 2019) operating systems are beginning to drop support for 32-bit binaries, so generally you should use `GOARCH=amd64`.
 

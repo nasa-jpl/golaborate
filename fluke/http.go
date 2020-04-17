@@ -38,6 +38,7 @@ func (h HTTPWrapper) Read(w http.ResponseWriter, r *http.Request) {
 	th, err := h.DewK.Read()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	th.EncodeAndRespond(w, r)
 }

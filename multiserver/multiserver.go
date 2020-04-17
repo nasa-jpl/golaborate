@@ -213,9 +213,6 @@ func BuildMux(c Config) *goji.Mux {
 			httper = thermocube.NewHTTPChiller(chiller)
 
 		default:
-			if typ == "" {
-				continue
-			} // could be an empty entry in the list of nodes
 			log.Fatal("type", typ, "not understood")
 		}
 

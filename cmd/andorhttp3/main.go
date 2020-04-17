@@ -121,10 +121,10 @@ func mkconf() {
 		log.Fatal(err)
 	}
 	f, err := os.Create(ConfigFileName)
-	defer f.Close()
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer f.Close()
 	err = yml.NewEncoder(f).Encode(c)
 	if err != nil {
 		log.Fatal(err)
@@ -133,8 +133,11 @@ func mkconf() {
 
 func printconf() {
 	c := config{}
-	k.Unmarshal("", &c)
-	err := yml.NewEncoder(os.Stdout).Encode(c)
+	err := k.Unmarshal("", &c)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = yml.NewEncoder(os.Stdout).Encode(c)
 	if err != nil {
 		log.Fatal(err)
 	}

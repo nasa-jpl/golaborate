@@ -302,7 +302,7 @@ func (b *BurstWrapper) ReadAllFrames(w http.ResponseWriter, r *http.Request) {
 			Name:    "ERR",
 			Value:   errS,
 			Comment: "error encountered capturing burst"}}, images)
-	if err == nil {
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -330,7 +330,7 @@ func HTTPPicture(p PictureTaker, table server.RouteTable, rec *imgrec.Recorder) 
 
 // SetExposureTime sets the exposure time on a POST request.
 // it can be provided either as a query parameter exposureTime, formatted in a
-// way that is parseable by golang/time.ParseDuration, or a json payload with
+// way that is parsable by golang/time.ParseDuration, or a json payload with
 // key f64, holding the exposure time in seconds.
 func SetExposureTime(p PictureTaker) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
