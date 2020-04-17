@@ -27,7 +27,7 @@ func NewHTTPWrapper(dm *DM) HTTPWrapper {
 
 // single is used to decode single actuator commands over JSON
 type single struct {
-	Idx int `json:"idx"`
+	Idx   int     `json:"idx"`
 	Value float64 `json:"value"`
 }
 

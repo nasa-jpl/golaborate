@@ -17,7 +17,7 @@ import (
 // Error is an Error satisfying struct
 type Error struct {
 	code int
-	txt string
+	txt  string
 }
 
 func (err Error) Error() string {
@@ -51,7 +51,6 @@ func Open(sn string) (*DM, error) {
 	// allocate the struct, as the SDK expects
 	var raw C.struct_DM
 	// per B. C. Mills 2020-01-08, no need to do anything to allocate.
-
 
 	// convert the Go string to a C string and free it later
 	cstr := C.CString(sn)
