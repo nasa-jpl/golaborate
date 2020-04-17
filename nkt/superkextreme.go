@@ -28,13 +28,13 @@ var (
 			"Status":             0x66,
 			"User Text":          0x6C},
 		CodeBanks: map[string]map[int]string{
-			"Setup": map[int]string{
+			"Setup": {
 				0: "Constant current mode",
 				1: "Constant power mode",
 				2: "Externally modulated current mode",
 				3: "Externally modulated power",
 				4: "External feedback mode (Power Lock)"},
-			"Status": map[int]string{
+			"Status": {
 				0:  "Emission on",
 				1:  "Interlock relays off",
 				2:  "Interlock supply voltage low (possible short circuit)",
@@ -67,7 +67,7 @@ var (
 			"Emission Runtime": 0x80,
 			"Status":           0x66},
 		CodeBanks: map[string]map[int]string{
-			"Status": map[int]string{
+			"Status": {
 				0: "Emission on",
 				1: "Interlock signal off",
 				2: "Interlock loop input low",

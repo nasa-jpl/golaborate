@@ -12,10 +12,6 @@ import (
 	"github.jpl.nasa.gov/bdube/golab/temperature"
 )
 
-const (
-	sep = ":"
-)
-
 // parseTempToC converts a response string looking like "250.123124;K" into
 // the same temperature in C, or errors on malformed input.
 // Unpopulated channel responses ("--", "..") return NaN
@@ -24,7 +20,7 @@ func parseTempToC(resp string) (float64, error) {
 	if strings.Contains(resp, "--") || strings.Contains(resp, "..") {
 		return math.NaN(), nil
 	}
-	pieces := strings.Split(string(resp), ";")
+	pieces := strings.Split(resp, ";")
 	unit := pieces[1]
 	T, err := strconv.ParseFloat(pieces[0], 64)
 	if err != nil {
@@ -59,7 +55,7 @@ func NewTemperatureMonitor(addr string) *TemperatureMonitor {
 // Identification returns the identifying information from the monitor.
 // it looks something like:
 //
-// Cryocon Model 12/14 Rev <fimware rev code><hardware rev code>
+// Cryocon Model 12/14 Rev <firmware rev code><hardware rev code>
 func (tm *TemperatureMonitor) Identification() (string, error) {
 	cmd := []byte("*IDN?")
 	err := tm.Open()

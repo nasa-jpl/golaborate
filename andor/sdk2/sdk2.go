@@ -997,7 +997,7 @@ func (c *Camera) GetFrame() (image.Image, error) {
 	for idx := 0; idx < l; idx++ {
 		b2[idx] = uint16(buf[idx])
 	}
-	b3 := []byte{}
+	var b3 []byte
 	hdr := (*reflect.SliceHeader)(unsafe.Pointer(&b3))
 	hdr.Data = uintptr(unsafe.Pointer(&b2[0]))
 	hdr.Len = len(b2) * 2
@@ -1094,30 +1094,30 @@ func (c *Camera) CollectHeaderMetadata() []fitsio.Card {
 		- fpa temperature
 		*/
 		// header to the header
-		fitsio.Card{Name: "HDRVER", Value: "EMCCD-1", Comment: "header version"},
-		fitsio.Card{Name: "WRAPVER", Value: WRAPVER, Comment: "server library code version"},
-		fitsio.Card{Name: "METAERR", Value: metaerr, Comment: "error encountered gathering metadata"},
-		fitsio.Card{Name: "CAMMODL", Value: "Andor iXon Ultra 888", Comment: "camera model"},
-		fitsio.Card{Name: "CAMSN", Value: camsn, Comment: "camera serial number"},
-		fitsio.Card{Name: "BITDEPTH", Value: 14, Comment: "2^BITDEPTH is the maximum possible DN"},
+		{Name: "HDRVER", Value: "EMCCD-1", Comment: "header version"},
+		{Name: "WRAPVER", Value: WRAPVER, Comment: "server library code version"},
+		{Name: "METAERR", Value: metaerr, Comment: "error encountered gathering metadata"},
+		{Name: "CAMMODL", Value: "Andor iXon Ultra 888", Comment: "camera model"},
+		{Name: "CAMSN", Value: camsn, Comment: "camera serial number"},
+		{Name: "BITDEPTH", Value: 14, Comment: "2^BITDEPTH is the maximum possible DN"},
 
 		// timestamp
-		fitsio.Card{Name: "DATE", Value: ts}, // timestamp is standard and does not require comment
+		{Name: "DATE", Value: ts}, // timestamp is standard and does not require comment
 
 		// exposure parameters
-		fitsio.Card{Name: "EXPTIME", Value: texp.Seconds(), Comment: "exposure time, seconds"},
+		{Name: "EXPTIME", Value: texp.Seconds(), Comment: "exposure time, seconds"},
 
 		// thermal parameters
-		fitsio.Card{Name: "FAN", Value: fan, Comment: "on (true) or off"},
-		fitsio.Card{Name: "TEMPSETP", Value: tsetpt, Comment: "Temperature setpoint"},
-		fitsio.Card{Name: "TEMPSTAT", Value: tstat, Comment: "TEC status"},
-		fitsio.Card{Name: "TEMPER", Value: temp, Comment: "FPA temperature (Celcius)"},
+		{Name: "FAN", Value: fan, Comment: "on (true) or off"},
+		{Name: "TEMPSETP", Value: tsetpt, Comment: "Temperature setpoint"},
+		{Name: "TEMPSTAT", Value: tstat, Comment: "TEC status"},
+		{Name: "TEMPER", Value: temp, Comment: "FPA temperature (Celcius)"},
 		// aoi parameters
-		fitsio.Card{Name: "AOIL", Value: aoi.Left, Comment: "1-based left pixel of the AOI"},
-		fitsio.Card{Name: "AOIT", Value: aoi.Top, Comment: "1-based top pixel of the AOI"},
-		fitsio.Card{Name: "AOIW", Value: aoi.Width, Comment: "AOI width, px"},
-		fitsio.Card{Name: "AOIH", Value: aoi.Height, Comment: "AOI height, px"},
-		fitsio.Card{Name: "AOIB", Value: binS, Comment: "AOI Binning, HxV"}}
+		{Name: "AOIL", Value: aoi.Left, Comment: "1-based left pixel of the AOI"},
+		{Name: "AOIT", Value: aoi.Top, Comment: "1-based top pixel of the AOI"},
+		{Name: "AOIW", Value: aoi.Width, Comment: "AOI width, px"},
+		{Name: "AOIH", Value: aoi.Height, Comment: "AOI height, px"},
+		{Name: "AOIB", Value: binS, Comment: "AOI Binning, HxV"}}
 }
 
 // Configure sets many values for the camera at once
@@ -1128,7 +1128,7 @@ func (c *Camera) Configure(settings map[string]interface{}) error {
 		"AcquisitionMode":     c.SetAcquisitionMode,
 		"ReadoutMode":         c.SetReadoutMode,
 		"TemperatureSetpoint": c.SetTemperatureSetpoint}
-	errs := []error{}
+	var errs []error
 	for k, v := range settings {
 		switch k {
 		case "VSAmplitude", "VSSpeed", "HSSpeed", "AcquisitionMode", "ReadoutMode", "TemperatureSetpoint":

@@ -109,7 +109,7 @@ func (c Channel) Physical() []float64 {
 		length := len(v)
 		ret := make([]float64, length)
 		for i := 0; i < length; i++ {
-			ret[i] = ((float64(v[i]) - c.Reference) * c.Scale) + c.Offset
+			ret[i] = ((v[i] - c.Reference) * c.Scale) + c.Offset
 		}
 		return ret
 	default:

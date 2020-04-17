@@ -55,7 +55,7 @@ import (
 )
 
 var (
-	// ErrNoSerialConf is generated when .SerialConf is not overriden
+	// ErrNoSerialConf is generated when .SerialConf is not overridden
 	ErrNoSerialConf = errors.New("type does not define .SerialConf() method and instance IsSerial=true")
 
 	// ErrNotConnected is generated when .Conn is nil and Send or Recv is called.
@@ -74,38 +74,6 @@ const (
 
 	closeDelay = 30 * time.Second
 )
-
-// Sender has a Send method that passes along a byte slice with the transmission termination appended
-type Sender interface {
-	Send([]byte) error
-}
-
-// Recver has a Recv method that gets a byte slice and strips the termination byte
-type Recver interface {
-	Recv() ([]byte, error)
-}
-
-// SendRecver can send and receive, and provides a method that sends then receives
-type SendRecver interface {
-	Sender
-	Recver
-
-	SendRecv([]byte) ([]byte, error)
-}
-
-// Opener can open ("establish a connection" but in io language)
-type Opener interface {
-	Open() error
-}
-
-// A Communicator can Open, Send, Recv and Close.
-//
-// It makes no promises about concurrent behavior or stability
-type Communicator interface {
-	io.Closer
-	Opener
-	SendRecver
-}
 
 // Terminators holds Rx and Tx terminators where are each a single byte
 type Terminators struct {
@@ -143,6 +111,9 @@ type RemoteDevice struct {
 	rxTerm   byte
 
 	serCfg *serial.Config
+
+	// tryingToClose is a flag for if a goroutine is running closeEventually already
+	tryingToClose bool
 }
 
 /*NewRemoteDevice creates a new RemoteDevice instance
@@ -240,7 +211,10 @@ func (rd *RemoteDevice) open() error {
 // A lock is acquired and released during this operation
 func (rd *RemoteDevice) Close() error {
 	rd.Lock()
-	defer rd.Unlock()
+	defer func() {
+		rd.Unlock()
+		rd.tryingToClose = false
+	}()
 	if rd.Conn != nil {
 		err := rd.Conn.Close()
 		if err == nil {
@@ -249,6 +223,7 @@ func (rd *RemoteDevice) Close() error {
 		}
 		errS := strings.ToLower(err.Error())
 		if strings.Contains(errS, "closed") { // errors containing the "closed" trigger phrase are benign
+			rd.Conn = nil
 			err = nil
 		}
 		return err
@@ -257,8 +232,7 @@ func (rd *RemoteDevice) Close() error {
 }
 
 func (rd *RemoteDevice) closeMaybe() error {
-	now := time.Now()
-	if now.Sub(rd.LastComm) < closeDelay {
+	if time.Now().Sub(rd.LastComm) < closeDelay {
 		return errCloseTooSoon
 	}
 	return rd.Close()
@@ -272,7 +246,9 @@ This function spawns a goroutine and is used to allow connection
 persistence between communications.  Use Close if you wish to close immediately.
 */
 func (rd *RemoteDevice) CloseEventually() {
+	if rd.tryingToClose { return } // avoid spawning excessive/competing goroutines if this is already happening
 	go rd.closeEventually()
+	rd.tryingToClose = true
 }
 
 func (rd *RemoteDevice) closeEventually() error {
@@ -290,7 +266,10 @@ func (rd *RemoteDevice) Send(b []byte) error {
 		// update the deadline; deadlines are wall times and connection
 		// may have persisted from a previous communication
 		deadline := time.Now().Add(rd.Timeout)
-		conn.SetDeadline(deadline)
+		err := conn.SetDeadline(deadline)
+		if err != nil {
+			return err
+		}
 	}
 
 	b = append(b, rd.txTerm)
@@ -299,7 +278,7 @@ func (rd *RemoteDevice) Send(b []byte) error {
 	return err
 }
 
-// Recv recieves data from the remote and strips the Rx terminator
+// Recv receives data from the remote and strips the Rx terminator
 func (rd *RemoteDevice) Recv() ([]byte, error) {
 	if rd.Conn == nil {
 		return nil, ErrNotConnected

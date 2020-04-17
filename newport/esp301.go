@@ -12,11 +12,6 @@ import (
 	"github.com/tarm/serial"
 )
 
-const (
-	// ESP301RemoteBufferSize is the number of ASCII characters that fit in the buffer on the ESP301.
-	ESP301RemoteBufferSize = 80
-)
-
 var (
 	// ErrBufferWouldOverflow is generated when the buffer on the ESP controller
 	// would overflow if the message was transmitted
@@ -192,7 +187,7 @@ func commandFromCmdOrAlias(cmdAlias string) (Command, error) {
 }
 
 func makeTelegram(c Command, axis string, write bool, data float64) string {
-	pieces := []string{}
+	var pieces []string
 	if c.UsesAxis {
 		pieces = append(pieces, axis)
 	}
@@ -366,13 +361,12 @@ func (esp *ESP301) SetFollowingErrorConfiguration(axis string, enableChecking, d
 // partially filled if a communication error is encountered while reading the
 // sequence of errors.
 func (esp *ESP301) ReadErrors() ([]string, error) {
-	errors := []string{}
-	incomplete := true
+	var errs []string
 	cmd := "TB?"
-	for incomplete {
+	for {
 		resp, err := esp.RawCommand(cmd)
 		if err != nil {
-			return errors, err
+			return errs, err
 		}
 		if resp[0] == '0' {
 			break
@@ -395,7 +389,7 @@ func (esp *ESP301) ReadErrors() ([]string, error) {
 				icode, err = strconv.Atoi(pieces[0])
 			}
 			if err != nil {
-				return errors, err
+				return errs, err
 			}
 			// at this stage, we have a map of icode=> error message and an axis
 			// number, which may be the special value of -1, indicating no axis
@@ -405,11 +399,11 @@ func (esp *ESP301) ReadErrors() ([]string, error) {
 			if axis != -1 {
 				errS = fmt.Sprintf("AXIS %d ", axis) + errS
 			}
-			errors = append(errors, errS)
+			errs = append(errs, errS)
 
 		} else {
-			return errors, fmt.Errorf("expected CSV from motion controller with at least 1 element, got %d", l)
+			return errs, fmt.Errorf("expected CSV from motion controller with at least 1 element, got %d", l)
 		}
 	}
-	return errors, nil
+	return errs, nil
 }

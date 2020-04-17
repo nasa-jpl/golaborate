@@ -1,7 +1,7 @@
 // Package ixllightwave contains code for operating IXL Lightwave LDC3916 laser diode controllers.
 // It contains several single-value structs that are used to enable a "better"
 // http interface where the return types are concrete and not strings, but
-// they are burried behind a JSON field.  Each of these structs implements
+// they are buried behind a JSON field.  Each of these structs implements
 // EncodeAndRespond, and the bodies of these functions are nearly copy pasted
 // and can be ignored by the reader.
 package ixllightwave

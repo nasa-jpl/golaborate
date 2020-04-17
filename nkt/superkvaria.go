@@ -23,7 +23,7 @@ var (
 			"Long Wave Setpoint":  0x34,
 			"Status":              0x66},
 		CodeBanks: map[string]map[int]string{
-			"Status": map[int]string{
+			"Status": {
 				0:  "-",
 				1:  "Interlock off",
 				2:  "Interlock loop in",

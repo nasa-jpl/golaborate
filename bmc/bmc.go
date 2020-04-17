@@ -75,7 +75,7 @@ func (dm *DM) LoadMap(path string) error {
 	}
 	cstr := C.CString(path)
 	defer C.free(unsafe.Pointer(cstr))
-	return ctoGoErr(C.BMCLoadMap(dm.raw, cstr, nil)) // nill == C NULL, causes BMC SDK to internally do the allocation
+	return ctoGoErr(C.BMCLoadMap(dm.raw, cstr, nil)) // nil == C NULL, causes BMC SDK to internally do the allocation
 }
 
 // GetArray queries the DM driver for the last array of values sent to it

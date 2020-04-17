@@ -20,7 +20,7 @@ const (
 	LDC4001PID = 0x804a
 )
 
-// LDCError is a formatible error code from the XPS
+// LDCError is a formattable error code from the XPS
 type LDCError struct {
 	code int
 }

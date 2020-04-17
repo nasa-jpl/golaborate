@@ -155,7 +155,7 @@ func (s *Sensor) SetZero() error {
 	return s.runSetOnlyCommand("TZ")
 }
 
-// VoidCalibration voids the NIST tracable calibration
+// VoidCalibration voids the NIST traceable calibration
 func (s *Sensor) VoidCalibration() error {
 	return s.runSetOnlyCommand("VC")
 }

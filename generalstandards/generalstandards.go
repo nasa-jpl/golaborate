@@ -63,7 +63,7 @@ func (d *DAC) Initialize() error {
 	}
 
 	// enable demand access mode
-	// Tuong had _DMA, manual has _DMDMA
+	// Tuan had _DMA, manual has _DMDMA
 	ret = int(C.ao16_ioctl_dsl(d.fd, C.AO16_IOCTL_TX_IO_MODE, &C.GSC_IO_MODE_DMDMA))
 	if ret != 0 {
 		return fmt.Errorf("error code %d", ret)
@@ -85,7 +85,7 @@ func (d *DAC) Output(channel int, value float64) {
 
 // volt_to_u16 clamps a voltage and converts it to the u16 value
 // based on offset binary encoding
-func volt_to_u16(val float64, vrange float64) uint16 {
+func voltToU16(val float64, vrange float64) uint16 {
 	if val > vrange {
 		return 0xFFFF
 	} else if val < -vrange {

@@ -82,7 +82,7 @@ type ThermalManager interface {
 	// SetCooling turns focal plane cooling on or off
 	SetCooling(bool) error
 
-	// GetTemperature gets the current focal plane temperature in Celcius
+	// GetTemperature gets the current focal plane temperature in Celsius
 	GetTemperature() (float64, error)
 
 	// GetTemperatureSetpoints returns the valid temperature setpoints.  Could return a discrete list, or min/max
@@ -104,7 +104,7 @@ type ThermalManager interface {
 	SetFan(bool) error
 }
 
-// HTTPThermalManager binds routes for thermal amangement on the table
+// HTTPThermalManager binds routes for thermal management on the table
 func HTTPThermalManager(t ThermalManager, table server.RouteTable) {
 	table[pat.Get("/fan")] = GetFan(t)
 	table[pat.Post("/fan")] = SetFan(t)
@@ -261,7 +261,7 @@ func (b *BurstWrapper) ReadFrame(w http.ResponseWriter, r *http.Request) {
 // ReadAllFrames reads all of the frames from the camera and writes them as a
 // cube to a single FITS file
 func (b *BurstWrapper) ReadAllFrames(w http.ResponseWriter, r *http.Request) {
-	images := []image.Image{}
+	var images []image.Image
 	for img := range b.ch {
 		images = append(images, img)
 	}
@@ -277,7 +277,7 @@ func (b *BurstWrapper) ReadAllFrames(w http.ResponseWriter, r *http.Request) {
 	hdr.Set("Content-Disposition", "attachment; filename=image.fits")
 	w.WriteHeader(http.StatusOK)
 	err = WriteFits(w, []fitsio.Card{
-		fitsio.Card{
+		{
 			Name:    "ERR",
 			Value:   errS,
 			Comment: "error encountered capturing burst"}}, images)
@@ -447,7 +447,7 @@ func GetFrame(p Camera, rec *imgrec.Recorder) http.HandlerFunc {
 			} else {
 				w2 = w
 			}
-			cards := []fitsio.Card{}
+			var cards []fitsio.Card
 			if carder, ok := interface{}(p).(MetadataMaker); ok {
 				cards = carder.CollectHeaderMetadata()
 			}
@@ -466,7 +466,7 @@ func GetFrame(p Camera, rec *imgrec.Recorder) http.HandlerFunc {
 	}
 }
 
-// AOIManipulator is an interface to a camera's AOI manipulating factures
+// AOIManipulator is an interface to a camera's AOI manipulating functions
 type AOIManipulator interface {
 	// SetAOI allows the AOI to be set
 	SetAOI(AOI) error

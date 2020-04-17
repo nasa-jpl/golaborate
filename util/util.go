@@ -38,7 +38,7 @@ func GetBit(b byte, bitIndex uint) bool {
 // SetBit sets a single bit in a byte
 func SetBit(in byte, bitIndex uint, high bool) byte {
 	if high {
-		in |= (1 << bitIndex)
+		in |= 1 << bitIndex
 	} else {
 		in &= ^(1 << bitIndex)
 	}
@@ -150,7 +150,7 @@ func (l *Limiter) Check(input float64) bool {
 
 // MergeErrors converts many errors to a single one, newline separated
 func MergeErrors(errs []error) error {
-	strs := []string{}
+	var strs []string
 	for idx := 0; idx < len(errs); idx++ {
 		err := errs[idx]
 		if err != nil {

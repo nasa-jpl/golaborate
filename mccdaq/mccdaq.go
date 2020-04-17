@@ -24,21 +24,21 @@ func Open() (*DAC, error) {
 	var (
 		ret     *DAC
 		ary     [1]C.DaqDeviceDescriptor
-		numdevs C.uint = 1
+		numdevs = 1
 	)
 
 	C.ulGetDaqDeviceInventory(C.ANY_IFC, &ary[0], &numdevs)
 	if numdevs == 0 {
-		return ret, fmt.Errorf("No DACs detected")
+		return ret, fmt.Errorf("no DACs detected")
 	}
 	ret.handle = C.ulCreateDaqDevice(ary[0])
 	if ret.handle == 0 {
-		return ret, fmt.Errorf("Connection to DAC not opened properly")
+		return ret, fmt.Errorf("connection to DAC not opened properly")
 	}
 
 	err := C.ulConnectDaqDevice(ret.handle)
 	if err != C.ERR_NO_ERROR {
-		return ret, fmt.Errorf("Connection to DAC not opened properly [%v]", err)
+		return ret, fmt.Errorf("connection to DAC not opened properly [%v]", err)
 	}
 
 	return ret, nil

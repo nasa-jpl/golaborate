@@ -48,7 +48,7 @@ func WriteFits(w io.Writer, metadata []fitsio.Card, imgs []image.Image) error {
 }
 
 func bytesToUint(b []byte) []uint16 {
-	ary := []uint16{}
+	var ary []uint16
 	hdr := (*reflect.SliceHeader)(unsafe.Pointer(&ary))
 	hdr.Data = uintptr(unsafe.Pointer(&b[0]))
 	hdr.Len = len(b) / 2

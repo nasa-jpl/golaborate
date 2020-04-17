@@ -34,10 +34,10 @@ const (
 	// ChillerToHost is the direction of data flow where a message is sent to the host from the chiller cube
 	ChillerToHost = Direction(false)
 
-	// RemoteOn turns the chiller on
+	// RemoteOn puts the chiller in remote control mode and locks the front panel
 	RemoteOn = RemoteControl(true)
 
-	// RemoteOff turns the chiller off
+	// RemoteOff puts the chiller in local mode and locks remote control
 	RemoteOff = RemoteControl(false)
 )
 

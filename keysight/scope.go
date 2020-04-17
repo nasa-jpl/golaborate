@@ -279,14 +279,14 @@ func (s *Scope) AcquireWaveform(channels []string) (oscilloscope.Waveform, error
 		}
 		ch := oscilloscope.Channel{Scale: yscale, Offset: yoff, Reference: yref}
 		if unsigned {
-			ary := []uint16{}
+			var ary []uint16
 			hdr := (*reflect.SliceHeader)(unsafe.Pointer(&ary))
 			hdr.Data = uintptr(unsafe.Pointer(&buf[0]))
 			hdr.Len = len(buf) / 2
 			hdr.Cap = cap(buf) / 2
 			ch.Data = ary
 		} else {
-			ary := []int16{}
+			var ary []int16
 			hdr := (*reflect.SliceHeader)(unsafe.Pointer(&ary))
 			hdr.Data = uintptr(unsafe.Pointer(&buf[0]))
 			hdr.Len = len(buf) / 2

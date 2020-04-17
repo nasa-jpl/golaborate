@@ -1,4 +1,4 @@
-// Package ascii contains some injectable HTTP interfaces to ASCII hardare
+// Package ascii contains some injectable HTTP interfaces to ASCII hardware
 package ascii
 
 import (

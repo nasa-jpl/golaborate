@@ -100,7 +100,7 @@ func getSourceAddr() byte {
 }
 
 func sanitize(data []byte) []byte {
-	out := []byte{}
+	var out []byte
 	for _, b := range data {
 		if bytes.Contains(specialChars, []byte{b}) {
 			out = append(out, specialCharFirstReplacement, b+specialCharShift)
@@ -112,7 +112,7 @@ func sanitize(data []byte) []byte {
 }
 
 func reverseSanitize(data []byte) []byte {
-	out := []byte{}
+	var out []byte
 	subNext := false
 	for _, b := range data {
 		if b == specialCharFirstReplacement {

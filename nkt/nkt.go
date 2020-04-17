@@ -88,7 +88,7 @@ func UnpackRegister(b []byte, typ types.BasicKind) server.HumanPayload {
 		v := dataOrder.Uint16(b)
 		hp = server.HumanPayload{Uint16: v}
 	case types.Bool:
-		v := uint8(b[0]) == 1
+		v := b[0] == 1
 		hp = server.HumanPayload{Bool: v}
 	case types.String:
 		v := string(b)

@@ -90,8 +90,7 @@ Hardware and matching "type" fields, case insensitive, alphabetical by vendor:
 - Thermocube
 	> 200, 300, 400 series "cube" fluid temperature controllers, "thermocube"
 - Thorlabs
-	> ITC 4000 series "itc4000", "tl-laser-diode"
-`
+	> ITC 4000 series "itc4000", "tl-laser-diode"`
 	/*
 	   - Omega
 	   	> DPF700 (flow meter) "dpf700" [ not actually working yet ]

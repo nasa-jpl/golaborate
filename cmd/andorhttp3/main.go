@@ -108,8 +108,7 @@ which is not a software simulation camera.
 If the files and folders created do not have the permissions you want on linux,
 your umask is likely to blame  andor-http makes them with permission 666, but your
 umask is probably the default of 0022 which knocks them down to 444.  Set your
-umask to 0000 before running andor-http to solve this.
-`
+umask to 0000 before running andor-http to solve this.`
 	fmt.Println(str)
 }
 
@@ -207,7 +206,7 @@ func run() {
 		log.Fatal(err)
 	}
 	c.Allocate()
-
+	defer c.Close()
 	args := cfg.Recorder
 	r := &imgrec.Recorder{Root: args.Root, Prefix: args.Prefix}
 	w := sdk3.NewHTTPWrapper(c, r)
@@ -222,7 +221,6 @@ func run() {
 	addr := cfg.Addr + cfg.Root
 	log.Println("now listening for requests at ", addr)
 	log.Fatal(http.ListenAndServe(cfg.Addr, root))
-	c.Close()
 }
 
 func main() {

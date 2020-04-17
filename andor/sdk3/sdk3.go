@@ -31,7 +31,7 @@ const (
 	LengthOfUndefinedBuffers = 255
 
 	// WRAPVER is the andor wrapper code version.
-	// Incremement this when pkg sdk3 is updated.
+	// Increment this when pkg sdk3 is updated.
 	WRAPVER = 7
 )
 
@@ -350,7 +350,7 @@ func (c *Camera) GetSerialNumber() (string, error) {
 // multiple buffers
 func (c *Camera) QueueBuffer() error {
 	if len(c.buffer) == 0 {
-		return fmt.Errorf("Go buffer cannot hold entire frame, likely uninitialized, len=%d, cap=%d", len(c.buffer), cap(c.buffer))
+		return fmt.Errorf("go buffer cannot hold entire frame, likely uninitialized, len=%d, cap=%d", len(c.buffer), cap(c.buffer))
 	}
 	err := Error(int(C.AT_QueueBuffer(C.AT_H(c.Handle), c.cptr, c.cptrsize)))
 	if err == nil {
@@ -495,7 +495,7 @@ func (c *Camera) Burst(frames int, fps float64, ch chan<- image.Image) error {
 			return err
 		}
 		// H, W swapped in unpadbuffer, rotation built into SDK3 but needs to
-		// be subvertedhere
+		// be subverted here
 		buf = UnpadBuffer(buf, stride, aoi.Height, aoi.Width)
 		im := &image.Gray16{Pix: buf, Stride: aoi.Height * 2, Rect: image.Rect(0, 0, aoi.Height, aoi.Width)} // swap W, H -- still in detector coordinates
 		g := gift.New(
@@ -554,7 +554,7 @@ func (c *Camera) SetCooling(b bool) error {
 	return SetBool(c.Handle, "SensorCooling", b)
 }
 
-// GetTemperature gets the current temperature of the sensor in Celcius
+// GetTemperature gets the current temperature of the sensor in Celsius
 func (c *Camera) GetTemperature() (float64, error) {
 	return GetFloat(c.Handle, "SensorTemperature")
 }
@@ -612,7 +612,7 @@ func (c *Camera) SetFan(b bool) error {
 func (c *Camera) Buffer() ([]byte, error) {
 	// this function is needed because we use a buffer of uint64 to
 	// guarantee 8-byte alignment.  We want the underlying data
-	buf := []byte{}
+	var buf []byte
 	nbytes, err := GetInt(c.Handle, "ImageSizeBytes")
 	if err != nil {
 		return buf, err
@@ -688,41 +688,41 @@ func (c *Camera) CollectHeaderMetadata() []fitsio.Card {
 		- fpa temperature
 		*/
 		// header to the header
-		fitsio.Card{Name: "HDRVER", Value: "sCMOS-4", Comment: "header version"},
-		fitsio.Card{Name: "WRAPVER", Value: WRAPVER, Comment: "server library code version"},
-		fitsio.Card{Name: "SDKVER", Value: sdkver, Comment: "sdk version"},
-		fitsio.Card{Name: "DRVVER", Value: drvver, Comment: "driver version"},
-		fitsio.Card{Name: "FIRMVER", Value: firmver, Comment: "camera firmware version"},
-		fitsio.Card{Name: "METAERR", Value: metaerr, Comment: "error encountered gathering metadata"},
-		fitsio.Card{Name: "CAMMODL", Value: cammodel, Comment: "camera model"},
-		fitsio.Card{Name: "CAMSN", Value: camsn, Comment: "camera serial number"},
+		{Name: "HDRVER", Value: "sCMOS-4", Comment: "header version"},
+		{Name: "WRAPVER", Value: WRAPVER, Comment: "server library code version"},
+		{Name: "SDKVER", Value: sdkver, Comment: "sdk version"},
+		{Name: "DRVVER", Value: drvver, Comment: "driver version"},
+		{Name: "FIRMVER", Value: firmver, Comment: "camera firmware version"},
+		{Name: "METAERR", Value: metaerr, Comment: "error encountered gathering metadata"},
+		{Name: "CAMMODL", Value: cammodel, Comment: "camera model"},
+		{Name: "CAMSN", Value: camsn, Comment: "camera serial number"},
 
 		// timestamp
-		fitsio.Card{Name: "DATE", Value: ts}, // timestamp is standard and does not require comment
+		{Name: "DATE", Value: ts}, // timestamp is standard and does not require comment
 
 		// orientation
-		fitsio.Card{Name: "ORIENT", Value: 0, Comment: "cw rotation from origin index +row +col"},
+		{Name: "ORIENT", Value: 0, Comment: "cw rotation from origin index +row +col"},
 
 		// exposure parameters
-		fitsio.Card{Name: "EXPTIME", Value: texp.Seconds(), Comment: "exposure time, seconds"},
+		{Name: "EXPTIME", Value: texp.Seconds(), Comment: "exposure time, seconds"},
 
 		// thermal parameters
-		fitsio.Card{Name: "FAN", Value: fan, Comment: "on (true) or off"},
-		fitsio.Card{Name: "TEMPSETP", Value: tsetpt, Comment: "Temperature setpoint"},
-		fitsio.Card{Name: "TEMPSTAT", Value: tstat, Comment: "TEC status"},
-		fitsio.Card{Name: "TEMPER", Value: temp, Comment: "FPA temperature (Celcius)"},
+		{Name: "FAN", Value: fan, Comment: "on (true) or off"},
+		{Name: "TEMPSETP", Value: tsetpt, Comment: "Temperature setpoint"},
+		{Name: "TEMPSTAT", Value: tstat, Comment: "TEC status"},
+		{Name: "TEMPER", Value: temp, Comment: "FPA temperature (Celcius)"},
 		// aoi parameters
-		fitsio.Card{Name: "AOIL", Value: aoi.Left, Comment: "1-based left pixel of the AOI"},
-		fitsio.Card{Name: "AOIT", Value: aoi.Top, Comment: "1-based top pixel of the AOI"},
-		fitsio.Card{Name: "AOIW", Value: aoi.Width, Comment: "AOI width, px"},
-		fitsio.Card{Name: "AOIH", Value: aoi.Height, Comment: "AOI height, px"},
-		fitsio.Card{Name: "AOIB", Value: binS, Comment: "AOI Binning, HxV"}}
+		{Name: "AOIL", Value: aoi.Left, Comment: "1-based left pixel of the AOI"},
+		{Name: "AOIT", Value: aoi.Top, Comment: "1-based top pixel of the AOI"},
+		{Name: "AOIW", Value: aoi.Width, Comment: "AOI width, px"},
+		{Name: "AOIH", Value: aoi.Height, Comment: "AOI height, px"},
+		{Name: "AOIB", Value: binS, Comment: "AOI Binning, HxV"}}
 }
 
 // Configure takes a map of interfaces and calls Set_xxx for each, where
 // xxx is Bool, Int, etc.
 func (c *Camera) Configure(settings map[string]interface{}) error {
-	errs := []error{}
+	var errs []error
 	for k, v := range settings {
 		typs := Features[k]
 		var err error
@@ -768,7 +768,7 @@ func UnpadBuffer(buf []byte, aoistride, aoiwidth, aoiheight int) []byte {
 }
 
 func bytesToUint(b []byte) []uint16 {
-	ary := []uint16{}
+	var ary []uint16
 	hdr := (*reflect.SliceHeader)(unsafe.Pointer(&ary))
 	hdr.Data = uintptr(unsafe.Pointer(&b[0]))
 	hdr.Len = len(b) / 2

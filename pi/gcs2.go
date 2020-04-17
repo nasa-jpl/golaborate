@@ -81,7 +81,7 @@ func (c *Controller) readBool(cmd, axis string) (bool, error) {
 	}
 	str = string(resp)
 	if len(str) == 0 {
-		return false, fmt.Errorf("the response from the controller was blank, is the axis label correct?")
+		return false, fmt.Errorf("the response from the controller was blank, is the axis label correct")
 	}
 	// TODO: dedup this, copied from GetPos
 	parts := strings.Split(str, "=")
@@ -104,7 +104,7 @@ func (c *Controller) readFloat(cmd, axis string) (float64, error) {
 	}
 	str = string(resp)
 	if len(str) == 0 {
-		return 0, fmt.Errorf("the response from the controller was blank, is the axis enabled (online, as PI says)?")
+		return 0, fmt.Errorf("the response from the controller was blank, is the axis enabled (online, as PI says)")
 	}
 	parts := strings.Split(str, "=")
 	// could panic here, assume the response is always intact,
