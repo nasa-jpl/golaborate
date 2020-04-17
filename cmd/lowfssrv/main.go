@@ -78,7 +78,7 @@ func (l *LOWFS) Loop() {
 			if err != nil {
 				log.Println(err)
 			}
-			err = l.Cam.WaitBuffer(l.PL.Interval * 100)
+			err = l.Cam.WaitBuffer(l.PL.Interval * 5)
 			if err != nil {
 				log.Println(err)
 			}
@@ -172,6 +172,14 @@ func (l *LOWFS) Start(w http.ResponseWriter, r *http.Request) {
 	l.aoi = aoi
 	l.stride = stride
 
+	fps, err := sdk3.GetFloat(l.Cam.Handle, "FrameRate")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	interFrameTime := 1 / fps // seconds
+	interFrameTimeDur := time.Duration(interFrameTime * 1e9)
+	l.PL.Interval = interFrameTimeDur
 	err = sdk3.SetEnumString(l.Cam.Handle, "CycleMode", "Continuous")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -232,18 +240,10 @@ func openCamera() (*sdk3.Camera, error) {
 			c.Close()
 			log.Fatal(err)
 		}
-		if sn == "auto" {
-			if !strings.Contains(sn, "SFT") {
-				break
-			} else {
-				c.Close()
-			}
+		if !strings.Contains(sn, "SFT") {
+			break
 		} else {
-			if sn == snCam {
-				break
-			} else {
-				c.Close()
-			}
+			c.Close()
 		}
 	}
 	model, err := c.GetModel()
@@ -263,7 +263,7 @@ func openCamera() (*sdk3.Camera, error) {
 		"PixelEncoding":            "Mono16",
 		"TriggerMode":              "Internal",
 		"MetadataEnable":           false,
-		"SensorCooling":            true,
+		"SensorCooling":            false,
 		"SpuriousNoiseFilter":      false,
 		"StaticBlemishCorrection":  false}
 	err = c.Configure(cfg)
@@ -271,6 +271,7 @@ func openCamera() (*sdk3.Camera, error) {
 		log.Fatal(err)
 	}
 	c.Allocate()
+	c.Rotating = false
 	err = c.QueueBuffer()
 	return c, err
 }

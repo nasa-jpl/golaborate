@@ -246,7 +246,9 @@ This function spawns a goroutine and is used to allow connection
 persistence between communications.  Use Close if you wish to close immediately.
 */
 func (rd *RemoteDevice) CloseEventually() {
-	if rd.tryingToClose { return } // avoid spawning excessive/competing goroutines if this is already happening
+	if rd.tryingToClose {
+		return
+	} // avoid spawning excessive/competing goroutines if this is already happening
 	go rd.closeEventually()
 	rd.tryingToClose = true
 }

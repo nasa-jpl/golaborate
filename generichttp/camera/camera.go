@@ -47,6 +47,27 @@ func (a AOI) Bottom() int {
 	return a.Top + a.Height
 }
 
+// Rotate an AOI, mapping from the raw to rotated coordinate frame
+func RotateAOI90(aoi AOI, sensorWidth, sensorHeight int) AOI {
+	// (0,0), upper left, becomes (sensorWidth, 0) upper right
+	return AOI{
+		Width:  aoi.Height, // swap width, height because modulo 90
+		Height: aoi.Width,
+		Left:   aoi.Top,
+		Top:    sensorWidth - aoi.Left - aoi.Width, // Top needs to be transformed from left edge
+	}
+}
+
+// Rotate an AOI, mapping from the raw to rotated coordinate frame
+func RotateAOI270(aoi AOI, sensorWidth, sensorHeight int) AOI {
+	return AOI{
+		Width:  aoi.Height,
+		Height: aoi.Width,
+		Left:   sensorHeight - aoi.Top - aoi.Height, // Left needs to be transformed from top edge
+		Top:    aoi.Left,
+	}
+}
+
 // Binning encapsulates information about pixel addition on camera
 type Binning struct {
 	// H is the horizontal binning factor

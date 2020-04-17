@@ -32,7 +32,7 @@ const (
 
 	// WRAPVER is the andor wrapper code version.
 	// Increment this when pkg sdk3 is updated.
-	WRAPVER = 7
+	WRAPVER = 8
 )
 
 // ErrFeatureNotFound is generated when a feature is looked up in the Features
@@ -44,7 +44,7 @@ type ErrFeatureNotFound struct {
 
 // Error satisfies the error interface
 func (e ErrFeatureNotFound) Error() string {
-	return fmt.Sprintf("feature %s not found in Features map, see go-hcit/andor/sdk3#Features for known features", e.Feature)
+	return fmt.Sprintf("feature %s not found in Features map, see golab/andor/sdk3#Features for known features", e.Feature)
 }
 
 var (
@@ -164,6 +164,9 @@ type Camera struct {
 
 	// Handle holds the int that points to a specific camera
 	Handle int
+
+	// Rotating indicates whether to rectify images from the andor SDK to world coordinates
+	Rotating bool
 }
 
 // Open opens a connection to the camera.  Typically, a real camera
@@ -173,10 +176,6 @@ func Open(camIdx int) (*Camera, error) {
 	var hndle C.AT_H
 	err := enrich(Error(int(C.AT_Open(C.int(camIdx), &hndle))), "AT_OPEN")
 	c.Handle = int(hndle)
-	c.GetAOIHeight()
-	c.GetAOIWidth()
-	c.GetAOILeft()
-	c.GetAOITop()
 	return &c, err
 }
 
@@ -298,7 +297,13 @@ func (c *Camera) GetAOI() (camera.AOI, error) {
 	left, err := c.GetAOILeft()
 	width, err := c.GetAOIWidth()
 	height, err := c.GetAOIHeight()
-	return camera.AOI{Top: top, Left: left, Width: height, Height: width}, err
+	sensW, err := c.GetSensorWidth()
+	sensH, err := c.GetSensorHeight()
+	aoi := camera.AOI{Top: top, Left: left, Width: width, Height: height}
+	if c.Rotating {
+		aoi = camera.RotateAOI90(aoi, sensW, sensH)
+	}
+	return aoi, err
 }
 
 // GetSDKVersion gets the software version of the SDK
@@ -417,7 +422,10 @@ func (c *Camera) GetFrame() (image.Image, error) {
 		return &ret, err
 	}
 
-	im := &image.Gray16{Pix: buf, Stride: aoi.Height * 2, Rect: image.Rect(0, 0, aoi.Height, aoi.Width)} // swap W, H -- still in detector coordinates
+	im := &image.Gray16{Pix: buf, Stride: aoi.Width * 2, Rect: image.Rect(0, 0, aoi.Width, aoi.Height)} // swap W, H -- still in detector coordinates
+	if !c.Rotating {
+		return im, err
+	}
 	g := gift.New(
 		gift.Rotate90(),
 	)
@@ -497,14 +505,18 @@ func (c *Camera) Burst(frames int, fps float64, ch chan<- image.Image) error {
 		// H, W swapped in unpadbuffer, rotation built into SDK3 but needs to
 		// be subverted here
 		buf = UnpadBuffer(buf, stride, aoi.Height, aoi.Width)
-		im := &image.Gray16{Pix: buf, Stride: aoi.Height * 2, Rect: image.Rect(0, 0, aoi.Height, aoi.Width)} // swap W, H -- still in detector coordinates
-		g := gift.New(
-			gift.Rotate90(),
-		)
-		rect := g.Bounds(im.Bounds())
-		dst := image.NewGray16(rect)
-		g.Draw(dst, im)
-		ch <- dst
+		im := &image.Gray16{Pix: buf, Stride: aoi.Width * 2, Rect: image.Rect(0, 0, aoi.Width, aoi.Height)}
+		if c.Rotating {
+			ch <- im
+		} else {
+			g := gift.New(
+				gift.Rotate90(),
+			)
+			rect := g.Bounds(im.Bounds())
+			dst := image.NewGray16(rect)
+			g.Draw(dst, im)
+			ch <- dst
+		}
 	}
 	return err
 }

@@ -100,8 +100,8 @@ func BuildMux(c Config) *goji.Mux {
 	// for every node specified, build a submux
 	for _, node := range c.Nodes {
 		var (
-			httper server.HTTPer
-			middleware []func(http.Handler)http.Handler
+			httper     server.HTTPer
+			middleware []func(http.Handler) http.Handler
 		)
 		axislocker := false
 		typ := strings.ToLower(node.Type)
