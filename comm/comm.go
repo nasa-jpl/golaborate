@@ -212,8 +212,8 @@ func (rd *RemoteDevice) open() error {
 func (rd *RemoteDevice) Close() error {
 	rd.Lock()
 	defer func() {
-		rd.Unlock()
 		rd.tryingToClose = false
+		rd.Unlock()
 	}()
 	if rd.Conn != nil {
 		err := rd.Conn.Close()
