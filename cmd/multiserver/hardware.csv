@@ -1,0 +1,17 @@
+Vendor,What is it,Model(s),Types|separated
+Aerotech,Motion Controller,Ensemble,aerotech|ensemble
+CryoCon,Thermal Monitor,"12,14, or 18i",cryocon
+Fluke,Thermal Humidity Monitor,DewK 1620a,fluke|dewk
+Granville-Phillips,Vacuum Pressure Gauge,GP375 Convectron,gp|convectron|gp375|gpconvectron
+IXL Lightwave,Laser Diode/TEC Controller,LDC3916 (and family),ixl|lightwave|ldc3916,
+KJC Lesker,Vacuum Pressure Gauge,KJC300,kjc|lesker
+Newport,Motion Controller,XPS,xps
+Newport,Motion Controller,ESP300/301,esp|esp300|esp301
+NKT,Laser,SuperK Extreme/Varia,nkt|superk
+Thermocube,Chiller,200/300/400 series,thermocube
+Thorlabs,Laser Diode/TEC controller,ITC4000 series,itc4000|tl-laser-diode
+Agilent,Oscilloscope,all digital scopes,agilent-scope
+Keysight,Oscilloscope,InfinityVision-X series,keysight-scope
+Keysight,DAQ/Logger,DAQ970 series (34970 probably works, untested),keysight-daq
+Agilent,Function Generator,33250A (and series),function-generator
+PI,Motion Controller,GCS2 compatible (post-2010ish peizo/stepper/DC motors),pi-motion
