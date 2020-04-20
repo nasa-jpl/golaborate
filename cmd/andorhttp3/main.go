@@ -43,7 +43,6 @@ type config struct {
 	Addr         string                 `yaml:"Addr"`
 	Root         string                 `yaml:"Root"`
 	SerialNumber string                 `yaml:"SerialNumber"`
-	Rotating     bool                   `yaml:"Rotating"`
 	Recorder     recorder               `yaml:"Recorder"`
 	BootupArgs   map[string]interface{} `yaml:"BootupArgs"`
 }
@@ -53,7 +52,6 @@ func setupconfig() {
 		Addr:         ":8000",
 		Root:         "/",
 		SerialNumber: "auto",
-		Rotating:     true,
 		Recorder:     recorder{},
 		BootupArgs: map[string]interface{}{
 			"ElectronicShutteringMode": "Rolling",
@@ -200,7 +198,6 @@ func run() {
 	}
 	defer c.Close()
 	defer sdk3.FinalizeLibrary()
-	c.Rotating = cfg.Rotating
 	model, err := c.GetModel()
 	if err != nil {
 		log.Fatal(err)

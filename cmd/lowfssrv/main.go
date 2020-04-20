@@ -267,7 +267,6 @@ func openCamera() (*sdk3.Camera, error) {
 		log.Fatal(err)
 	}
 	c.Allocate()
-	c.Rotating = false
 	err = c.QueueBuffer()
 	return c, err
 }

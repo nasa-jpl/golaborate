@@ -5,6 +5,7 @@ import (
 	"go/types"
 	"math"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.jpl.nasa.gov/bdube/golab/generichttp/camera"
@@ -284,6 +285,10 @@ func (h *HTTPWrapper) SetFeature(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
+	}
+
+	if strings.Contains(feature, "AOI") {
+		h.Camera.Allocate()
 	}
 
 }

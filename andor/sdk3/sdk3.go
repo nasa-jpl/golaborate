@@ -19,7 +19,6 @@ import (
 	"unsafe"
 
 	"github.com/astrogo/fitsio"
-	"github.com/disintegration/gift"
 	"github.jpl.nasa.gov/bdube/golab/generichttp/camera"
 	"github.jpl.nasa.gov/bdube/golab/util"
 )
@@ -164,9 +163,6 @@ type Camera struct {
 
 	// Handle holds the int that points to a specific camera
 	Handle int
-
-	// Rotating indicates whether to rectify images from the andor SDK to world coordinates
-	Rotating bool
 }
 
 // Open opens a connection to the camera.  Typically, a real camera
@@ -176,6 +172,9 @@ func Open(camIdx int) (*Camera, error) {
 	var hndle C.AT_H
 	err := enrich(Error(int(C.AT_Open(C.int(camIdx), &hndle))), "AT_OPEN")
 	c.Handle = int(hndle)
+	if err == nil {
+		c.Allocate()
+	}
 	return &c, err
 }
 
@@ -254,18 +253,6 @@ func (c *Camera) GetAOITop() (int, error) {
 func (c *Camera) SetAOI(aoi camera.AOI) error {
 	defer c.Allocate()
 	var err error
-	if aoi.Left == 0 {
-		aoi.Left, err = c.GetAOILeft()
-	}
-	if aoi.Top == 0 {
-		aoi.Top, err = c.GetAOITop()
-	}
-	if aoi.Width == 0 {
-		aoi.Width, err = c.GetAOIWidth()
-	}
-	if aoi.Height == 0 {
-		aoi.Height, err = c.GetAOIHeight()
-	}
 
 	err = SetInt(c.Handle, "AOIWidth", int64(aoi.Width))
 	if err != nil {
@@ -290,17 +277,14 @@ func (c *Camera) SetAOI(aoi camera.AOI) error {
 func (c *Camera) GetAOI() (camera.AOI, error) {
 	// no point bailing early since these will all throw the same error if
 	// they do at all
+	// always allocate, because Gary will use the raw level of the SDK
+	// which will lead to the buffer being too small or too large
+	// sometimes.
 	top, err := c.GetAOITop()
 	left, err := c.GetAOILeft()
 	width, err := c.GetAOIWidth()
 	height, err := c.GetAOIHeight()
-	sensW, err := c.GetSensorWidth()
-	sensH, err := c.GetSensorHeight()
-	aoi := camera.AOI{Top: top, Left: left, Width: width, Height: height}
-	if c.Rotating {
-		aoi = camera.RotateAOI90(aoi, sensW, sensH)
-	}
-	return aoi, err
+	return camera.AOI{Top: top, Left: left, Width: width, Height: height}, err
 }
 
 // GetSDKVersion gets the software version of the SDK
@@ -379,9 +363,6 @@ func (c *Camera) WaitBuffer(timeout time.Duration) error {
 // GetFrame triggers an exposure and returns the frame as an image.Gray16 masquerading as an image.Image
 func (c *Camera) GetFrame() (image.Image, error) {
 	var ret image.Gray16
-	if !c.bufferOnQueue {
-		return &ret, ErrBufferNotOnQueue
-	}
 	// if we have to query hardware for exposure time, there may be an error
 	expT, err := c.GetExposureTime()
 	if err != nil {
@@ -419,17 +400,8 @@ func (c *Camera) GetFrame() (image.Image, error) {
 		return &ret, err
 	}
 
-	im := &image.Gray16{Pix: buf, Stride: aoi.Width * 2, Rect: image.Rect(0, 0, aoi.Width, aoi.Height)} // swap W, H -- still in detector coordinates
-	if !c.Rotating {
-		return im, err
-	}
-	g := gift.New(
-		gift.Rotate90(),
-	)
-	rect := g.Bounds(im.Bounds())
-	dst := image.NewGray16(rect)
-	g.Draw(dst, im)
-	return dst, nil
+	im := &image.Gray16{Pix: buf, Stride: aoi.Width * 2, Rect: image.Rect(0, 0, aoi.Width, aoi.Height)}
+	return im, nil
 }
 
 // Burst performs a burst by taking N images at M fps.
@@ -502,18 +474,7 @@ func (c *Camera) Burst(frames int, fps float64, ch chan<- image.Image) error {
 		// H, W swapped in unpadbuffer, rotation built into SDK3 but needs to
 		// be subverted here
 		buf = UnpadBuffer(buf, stride, aoi.Height, aoi.Width)
-		im := &image.Gray16{Pix: buf, Stride: aoi.Width * 2, Rect: image.Rect(0, 0, aoi.Width, aoi.Height)}
-		if c.Rotating {
-			ch <- im
-		} else {
-			g := gift.New(
-				gift.Rotate90(),
-			)
-			rect := g.Bounds(im.Bounds())
-			dst := image.NewGray16(rect)
-			g.Draw(dst, im)
-			ch <- dst
-		}
+		ch <- &image.Gray16{Pix: buf, Stride: aoi.Width * 2, Rect: image.Rect(0, 0, aoi.Width, aoi.Height)}
 	}
 	return err
 }
@@ -713,7 +674,7 @@ func (c *Camera) CollectHeaderMetadata() []fitsio.Card {
 		{Name: "DATE", Value: ts}, // timestamp is standard and does not require comment
 
 		// orientation
-		{Name: "ORIENT", Value: 0, Comment: "cw rotation from origin index +row +col"},
+		{Name: "ORIENT", Value: -90, Comment: "cw rotation from origin index +row +col"},
 
 		// exposure parameters
 		{Name: "EXPTIME", Value: texp.Seconds(), Comment: "exposure time, seconds"},
