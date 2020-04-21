@@ -6,6 +6,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // IntSliceToCSV converts a slice of ints to CSV formatted data.
@@ -83,17 +84,16 @@ func ArangeByte(startEnd byte, endStep ...byte) []byte {
 
 // UniqueString reduces a slice of strings to the unique values
 func UniqueString(slice []string) []string {
-	seen := make(map[string]struct{}, len(slice))
-	j := 0
+	var out []string
+	seen := make(map[string]struct{})
 	for _, v := range slice {
 		if _, ok := seen[v]; ok {
 			continue
 		}
 		seen[v] = struct{}{}
-		slice[j] = v
-		j++
+		out = append(out, v)
 	}
-	return slice[:j]
+	return out
 }
 
 // UintSliceContains returns true if value is in slice, otherwise false
@@ -176,4 +176,9 @@ func ClosestIndex(values []float64, test float64) int {
 		}
 	}
 	return lowestIdx
+}
+
+// SecsToDuration converts floating point seconds to a time.Duration
+func SecsToDuration(secs float64) time.Duration {
+	return time.Duration(secs * float64(time.Second))
 }
