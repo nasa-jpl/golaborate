@@ -2,16 +2,14 @@ package sdk3
 
 import (
 	"encoding/json"
-	"go/types"
-	"math"
-	"net/http"
-	"strings"
-	"time"
-
 	"github.jpl.nasa.gov/bdube/golab/generichttp/camera"
 	"github.jpl.nasa.gov/bdube/golab/imgrec"
 	"github.jpl.nasa.gov/bdube/golab/server"
+	"github.jpl.nasa.gov/bdube/golab/util"
+	"go/types"
 	"goji.io/pat"
+	"net/http"
+	"strings"
 )
 
 // HTTPWrapper provides an HTTP interface to a camera
@@ -208,8 +206,7 @@ func (h *HTTPWrapper) SetFeature(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		defer r.Body.Close()
-		tNs := time.Duration(int(math.Round(f.F64*1e9))) * time.Nanosecond
-		err = h.Camera.SetExposureTime(tNs)
+		err = h.Camera.SetExposureTime(util.SecsToDuration(f.F64))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
