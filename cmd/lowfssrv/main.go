@@ -31,6 +31,11 @@ const (
 	RESPNOK = 'N'
 )
 
+type startArgs struct {
+	camera.AOI
+	FrameCount int `json:"frameCount"`
+}
+
 // LOWFS is a type that manages the camera generating data and
 // the replies from the reconstructor
 type LOWFS struct {
@@ -78,6 +83,7 @@ func (l *LOWFS) Loop() {
 			if err != nil {
 				log.Println(err)
 			}
+
 			err = l.Cam.WaitBuffer(l.PL.Interval * 5)
 			if err != nil {
 				log.Println(err)
@@ -136,14 +142,15 @@ func (l *LOWFS) HandleSocket() {
 
 // Start configures the AOI and begins the loop
 func (l *LOWFS) Start(w http.ResponseWriter, r *http.Request) {
-	aoi := camera.AOI{}
-	err := json.NewDecoder(r.Body).Decode(&aoi)
+	args := startArgs{}
+	err := json.NewDecoder(r.Body).Decode(&args)
 	defer r.Body.Close()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	err = l.Cam.SetAOI(aoi)
+	aoi := args.AOI
+	err = l.Cam.SetAOI(args.AOI)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -176,7 +183,12 @@ func (l *LOWFS) Start(w http.ResponseWriter, r *http.Request) {
 	interFrameTime := 1 / fps // seconds
 	interFrameTimeDur := time.Duration(interFrameTime * 1e9)
 	l.PL.Interval = interFrameTimeDur
-	err = sdk3.SetEnumString(l.Cam.Handle, "CycleMode", "Continuous")
+	err = sdk3.SetEnumString(l.Cam.Handle, "CycleMode", "Fixed")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	err = sdk3.SetInt(l.Cam.Handle, "FrameCount", int64(args.FrameCount))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -337,4 +349,16 @@ func main() {
 	w.RT().Bind(mux)
 	root.Handle(pat.New("/camera/*"), mux)
 	http.ListenAndServe(":8000", root)
+}
+
+type UserCred struct {
+	ID int
+	// etc, this holds your auth state
+}
+
+func (u UserCred) IsAuthed() bool { return false }
+
+type CredBroker interface {
+	Get(id int) UserCred
+	Put(c UserCred)
 }
