@@ -1,0 +1,794 @@
+
+
+
+
+
+
+
+
+
+
+
+
+                                    Acromag, Inc.
+                                 30765 S.Wixom Road
+              
+                              Wixom, Michigan 48393-7037
+
+                                Phone: (248)295-0310
+                                 FAX: (248)624-9234
+
+                                Linux Software Library
+                         Information File for the AP236 Board
+                                        V1.0
+                                      12/01/15
+
+
+
+
+               The  information  in this manual is subject to  change
+               without notice.   Acromag,  Inc.  makes no warranty of
+               any kind with regard to this material and accompanying
+               software,  including, but not limited to , the implied
+               warranties  of  merchantability  and  fitness  for   a
+               particular   purpose.    Acromag,   Inc.   assumes  no
+               responsibility for any errors that may appear in  this
+               manual and accompanying software.
+
+               See GPL.txt and LGPL.txt.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   1. Overview
+
+   This  "information"  file  contains a description of  the library
+   programs used for the following models of Acromag Industrial  I/O
+   Boards:
+
+         AP236  16-Bit Isolated Analog Output Board
+
+
+
+   2. Introduction
+
+   The  software  for  the  AP236 Output  board  is  implemented as
+   a library of "C" functions.  This will  make  it     possible  to
+   utilize the board by simply  linking  the user's  code  with  the
+   provided   library   and   making   function   calls   for   each
+   "command"  to be accomplished.  Most of the function  calls  will
+   require  a few parameters or the address of a parameter block  to
+   be  passed.   The  parameters will  include  the  board  address,
+   configuration  information,  data storage addresses,  and  status
+   information. These functions accomplish the following tasks:
+
+         - Configuration
+         - Read Status
+         - Write to DAC's
+         - Trigger Output
+
+   Also  included  is  a demonstration program which shows  how  the
+   library  routines  are used. It  is a helpful program to use when
+   first  installing the board, checking it out, and learning how it
+   works.
+
+   In this document, the term "channel" is used to describe  one  of
+   8 channels.   Channels are numbered 0 through 7.
+
+
+
+   3. List of Files
+
+   The library  software  for  each  Acromag  I/O  board  is  in   a
+   correspondingly named  subdirectory on  the supplied  media.  The
+   files  which  make  up the  library  for  the  AP236  board  are
+   stored in the subdirectory named "AP236".
+
+   There  are two types of program files provided.   Library program
+   files are the files which make up the "library".  Support program
+   files contain example  programs which show how to use the library
+   programs.
+
+
+
+
+
+				   1
+
+
+
+
+
+
+
+   3.1 Library Program Files
+
+   The  following  files  are   included on the  supplied  media  and
+   make up the actual "library" software.
+
+
+        AP236.h   - include file
+        cd236.c   - routine to calculate corrected data
+        cnfg236.c - configure
+        rsts236.c - reads status
+        rwcc236.c - reads/wirtes calibration coefficients
+        wro236.c  - routine to write to DAC output registers
+
+
+
+
+   3.2 Support Program Files
+
+   The  following files are included on the supplied media.     The
+   test program demonstrates how  the library  programs may be used.
+
+        drvr236.c - test program to  demonstrate  library  programs.
+        apcommon.h - include file for AP support.
+        apcommon.c - source file for AP support.
+
+
+
+   4. Software Installation
+
+   It  is strongly advised that the user make a backup copy  of  the
+   distribution media and that the original  distribution  media  be
+   stored in a safe place.
+
+   The  software is installed by simply copying the library files to
+   the  user's  work directory and compiling and  linking  with  the
+   user's application program.
+
+
+   5. Hardware Installation
+
+   For proper installation of each Acromag I/O board the user should
+   refer to the appropriate user's manual.
+
+
+   6. Usage of the Library and Support Programs
+
+   The  software is installed  by copying the supplied files to your
+   work  directory and compiling  and linking  with your application
+   program.
+
+
+
+
+
+
+
+
+
+				   2
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        It  is recommended that the user read the  User's Manual for  the
+        board  and  thoroughly  familiarize themselves with the hardware.
+
+        For a new user to become familiar with the Acromag Library it may
+        be  most  "straight forward"  to proceed in the following manner:
+
+               (a) Build and load the Acromag device driver module.
+
+                 i)   See  the   information  file  in  the device driver
+                 directory   "/home/AP/AP236/dev236/info.txt"   for
+                 information about building and loading the device driver
+                 module.
+
+               (b) Build and execute the Acromag Library Demonstration.
+
+                  i)  Copy the Acromag Library routines from the "AP236"
+                  directory of the source media to a new directory  under
+                  /home/AP/AP236.
+
+
+                  ii)  Copy   the  apcommon  support routines  from the
+                  "apcommon" directory of the source  media  to  a  new
+                  directory  under /home/AP/apcommon.
+
+
+                  iii) From  a  tty  shell,   make  /home/AP/AP236  the
+                  current directory, then use the makefile  to  build the
+                  project.
+
+                  iv)  Launch  the  debugger,  "gdb a.out"  use the 'run' 
+                  command to start the program or  './a.out' without the
+                  debugger. 
+
+                  v)   The  Acromag  Demonstration  program  menu  should
+                  appear  on  the  target processor's  console  terminal.
+
+
+
+
+
+
+
+
+
+
+
+
+				   3
+
+
+
+
+
+
+   The following menu is displayed for the AP236:
+
+   AP236 Library Demonstration  Rev. A   Channel: 0, Range: -10.000 to 10.000
+    1. Exit this Program
+    2. Read Calibration Coefficients
+    3. Read Status Command
+    4. Examine/Change Current Channel
+    5. Set Up Configuration Block Parameters
+    6. Configure Channel
+    7. Write Ideal Data To Output
+    8. Write Corrected Data To Output
+    9. Simultaneous Trigger
+   10. Display Ideal/Corrected Data, Offset/Gain Coefficients
+   11. Clear Data Buffers
+   12. Alter Offset/Gain Coefficients
+
+   Select: 
+
+   To perform basic Analog Output functions using the AP236, follow
+   this sequence of main menu selections:
+
+       Select  2: Read calibration coefficients.
+       Select  4: To select the currrent channel.
+       Select  5: To set up configuration block parameters.
+       Select  6: To configure the currrent channel.
+       Select  7: To write ideal data to a DAC channel.
+       Select  8: To write corrected data to a DAC channel.
+
+   Note: Choose 7 or 8, they perform  the same basic  function  with
+         the  only  difference  being  that  8  will  give corrected
+         outputs, using on-board  calibration coefficients, that are
+         more accurate.
+
+       Select  9: To start conversion(s) if the Simultaneous Trigger mode
+                  was selected.
+
+
+
+
+
+   6.1 Explanation of the Main Demonstration Menu
+
+   The following is an explanation of each menu selection:
+
+        1. Exit this Program
+
+        This selection causes execution to be  returned to the shell.
+
+
+
+
+
+
+
+
+
+
+
+
+				   4
+
+
+
+
+        2. Read Calibration Coefficients.
+
+        The rwcc236() function  is  used to  perform  the read  the
+        calibration coefficients for the board.   A  pointer to the
+        Configuration Block will be passed to this routine.     The
+        routine  will  use  a  pointer  together  with  offsets  to
+        reference the  registers on  the Board  and  will  transfer
+        information from the Board to the Configuration Block.
+
+        3. Read Status
+
+	This menu selection will call the rsts236() function and pass
+	a pointer which points to the Configuration Block  structure.
+	The  current status information is read from the  board  and
+	written into this structure by the rsts236()  function.  The
+	status information is then displayed by the example program.
+
+        4. Examine/Change Current Channel 
+
+	This menu selection will  allow the user  to select  one of
+	eight DAC output channels available for use on the module.
+
+        5. Set Up Configuration Block Parameters
+
+	This  selection will cause the Configuration Block Parameter
+	Menu to be displayed.  Through that menu it will be possible
+	to  enter values into the various structure members  of  the
+	Configuration Block structure.   See section 6.2 for details
+	on the Configuration Block Parameter Menu which follows.
+
+        6. Configure Channel
+
+	This  menu selection will call the  cnfg236()  function  and
+	pass  a  pointer  which points to  the  Configuration  Block
+	structure.    Information  in  the  Configuration Block will
+	be written to the channel.
+
+        7. Write Ideal Data to Output
+
+        This command will calculate an ideal(uncorrected) data count
+        based on your desired  voltage and write it  to  the current
+        DAC channel.
+
+        8. Write Corrected Data to Output
+
+        This command will calculate a corrected data count using the
+        gain and offset coefficients and write it to the current DAC
+        channel. Use this selection to obtain greatest accuracy.
+
+        9. Simultaneous Trigger
+
+        This  command will  write a 1 to the  "Simultaneous Trigger"
+        register.  This must be done in order for the board to start
+        generating outputs if the Simultaneous Trigger Mode has been
+        selected.
+
+
+
+
+
+				   5
+
+
+
+
+        10. Display Ideal/Corrected Data, Gain/Offset Coefficients
+
+        Displays the data and coefficients for each  channel on  the
+        board, where ID  = ideal(uncorrected)  data, CD  = corrected
+        data, GD  = gain  data(coefficient), and  OD  = offset  data
+        (coefficient).
+
+        11. Clear Data Buffers
+
+        Clears out all of the ideal (uncorrected) and corrected data
+        buffers.
+
+        12. Alter Offset/Gain Coefficients
+
+        This selection allows  the user to  alter the  gain, and  offset
+        coefficients read from the board.   The  user  may determine his
+        own  gain and offset coefficients by measuring the zero and full
+        scale  output voltages  with a DVM,  typing the  values into the
+        program,  and load  them into  the gain and offset data buffers.
+
+
+
+   6.2  Explanation of the Configuration Parameter Menu
+
+   This menu  is  displayed  when  the  user  selects  the  "Set  Up
+   Configuration  Block  Parameters"  menu  item  from  the  Library
+   Demonstration Menu.   Through the Configuration Parameter Menu it
+   will  be  possible  for  the  user  to  enter  values  into  the
+   configuration structure.    The configuration structure is used by
+   the cnfg236()function.      Following is the "Set Up Configuration
+   Parameters" menu.
+
+		Configuration Parameters for Channel 00
+
+		 1. Return to Previous Menu
+		 2. Board Pointer:	FFFFC900105FE000
+		 3. Parameter Mask:     FF
+		 4. Output Update Mode: 0
+		 5. Output Range:       2
+		 6. Power-up Voltage:   1
+		 7. Thermal Shutdown:   0
+		 8. 5% Overrange:       0
+		 9. Clear Voltage:      1
+		10. Data Reset:         0
+		11. Full Device Reset:  1
+
+		Select:
+
+	     (Note menu values will differ depending on your system.)
+
+	     Following is an explanation of each menu selection:
+
+	     1. Return to Previous Menu
+
+	     This selection returns the user to the Main Library Menu.
+
+
+
+
+
+
+				   6
+
+
+
+
+
+	     2. Board Pointer
+
+	     The AP module address is displayed.
+
+
+	     3. Parameter Mask
+
+	     This  selection  allows the user to enter a  value  for  the
+	     Parameter   Mask.   The  Parameter  Mask  is  used  by   the
+	     cnfg236()  function to determine which parameters to  update
+	     in  various  registers of the board.   The  individual  bits
+	     correspond to various parameters in the Configuration Block.
+	     A  "1"  in  the bit position means  to  use  the  respective
+	     parameter field to update a DAC channel on the board.  A "0"
+	     means not to use the parameter field.
+
+		  bit 0  - Output Range Parameter.
+		  bit 1  - Power-up Voltage Parameter.
+		  bit 2  - Thermal Shutdown Parameter.
+		  bit 3  - 5% Overrange Parameter.
+		  bit 4  - Clear Voltage Parameter.
+		  bit 5  - Data Reset Parameter.
+		  bit 6  - Full Device Reset Parameter.
+		  bit 7  - Reserved.
+
+
+	     4. Output Update Mode
+
+	     This selection allows  the user to  enter a  value  for  the
+	     Output Update Mode.  Valid values are as follows:
+
+	             Value
+	             -----
+		       0 - Transparent Mode
+		       1 - Simultaneous Mode
+
+
+	     5. Output Range
+
+	     This selection allows  the user to  enter a  value  for  the
+	     Output Range.  Valid values are as follows:
+
+	             Value
+	             -----
+		       0 -  -10V to +10V
+		       1 -    0V to +10V
+		       2 -   -5V to +5V
+		       3 -    0V to +5V
+		       4 - -2.5V to +7.5V
+		       5 -   -3V to +3V
+		       6 -    0V to +16V
+		       7 -    0V to +20V
+
+
+
+
+
+
+
+
+				   7
+
+
+
+
+
+	     6. Power-up Voltage
+
+	     This  selection  allows  the user to enter a value  for  the
+	     Power-up Voltage.  Valid values are as follows:
+
+ 	            Value
+	             -----
+		       0 -  Zero Scale
+		       1 -  Mid Scale
+		       2 -  Full Scale
+
+
+	     7. Thermal Shutdown
+
+	     This  selection  allows  the user to enter a value  for  the
+	     Thermal Shutdown.  Valid values are as follows:
+
+	             Value
+ 	            -----
+		       0 -  Disable
+		       1 -  Enable
+
+
+	     8. 5% Overrange
+
+	     This  selection  allows  the user to enter a value  for  the
+	     5% Overrange.  Valid values are as follows:
+
+	             Value
+	             -----
+		       0 -  Disable
+		       1 -  Enable
+
+
+	     9. Clear Voltage
+
+	     This  selection  allows  the user to enter a value  for  the
+	     Clear Voltage.  Valid values are as follows:
+
+ 	            Value
+	             -----
+		       0 -  Zero Scale
+		       1 -  Mid Scale
+		       2 -  Full Scale
+
+
+	     10. Data Reset
+
+	     This  selection  allows  the user to enter a value  for  the
+	     Data Reset.  Valid values are as follows:
+
+ 	            Value
+	             -----
+		       0 -  Disable
+		       1 -  Enable
+
+
+
+
+
+				   8
+
+
+
+
+
+	     11. Full Device Reset
+
+	     This  selection  allows  the user to enter a value  for  the
+	     Full Device Reset.  Valid values are as follows:
+
+ 	            Value
+	             -----
+		       0 -  Disable
+		       1 -  Enable
+
+
+
+
+   7. Description of Library Programs.
+
+   Following  are descriptions of the programs and files which  make
+   up the library.
+
+   AP236.h - This module contains  the  definitions  and  structures
+   used by the library.
+
+
+
+   void rcc236 - This  routine is  used  to  read  the  calibration
+   coefficients from the board and store them in an array.
+
+        calling sequence:
+
+        rcc236(ptr)
+
+        where:
+
+        ptr  - (structure  pointer)  This is a pointer  to  the
+        Configuration Block structure.
+
+
+
+
+
+   void cd236 - This routine calculates the corrected data for all channels.
+
+        calling sequence:
+
+        cd236(ptr)
+
+        where:
+
+        ptr  - (structure  pointer)  This is a pointer  to  the
+        Configuration Block structure.
+
+
+     NOTE: the ideal count value must be  calculated and  stored  in
+     the configuration  block structure  for this  function to  work
+     properly.
+
+
+
+
+
+
+				   9
+
+
+
+
+   void wro236 - This  is  the routine  that  actually  writes  the
+   desired output data into the DAC channel register.
+
+        calling sequence:
+
+        wro236(ptr, channel, data)
+
+        where:
+        ptr  - (structure  pointer)  This is a pointer  to  the
+        Configuration Block structure.
+
+        channel(int) - is the DAC channel register number to write
+        to (0 - 7).
+
+        data(word) - is the value to write into the DAC channel register.
+        Its limits are 0000H to FFFFH.
+
+
+
+   void cnfg236 - This module is used to perform the "configure channel"
+   function for the AP236 board.  A pointer to the Configuration Block
+   will be passed to this routine.  The routine will use a pointer
+   within the Configuration Block to reference the registers
+   on the Board.  Based on flag bits in the Attribute and
+   Parameter Flag words in the Configuration Block, the board
+   will be configured and various registers will be updated with
+   new information which will be transfered from the Configuration
+   Block to registers on the Board.
+
+        calling sequence:
+
+        cnfg236(ptr, channel)
+
+        where:
+        ptr  - (structure  pointer)  This is a pointer  to  the
+        Configuration Block structure.
+
+        channel(int) - is the DAC channel register number to write
+        to (0 - 7).
+
+
+
+   void rsts236 - This module is used to perform the read status function
+    for the board.  A pointer to the configuration block will be passed to
+    this routine.  The routine will use a pointer within the configuration
+    block together with offsets to reference the registers on the board and
+    will transfer the information from the board.
+
+        calling sequence:
+
+        rsts236(ptr)
+
+        where:
+        ptr  - (structure  pointer)  This is a pointer  to  the
+        Configuration Block structure.
+
+
+
+
+
+
+				   10
+
+
+
+
+
+
+   8. Description of Support Programs
+
+   Following  is  a  description of the support  files  and  program
+   modules  which  provide  examples  for  the  use  of  the library
+   programs.
+
+   apcommon.c - This file provides AP common support routines.
+
+   drvr236.c  - This  is a program which demonstrates the  usage  of
+   the library modules.   This program is menu driven and allows the
+   user to become familiar with the  AP236  board  and  the library
+   software.   The user may,  through menu  selections,   configure,
+   read from, and write to the board.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 				   11
+
+
+
+
+
+
