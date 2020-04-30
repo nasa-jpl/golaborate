@@ -95,6 +95,9 @@ func (e *Ensemble) writeOnlyBus(msg string) error {
 	if err != nil {
 		return err
 	}
+	if resp[len(resp)-1] == '\n' {
+		resp = resp[:len(resp)-1]
+	}
 	// sanitize in case there is the response from a previous message here
 	if len(resp) == 2 {
 		resp = resp[1:] // discard the first byte (it was the old response)
