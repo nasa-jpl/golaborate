@@ -5,7 +5,42 @@ by acromag.  Namely: there are Go functions for each channel configuration,
 and a call to any of them issues a transfer of the configuration to the board.
 This will prevent the last word in performance under obscure conditions (e.g.
 updating the config 10,000s of times per second) but is not generally harmful
-and simplifies interfacing to the device.
+and simplifies interfacing to the device, as there can be no "I updated the
+config but forgot to write to the device" errors.
+
+Basic usage is as followed:
+ dac, err := ap236.New(0) // 0 is the 0th card in the system, in range 0~4
+ if err != nil {
+ 	log.fatal(err)
+ }
+ // single channel, immediate mode (output immediately on write)
+ // see method docs on error values, this example ignores them
+ // there is a get for each set
+ ch := 1
+ dac.SetRange(ch, TenVSymm)
+ dac.SetPowerUpVoltage(ch, ap236.MidScale)
+ dac.SetClearVoltage(ch, ap236.MidScale)
+ dac.SetOverTempBehavior(ch, true) // shut down if over temp
+ dac.SetOverRange(ch, false) // over range not allowed
+ dac.SetOutputSimultaneous(ch, false) // this is what puts it in immediate mode
+ dac.Output(ch, 1.) // 1 volt as close as can be quantized.  Calibrated.
+ dac.OutputDN(ch, 2000) // 2000 DN, uncalibrated
+
+ // multi-channel, synchronized
+ chs := []int{1,2,3}
+ // setup
+ for _, ch := range chs {
+ 	dac.SetRange(ch, TenVSymm)
+	dac.SetPowerUpVoltage(ch, ap236.MidScale)
+	dac.SetClearVoltage(ch, ap236.MidScale)
+	dac.SetOverTempBehavior(ch, true)
+	dac.SetOverRange(ch, false)
+ 	dac.SetOutputSimultaneous(ch, true)
+ }
+ // in your code
+ dac.OutputMulit(chs, []float64{1, 2, 3} // calibrated
+ dac.OutputMultiDN(chs, []uint16{1000, 2000, 3000}) // uncalibrated
+
 */
 package ap236
 
@@ -20,6 +55,7 @@ import "C"
 import (
 	"errors"
 	"fmt"
+	"math"
 	"unsafe"
 
 	_ "github.jpl.nasa.gov/bdube/golab/acromag/apcommon"
@@ -71,12 +107,25 @@ const (
 	SixteenVPos
 	// TwentyVPos is an output range of 0-20V, this requires an external voltage source
 	TwentyVPos
+
+	slope = C.IDEALSLOPE
+	zero  = C.IDEALZEROBTC
+	maxV  = C.ENDPOINTHI
+	minV  = C.ENDPOINTLO
+	maxDN = C.CLIPHI
+	minDN = C.CLIPLO
 )
 
 var (
-	// ErrSimultaneousOutput is thrown when a device in simultaneous output mode is issued
+	// ErrSimultaneousOutput is generated when a device in simultaneous output mode is issued
 	// an Output command that is accepted for next flush but not executed.
 	ErrSimultaneousOutput = errors.New("device is in simultaneous output mode: accepted but not written")
+
+	// ErrVoltageTooLow is generated when a too low voltage is commanded
+	ErrVoltageTooLow = errors.New("commanded voltage below lower limit")
+
+	// ErrVoltageTooLow is generated when a too high voltage is commanded
+	ErrVotlageTooHigh = errors.New("commanded voltage above upper limit")
 
 	// IdealCode is the array from drvr236.c L60-L85
 	// its inner elements, by index:
@@ -97,7 +146,8 @@ var (
 	// 6 - -3 to 3V
 	// 7 - 0 to 16V
 	// 8 - 0 to 20V
-	IdealCode = [8][7]float64{
+	// the range channel option is an index into the outer element
+	idealCode = [8][7]float64{
 		/* IdealZeroSB, IdealZeroBTC, IdealSlope, -10 to 10V, cliplo, cliphi */
 		{32768.0, 0.0, 3276.8, -10.0, 10.0, -32768.0, 32767.0},
 
@@ -156,8 +206,8 @@ type AP236 struct {
 	cfg C.struct_cblk236
 }
 
-// NewAP236 creates a new instance and opens the connection to the DAC
-func NewAP236(deviceIndex int) (*AP236, error) {
+// New creates a new instance and opens the connection to the DAC
+func New(deviceIndex int) (*AP236, error) {
 	var (
 		o    AP236
 		out  = &o
@@ -169,7 +219,7 @@ func NewAP236(deviceIndex int) (*AP236, error) {
 	// is a valid way to generate the pointer that C wants
 	// see also: several ways to get the same address of the
 	// data: https://play.golang.org/p/fpkOIT9B3BB
-	cptr := (*[8][7]C.double)(unsafe.Pointer(&IdealCode))
+	cptr := (*[8][7]C.double)(unsafe.Pointer(&idealCode))
 	o.cfg.pIdealCode = cptr
 	errC := C.APOpen(C.int(deviceIndex), &o.cfg.nHandle, cs)
 	err := enrich(errC, "APOpen")
@@ -314,9 +364,23 @@ func (dac *AP236) sendCfgToBoard(channel int) {
 }
 
 // Output writes a voltage to a channel.
-//
+// the error is only non-nil if the value is out of range
 func (dac *AP236) Output(channel int, voltage float64) error {
-	return nil // TODO: impl
+	rng, _ := dac.GetRange(channel) // output range
+	slp := idealCode[rng][slope]    // slope
+	zro := idealCode[rng][zero]     // zero DN
+	mindn := idealCode[rng][minDN]  // min value allowed
+	maxdn := idealCode[rng][maxDN]  // max value allowed
+	minvolt := idealCode[rng][minV]
+	maxvolt := idealCode[rng][maxV]
+	dn := math.Round(voltage*slp + zro)
+	if voltage < minvolt || dn < mindn {
+		return ErrVoltageTooLow
+	} else if voltage > maxvolt || dn > maxdn {
+		return ErrVotlageTooHigh
+	}
+	dnU := uint16(dn)
+	return dac.OutputDN(channel, dnU)
 }
 
 // OutputDN writes a value to the board in DN.
@@ -328,6 +392,62 @@ func (dac *AP236) OutputDN(channel int, value interface{}) error {
 		return fmt.Errorf("output value is not a uint16")
 	}
 	C.wro236(&dac.cfg, C.int(channel), C.word(v))
+	return nil
+}
+
+// OutputMulti writes voltages to multiple output channels.
+// the error is non-nil if any of these conditions occur:
+//	1.  A blend of output modes (some simultaneous, some immediate)
+//  2.  A command is out of range
+
+// if an error is encountered in case 2, the output buffer of the DAC may be
+// partially updated from proceeding valid commands.  No invalid values escape
+// to the DAC.
+//
+// The device is flushed after writing if the channels are simultaneous output.
+//
+// passing zero length slices will cause a panic.  Slices must be of equal length.
+func (dac *AP236) OutputMulti(channels []int, voltages []float64) error {
+	// ensure channels are homogeneous
+	sim, _ := dac.GetOutputSimultaneous(channels[0])
+	for i := 0; i < len(channels); i++ { // old for is faster than range, this code may be hot
+		sim2, _ := dac.GetOutputSimultaneous(channels[i])
+		if sim2 != sim {
+			return fmt.Errorf("mixture of output modes used, must be homogeneous.  Channel %d != channel %d",
+				channels[i], channels[0])
+		}
+	}
+	for i := 0; i < len(channels); i++ {
+		err := dac.Output(channels[i], voltages[i])
+		if err != nil {
+			return fmt.Errorf("channel %d voltage %f: %w", channels[i], voltages[i], err)
+		}
+	}
+	if sim {
+		dac.Flush()
+	}
+	return nil
+}
+
+func (dac *AP236) OutputMultiDN(channels []int, uint16s []interface{}) error {
+	// ensure channels are homogeneous
+	sim, _ := dac.GetOutputSimultaneous(channels[0])
+	for i := 0; i < len(channels); i++ { // old for is faster than range, this code may be hot
+		sim2, _ := dac.GetOutputSimultaneous(channels[i])
+		if sim2 != sim {
+			return fmt.Errorf("mixture of output modes used, must be homogeneous.  Channel %d != channel %d",
+				channels[i], channels[0])
+		}
+	}
+	for i := 0; i < len(channels); i++ {
+		err := dac.OutputDN(channels[i], uint16s[i])
+		if err != nil {
+			return fmt.Errorf("channel %d DN %f: %w", channels[i], uint16s[i], err)
+		}
+	}
+	if sim {
+		dac.Flush()
+	}
 	return nil
 }
 
