@@ -12,7 +12,7 @@ Thermocube,Chiller,200/300/400 series,thermocube
 Thorlabs,Laser Diode/TEC controller,ITC4000 series,itc4000|tl-laser-diode
 Agilent,Oscilloscope,all digital scopes,agilent-scope
 Keysight,Oscilloscope,InfinityVision-X series,keysight-scope
-Keysight,DAQ/Logger,DAQ970 series (34970 probably works, untested),keysight-daq
+Keysight,DAQ/Logger,DAQ970 series (34970 probably works; untested),keysight-daq
 Agilent,Function Generator,33250A (and series),function-generator
 PI,Motion Controller,GCS2 compatible (post-2010ish peizo/stepper/DC motors),pi-motion
 Acromag,DAC,AP236,AP236
