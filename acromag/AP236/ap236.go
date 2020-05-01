@@ -70,14 +70,11 @@ func init() {
 	}
 }
 
-// OutputScale is the output scale of the DAC at power up
+// OutputScale is the output scale of the DAC at power up or clear
 type OutputScale int
 
 // OutputRange is the output range of the DAC
 type OutputRange int
-
-// ThermalMode describes if the DAC shuts down when > 150C die temperature
-type ThermalMode int
 
 const (
 	// ZeroScale represents a power up zero scale signal.
