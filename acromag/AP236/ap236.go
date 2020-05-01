@@ -13,6 +13,7 @@ Basic usage is as followed:
  if err != nil {
  	log.fatal(err)
  }
+ defer dac.Close()
  // single channel, immediate mode (output immediately on write)
  // see method docs on error values, this example ignores them
  // there is a get for each set
@@ -472,4 +473,10 @@ func (dac *AP236) Reset(channel int) error {
 	dac.sendCfgToBoard(channel)
 	dac.cfg.opts._chan[C.int(channel)].FullReset = C.int(0)
 	return nil
+}
+
+// Close the dac, freeing hardware.
+func (dac *AP236) Close() error {
+	errC := C.APClose(dac.cfg.nHandle)
+	return enrich(errC, "APClose")
 }
