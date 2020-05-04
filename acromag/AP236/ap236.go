@@ -122,7 +122,7 @@ var (
 	// ErrVoltageTooLow is generated when a too low voltage is commanded
 	ErrVoltageTooLow = errors.New("commanded voltage below lower limit")
 
-	// ErrVoltageTooLow is generated when a too high voltage is commanded
+	// ErrVoltageTooHigh is generated when a too high voltage is commanded
 	ErrVotlageTooHigh = errors.New("commanded voltage above upper limit")
 
 	// IdealCode is the array from drvr236.c L60-L85
@@ -397,7 +397,7 @@ func (dac *AP236) OutputDN(channel int, value interface{}) error {
 // the error is non-nil if any of these conditions occur:
 //	1.  A blend of output modes (some simultaneous, some immediate)
 //  2.  A command is out of range
-
+//
 // if an error is encountered in case 2, the output buffer of the DAC may be
 // partially updated from proceeding valid commands.  No invalid values escape
 // to the DAC.
@@ -427,6 +427,8 @@ func (dac *AP236) OutputMulti(channels []int, voltages []float64) error {
 	return nil
 }
 
+// OutputMultiDN is equivalent to OutputMulti, but with DNs instead of volts.
+// see the docstring of OutputMulti for more information.
 func (dac *AP236) OutputMultiDN(channels []int, uint16s []interface{}) error {
 	// ensure channels are homogeneous
 	sim, _ := dac.GetOutputSimultaneous(channels[0])
