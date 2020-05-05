@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
 	"math"
 	"net/http"
 	"time"
@@ -324,12 +323,6 @@ func NewSuperK(addr string, connectSerial bool) *SuperK {
 		maker = comm.BackingOffTCPConnMaker(addr, 3*time.Second)
 	}
 	pool := comm.NewPool(1, 30*time.Second, maker)
-	go func() {
-		for {
-			time.Sleep(75 * time.Millisecond)
-			log.Println("pool size = ", pool.Size())
-		}
-	}()
 	extreme := NewSuperKExtreme(addr, pool)
 	varia := NewSuperKVaria(addr, pool)
 	return &SuperK{SuperKExtreme: extreme, SuperKVaria: varia}
