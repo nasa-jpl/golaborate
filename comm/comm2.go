@@ -1,8 +1,9 @@
 package comm
 
 import (
+	"bufio"
+	"bytes"
 	"io"
-	"sync"
 	"time"
 )
 
@@ -14,30 +15,29 @@ type CreationFunc func() (io.ReadWriteCloser, error)
 // that will be closed if they are not in use, and re-opened as needed.
 // it is concurrent safe.  Pools must be created with NewPool.
 type Pool struct {
-	// can assume chan and timer are created by New in all methods
-	// when stopping the timer, close the channel.  The drain for its channel
-	// safely handles the zero value that comes on a closed channel.
-	maxSize int                     // maximum number of connections, == cap(conns)
-	onLease int                     // number of connections given out, <= cap(conns)
-	timeout time.Duration           // time after len(conns) == 0 to free all connections
-	conns   chan io.ReadWriteCloser // the circular buffer of connections
-	timer   *time.Timer             // timer used to destroy connections in the pool after all are returned
-	maker   func() (io.ReadWriteCloser, error)
-
-	reclaiming bool // whether startReclaiming's goroutine is running
-	mu         *sync.Mutex
+	maxSize   int                     // maximum number of connections, == cap(conns)
+	onLease   int                     // number of connections given out, <= cap(conns)
+	timeout   time.Duration           // every (timeout) an attempt is made to destroy a connection
+	conns     chan io.ReadWriteCloser // the circular buffer of connections
+	interrupt chan struct{}           // interrupt is used to stop the background closer
+	sem       chan struct{}           // sem is the semaphore used to ensure acquisitions from the pool are atomic
+	maker     func() (io.ReadWriteCloser, error)
 }
 
+// NewPool creates a new pool.  At each interval of timeout, a connection
+// may be freed if it is available.  Calling Close terminates the background
+// goroutine which closes idle connections and drains the pool as it is immediately
 func NewPool(maxSize int, timeout time.Duration, maker CreationFunc) *Pool {
 	p := &Pool{
-		maxSize: maxSize,
-		timeout: timeout,
-		conns:   make(chan io.ReadWriteCloser, maxSize),
-		timer:   time.NewTimer(timeout),
-		maker:   maker,
-		mu:      &sync.Mutex{},
+		maxSize:   maxSize,
+		timeout:   timeout,
+		conns:     make(chan io.ReadWriteCloser, maxSize),
+		interrupt: make(chan struct{}),
+		sem:       make(chan struct{}, 1),
+		maker:     maker,
 	}
-	p.timer.Stop() // stop the timer since there is nothing to close initially
+	p.sem <- struct{}{}
+	go p.destroyTrash()
 	return p
 }
 
@@ -49,53 +49,51 @@ func NewPool(maxSize int, timeout time.Duration, maker CreationFunc) *Pool {
 // When done with the communicator, return it with Put(), or discard it with
 // Destroy() if it has become no good (e.g., all calls error).
 //
-// If the error from Get is not nil, you must not return it
-// to the pool, or you will cause a panic.
+// If the error from Get is not nil, you must not return it to the pool.
 func (p *Pool) Get() (io.ReadWriter, error) {
-	// first we must stop the timer and close the channel
-	// that can fail as is documented ( https://golang.org/pkg/time/#Timer.Stop )
-	// but a new connection will be generated with retry logic anyway,
-	// so we can ignore that.
-	p.timer.Stop()
+	select {
+	case rw := <-p.conns:
+		p.onLease++
+		return rw, nil
+	case <-time.After(100 * time.Microsecond): // wait a little bit
+		// nothing in the pool or returned in time, check if all on lease.
+		// If not, we need to acquire the semaphore,  which says we are the only
+		// one modifying the size of the pool.
+		if p.onLease == p.maxSize {
+			// could recurse, but want to avoid design which can OOM bomb
+			// the user.  May cause a deadlock by not returning, but that
+			// is an error in their program, not the pool.
+			// eventually, they must return one.
+			rv := <-p.conns
+			p.onLease++
+			return rv, nil
+		}
 
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	// short circuit: if a connection is available, immediately return it
-	if len(p.conns) > 0 {
-		ret := <-p.conns
-		p.onLease++
-		return ret, nil
+		// due to a subtle race, we need to select again
+		select {
+		case rw := <-p.conns:
+			p.onLease++
+			return rw, nil
+		default:
+			<-p.sem
+			defer func() { p.sem <- struct{}{} }()
+			rw, err := p.maker()
+			if err == nil { // only increment if the conn was good
+				p.onLease++
+			}
+			return rw, err
+		}
 	}
-	// check if they're all given out
-	if p.onLease == p.maxSize {
-		// wait for one to come back
-		ret := <-p.conns
-		p.onLease++
-		return ret, nil
-	}
-	// now the easy cases are exhausted; we don't have a conn available
-	// and they aren't all out; make one and give it out
-	// no connections available, create one and return it
-	// only incrememnt the lease count if we are giving out something
-	// other than garbage
-	c, err := p.maker()
-	if err == nil {
-		p.onLease++
-	}
-	return c, err
 }
 
 // Put restores a communicator to the pool.  It may be reused, or will be
-// automatically freed after all connections are returned and the timout
-// has elapsed.  Junk communicators (ones that always error) should be
-// Destroy()'d and not returned with Put.
+// be freed eventually by the pool.  Junk communicators (ones that always error)
+// should be Destroy()'d and not returned with Put.
 func (p *Pool) Put(rw io.ReadWriter) {
-	rwc := (rw).(io.ReadWriteCloser)
-	p.conns <- rwc
+	<-p.sem // acquire the semaphore
 	p.onLease--
-	if len(p.conns) == p.maxSize {
-		p.startReclaim()
-	}
+	p.conns <- (rw).(io.ReadWriteCloser)
+	p.sem <- struct{}{}
 	return
 }
 
@@ -105,11 +103,13 @@ func (p *Pool) Destroy(rw io.ReadWriter) {
 	// no need for lock?
 	rwc := (rw).(io.ReadWriteCloser)
 	rwc.Close()
+	<-p.sem
 	p.onLease--
+	p.sem <- struct{}{}
 	return
 }
 
-// Active returns the number of connections in the pool, or given out from it
+// Size returns the number of connections in the pool, or given out from it
 func (p *Pool) Size() int {
 	return len(p.conns) + p.onLease
 }
@@ -120,20 +120,59 @@ func (p *Pool) Active() int {
 	return p.onLease
 }
 
-// startReclaim spawns another goroutine which will be used to close all
-// connections in the pool
-func (p *Pool) startReclaim() {
-	defer func() { p.reclaiming = true }()
-	if !p.reclaiming {
-		go func() {
-			defer func() { p.reclaiming = false }()
-			// wait until the timeout has elapsed, then close everything
-			<-p.timer.C
-			for closer := range p.conns {
-				closer.Close()
-			}
-			p.timer.Reset(p.timeout)
-		}()
+// destroyTrash should be run in a goroutine.  It loops on the trash bin
+// until the cancellation signal is given, at which time it returns
+func (p *Pool) destroyTrash() {
+	for {
+		time.Sleep(p.timeout)
+		select {
+		case closer := <-p.conns:
+			closer.Close()
+		case <-p.interrupt:
+			return
+		}
 	}
-	return
+}
+func (p *Pool) Close() {
+	p.interrupt <- struct{}{} // stop the background "garbage collection"
+	<-p.sem                   // acquire the semaphore and prevent new connections
+	for len(p.conns) > 0 {    // not a range so that the loop will skip if the pool is empty
+		c := <-p.conns
+		c.Close()
+	}
+	p.sem <- struct{}{}
+}
+
+// Terminator is a struct holding termination sequences and read/writers
+type Terminator struct {
+	Wterm byte
+	Rterm byte
+	w     io.Writer
+	r     io.Reader
+}
+
+func (t Terminator) Write(b []byte) (int, error) {
+	b = append(b, t.Wterm)
+	return t.w.Write(b)
+}
+
+// Read implements io.Reader.  The input is scanned up to the first encounter
+// of Rterm.  Rterm is stripped from the message and the remainder returned.
+// buf is double buffered for this purpose.
+func (t Terminator) Read(buf []byte) (int, error) {
+	b, err := bufio.NewReader(t.r).ReadBytes(t.Rterm)
+	if err != nil {
+		return 0, err
+	}
+	if bytes.HasSuffix(b, []byte{t.Rterm}) {
+		idx := bytes.IndexByte(b, t.Rterm)
+		b = b[:idx]
+	}
+	return copy(buf, b), nil
+}
+
+// NewTerminator returns a wrapper around a Read/Writer that appends and
+// strips termination bytes
+func NewTerminator(rw io.ReadWriter, Rx, Tx byte) Terminator {
+	return Terminator{w: rw, r: rw, Wterm: Tx, Rterm: Rx}
 }
