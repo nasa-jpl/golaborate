@@ -4,7 +4,10 @@ import (
 	"bufio"
 	"bytes"
 	"io"
+	"net"
 	"time"
+
+	"github.com/cenkalti/backoff"
 )
 
 // CreationFunc is a function which returns a new "connection" to something
@@ -133,6 +136,10 @@ func (p *Pool) destroyTrash() {
 		}
 	}
 }
+
+// Close interrupts the background collection of idle connections
+// if it is not called, the garbage collector can never free the pool and the
+// background worker will never stop
 func (p *Pool) Close() {
 	p.interrupt <- struct{}{} // stop the background "garbage collection"
 	<-p.sem                   // acquire the semaphore and prevent new connections
@@ -175,4 +182,40 @@ func (t Terminator) Read(buf []byte) (int, error) {
 // strips termination bytes
 func NewTerminator(rw io.ReadWriter, Rx, Tx byte) Terminator {
 	return Terminator{w: rw, r: rw, Wterm: Tx, Rterm: Rx}
+}
+
+// NetworkConnMaker builds the closure needed to satisfy the creationFunc interface
+func NetworkConnMaker(network string, address string, timeout time.Duration) CreationFunc {
+	return func() (io.ReadWriteCloser, error) {
+		return net.DialTimeout(network, address, timeout)
+	}
+}
+
+// TCPConnMaker wraps NetworkConnmaker with TCP as the network
+func TCPConnMaker(address string, timeout time.Duration) CreationFunc {
+	return NetworkConnMaker("tcp", address, timeout)
+}
+
+// BackingOffTCPConnMaker is a TCPConnMaker with hardcoded backoff parameters
+func BackingOffTCPConnMaker(address string, timeout time.Duration) CreationFunc {
+	return func() (io.ReadWriteCloser, error) {
+		var (
+			conn io.ReadWriteCloser
+			err  error
+		)
+
+		op := func() error {
+			conn, err = net.DialTimeout("tcp", address, timeout)
+			return err
+		}
+		err = backoff.Retry(op, &backoff.ExponentialBackOff{
+			InitialInterval:     100 * time.Millisecond,
+			RandomizationFactor: 0,
+			Multiplier:          2,
+			MaxInterval:         20 * time.Second,
+			MaxElapsedTime:      30 * time.Second,
+			Clock:               backoff.SystemClock})
+
+		return conn, err
+	}
 }
