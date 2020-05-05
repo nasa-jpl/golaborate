@@ -58,8 +58,6 @@ import (
 	"fmt"
 	"math"
 	"unsafe"
-
-	_ "github.jpl.nasa.gov/bdube/golab/acromag/apcommon"
 )
 
 func init() {
