@@ -130,6 +130,15 @@ func reverseSanitize(data []byte) []byte {
 	return out
 }
 
+// crcHelper computes the two-byte CRC value in a concurrent safe way and one line
+func crcHelper(buf []byte) []byte {
+	crcUint := crcTable.InitCrc()
+	crcUint = crcTable.UpdateCrc(crcUint, buf)
+	crcBytes := make([]byte, 2)
+	binary.BigEndian.PutUint16(crcBytes, crcTable.CRC16(crcUint))
+	return crcBytes
+}
+
 // messages are encoded as [SOT][MESSAGE][EOT].
 // SOT and EOT are declared in the const ( ... ) block below
 // the message is formatted as
@@ -159,7 +168,7 @@ func (mp MessagePrimitive) EncodeTelegram() ([]byte, error) {
 	// assemble the telegram
 	out := append([]byte{telStart}, buf...)
 	out = append(out, crcBytes...)
-	// out = append(out, telEnd)
+	out = append(out, telEnd)
 	return out, nil
 }
 
@@ -172,12 +181,16 @@ func DecodeTelegram(tele []byte) (MessagePrimitive, error) {
 		// } else if !bytes.Contains(tele, []byte{telEnd}) {
 		// fstr := fmt.Sprintf("telegram end byte %X not found", telEnd)
 		// return MessagePrimitive{}, errors.New(fstr)
-	} // the end byte is stripped on the way in
-
-	// if we do, drop anything else
-	iStart := bytes.IndexByte(tele, telStart)
+	}
+	if !bytes.Contains(tele, []byte{telEnd}) {
+		fstr := fmt.Sprintf("telegram end byte %X not found", telEnd)
+		return MessagePrimitive{}, errors.New(fstr)
+	}
+	// remove SOT/EOT
+	start := bytes.IndexByte(tele, telStart)
+	end := bytes.IndexByte(tele, telEnd)
 	// iEnd := bytes.IndexByte(tele, telEnd)
-	tele = tele[iStart+1:] // : iEnd]
+	tele = tele[start+1 : end]
 
 	// now desanitize the message
 	tele = reverseSanitize(tele)

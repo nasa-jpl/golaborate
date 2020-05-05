@@ -6,10 +6,10 @@ package nkt
 
 import (
 	"context"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
-	"go/types"
+	"io"
+	"log"
 	"math"
 	"net/http"
 	"time"
@@ -77,43 +77,6 @@ type ModuleInformation struct {
 	Decoders map[string]func([]byte) server.HumanPayload
 }
 
-// UnpackRegister converts the raw data from a register into a server.HumanPayload
-func UnpackRegister(b []byte, typ types.BasicKind) server.HumanPayload {
-	var hp server.HumanPayload
-	if len(b) == 0 {
-		return server.HumanPayload{}
-	}
-	switch typ {
-	case types.Uint16:
-		v := dataOrder.Uint16(b)
-		hp = server.HumanPayload{Uint16: v}
-	case types.Bool:
-		v := b[0] == 1
-		hp = server.HumanPayload{Bool: v}
-	case types.String:
-		v := string(b)
-		hp = server.HumanPayload{String: v}
-	case types.Byte:
-		v := b[0]
-		hp = server.HumanPayload{Byte: v}
-	default: // default is 10x superres floating point value
-		v := dataOrder.Uint16(b)
-		hp = server.HumanPayload{Float: float64(v) / 10.0}
-	}
-
-	hp.T = typ
-	return hp
-}
-
-// crcHelper computes the two-byte CRC value in a concurrent safe way and one line
-func crcHelper(buf []byte) []byte {
-	crcUint := crcTable.InitCrc()
-	crcUint = crcTable.UpdateCrc(crcUint, buf)
-	crcBytes := make([]byte, 2)
-	binary.BigEndian.PutUint16(crcBytes, crcTable.CRC16(crcUint))
-	return crcBytes
-}
-
 // AddressScan scans the NKT device to see:
 // - /where/ what modules are installed (an address)
 // - /what/ modules are installed (a type code)
@@ -157,9 +120,7 @@ func AddressScan(addr string) (map[byte]string, error) {
 					modules[a] = ModuleTypeMap[mpr.Data[0]]
 				}
 			}
-
 		}
-
 	}
 	return modules, nil
 }
@@ -172,12 +133,7 @@ type Module struct {
 	// Info contains mapping data for a given module, see ModuleInformation for more docs.
 	Info *ModuleInformation
 
-	*comm.RemoteDevice
-}
-
-// SerialConf satisfies comm.SerialConfigurator and enables operation over a serial port
-func (m *Module) SerialConf() serial.Config {
-	return makeSerConf(m.RemoteDevice.Addr)
+	pool *comm.Pool // pointer so that pool is shared between modules
 }
 
 func (m *Module) getRegister(addrName string) (byte, error) {
@@ -187,160 +143,112 @@ func (m *Module) getRegister(addrName string) (byte, error) {
 	} else if value, ok = StandardAddresses[addrName]; ok {
 		register = value
 	} else {
-		return byte(0), errors.New("addrName is not a register known to the module or nkt.StandardAddresses")
+		return 0, errors.New("addrName is not a register known to the module or nkt.StandardAddresses")
 	}
 	return register, nil
-}
-
-// SendMP overloads RemoteDevice.Send to handle telegram encoding of message primitives
-func (m *Module) SendMP(mp MessagePrimitive) error {
-	tele, err := mp.EncodeTelegram()
-	if err != nil {
-		return err
-	}
-	err = m.Send(tele)
-	return err
-}
-
-// RecvMP overloads RemoteDevice.Recv to handle telegram decoding into message primitives
-func (m *Module) RecvMP() (MessagePrimitive, error) {
-	buf, err := m.Recv()
-	if err != nil {
-		return MessagePrimitive{}, err
-	}
-	return DecodeTelegram(buf)
 }
 
 // SendRecvMP sends a buffer after appending the Tx terminator,
 // then returns the response with the Rx terminator stripped
 func (m *Module) SendRecvMP(mp MessagePrimitive) (MessagePrimitive, error) {
-	var (
-		mpRecv MessagePrimitive
-		err    error
-	)
-	m.Lock()
-	defer m.Unlock()
+	var ret MessagePrimitive
+	// set up the connection to the device
+	conn, err := m.pool.Get()
+	if err != nil {
+		return ret, err
+	}
+	defer m.pool.Put(conn)
+
+	send, err := mp.EncodeTelegram()
+	if err != nil {
+		return ret, err
+	}
+
 	// try to send the message up to 3 times.  transient CRC errors are pretty common with the NKTs
 	for idx := 0; idx < 5; idx++ {
-		err = m.SendMP(mp)
+		_, err = conn.Write(send)
 		if err != nil {
-			return mpRecv, err
+			return ret, err
 		}
-		mpRecv, err = m.RecvMP()
+		buf := make([]byte, 64) // messages are typically close to 10 bytes, 64 is plenty
+		n, err := conn.Read(buf)
+		if err != nil {
+			return ret, err
+		}
+		ret, err = DecodeTelegram(buf[:n])
 		if err == nil {
 			break
 		}
 		mp.Src = getSourceAddr()
 	}
-	return mpRecv, err
-
+	return ret, err
 }
 
 // GetValue reads a register
 func (m *Module) GetValue(addrName string) (MessagePrimitive, error) {
+	var (
+		ret MessagePrimitive
+		err error
+	)
 	register, err := m.getRegister(addrName)
 	if err != nil {
-		return MessagePrimitive{}, err
+		return ret, err
 	}
-	err = m.Open()
-	if err != nil {
-		return MessagePrimitive{}, err
-	}
-	defer m.CloseEventually()
-
-	mpSend := MessagePrimitive{
+	send := MessagePrimitive{
 		Dest:     m.AddrDev,
 		Src:      getSourceAddr(), // GSA returns a quasi-unique source address (up to ~154 per message interval)
 		Register: register,
 		Type:     "Read"}
 
-	return m.SendRecvMP(mpSend)
+	return m.SendRecvMP(send)
 }
 
 //SetValue writes a register
 func (m *Module) SetValue(addrName string, data []byte) (MessagePrimitive, error) {
+	var (
+		ret MessagePrimitive
+		err error
+	)
 	register, err := m.getRegister(addrName)
 	if err != nil {
-		return MessagePrimitive{}, err
+		return ret, err
 	}
-
-	mpSend := MessagePrimitive{
+	send := MessagePrimitive{
 		Dest:     m.AddrDev,
-		Src:      getSourceAddr(),
+		Src:      getSourceAddr(), // GSA returns a quasi-unique source address (up to ~154 per message interval)
 		Register: register,
 		Type:     "Write",
 		Data:     data}
 
-	err = m.Open()
-	if err != nil {
-		return MessagePrimitive{}, err
-	}
-	defer m.CloseEventually()
-
-	return m.SendRecvMP(mpSend)
+	return m.SendRecvMP(send)
 }
 
 // GetValueMulti is equivalent to GetValue for multiple addresses
 // if an error is encoutered along the way, the incomplete slice of MessagePrimitives will be returned with the error.
 func (m *Module) GetValueMulti(addrNames []string) ([]MessagePrimitive, error) {
-	err := m.Open()
-	if err != nil {
-		return []MessagePrimitive{}, err
-	}
-	defer m.CloseEventually()
-
-	l := len(addrNames)
-	messages := make([]MessagePrimitive, l, l)
-	for idx, addr := range addrNames {
-		register, err := m.getRegister(addr)
+	out := make([]MessagePrimitive, len(addrNames))
+	for i := 0; i < len(addrNames); i++ {
+		mp, err := m.GetValue(addrNames[i])
 		if err != nil {
-			return messages, err
+			return out, err
 		}
-		mpSend := MessagePrimitive{
-			Dest:     m.AddrDev,
-			Src:      getSourceAddr(),
-			Register: register,
-			Type:     "Read",
-			Data:     []byte{}}
-		mpRecv, err := m.SendRecvMP(mpSend)
-		messages[idx] = mpRecv
-		if err != nil {
-			return messages, err
-		}
+		out[i] = mp
 	}
-	return messages, nil
+	return out, nil
 }
 
 // SetValueMulti is equivalent to SetValue for multiple addresses
 // if an error is encoutered along the way, the incomplete slice of MessagePrimitives will be returned with the error.
 func (m *Module) SetValueMulti(addrNames []string, data [][]byte) ([]MessagePrimitive, error) {
-	err := m.Open()
-	if err != nil {
-		return []MessagePrimitive{}, err
-	}
-	defer m.CloseEventually()
-
-	l := len(addrNames)
-	messages := make([]MessagePrimitive, l, l)
-	for idx, addr := range addrNames {
-		register, err := m.getRegister(addr)
+	out := make([]MessagePrimitive, len(addrNames))
+	for i := 0; i < len(addrNames); i++ {
+		mp, err := m.SetValue(addrNames[i], data[i])
 		if err != nil {
-			return messages, err
+			return out, err
 		}
-		d := data[idx]
-		mpSend := MessagePrimitive{
-			Dest:     m.AddrDev,
-			Src:      getSourceAddr(),
-			Register: register,
-			Type:     "Write",
-			Data:     d}
-		mpRecv, err := m.SendRecvMP(mpSend)
-		messages[idx] = mpRecv
-		if err != nil {
-			return messages, err
-		}
+		out[i] = mp
 	}
-	return messages, nil
+	return out, nil
 }
 
 // SetFloat converts a float to limited precision uint16 and writes it to the module
@@ -404,9 +312,26 @@ type SuperK struct {
 }
 
 // NewSuperK returns a new laser with pre-configured varia and extreme modules
-func NewSuperK(addr string, serial bool) *SuperK {
-	extreme := NewSuperKExtreme(addr, serial)
-	varia := NewSuperKVaria(addr, serial)
+func NewSuperK(addr string, connectSerial bool) *SuperK {
+	var maker comm.CreationFunc
+	// make the maker func
+	if connectSerial {
+		maker = func() (io.ReadWriteCloser, error) {
+			conf := makeSerConf(addr)
+			return serial.OpenPort(&conf)
+		}
+	} else {
+		maker = comm.BackingOffTCPConnMaker(addr, 3*time.Second)
+	}
+	pool := comm.NewPool(1, 30*time.Second, maker)
+	go func() {
+		for {
+			time.Sleep(75 * time.Millisecond)
+			log.Println("pool size = ", pool.Size())
+		}
+	}()
+	extreme := NewSuperKExtreme(addr, pool)
+	varia := NewSuperKVaria(addr, pool)
 	return &SuperK{SuperKExtreme: extreme, SuperKVaria: varia}
 }
 

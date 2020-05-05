@@ -85,12 +85,11 @@ type SuperKExtreme struct {
 }
 
 // NewSuperKExtreme create a new Module representing a SuperKExtreme's main module
-func NewSuperKExtreme(addr string, serial bool) *SuperKExtreme {
-	rd := comm.NewRemoteDevice(addr, serial, &comm.Terminators{Rx: telEnd, Tx: telEnd}, nil)
+func NewSuperKExtreme(addr string, pool *comm.Pool) *SuperKExtreme {
 	return &SuperKExtreme{Module{
-		RemoteDevice: &rd,
-		AddrDev:      extremeDefaultAddr,
-		Info:         SuperKExtremeMain}}
+		pool:    pool,
+		AddrDev: extremeDefaultAddr,
+		Info:    SuperKExtremeMain}}
 }
 
 // SetEmission turns emission (laser output) on

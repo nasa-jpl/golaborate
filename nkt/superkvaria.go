@@ -70,12 +70,11 @@ type SuperKVaria struct {
 }
 
 // NewSuperKVaria create a new Module representing a SuperKVaria module
-func NewSuperKVaria(addr string, serial bool) *SuperKVaria {
-	rd := comm.NewRemoteDevice(addr, serial, &comm.Terminators{Rx: telEnd, Tx: telEnd}, nil)
+func NewSuperKVaria(addr string, pool *comm.Pool) *SuperKVaria {
 	return &SuperKVaria{Module{
-		RemoteDevice: &rd,
-		AddrDev:      variaDefaultAddr,
-		Info:         SuperKVariaInfo}}
+		pool:    pool,
+		AddrDev: variaDefaultAddr,
+		Info:    SuperKVariaInfo}}
 }
 
 // GetShortWave retrieves the short wavelength setpoint of the Varia
