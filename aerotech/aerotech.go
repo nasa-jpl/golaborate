@@ -4,6 +4,7 @@ package aerotech
 import (
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -47,6 +48,9 @@ const (
 	// BadReqCode is the first byte in the controller's response when the message
 	// was not understood
 	BadReqCode = byte(33)
+
+	// Terminator is the request terminator used
+	Terminator = '\n'
 )
 
 // ErrBadResponse is generated when a bad response comes from the controller
@@ -60,38 +64,47 @@ func (e ErrBadResponse) Error() string {
 
 // Ensemble represents an Ensemble motion controller
 type Ensemble struct {
-	*comm.RemoteDevice
+	pool *comm.Pool
 
 	// velocities holds the velocities of the axes; the controller does not allow this to be queried, so we store it here
 	velocities map[string]float64
 }
 
-// NewEnsemble returns a new Ensemble instance with the remote
-// device preconfigured
-func NewEnsemble(addr string, serial bool) *Ensemble {
+// NewEnsemble returns a new Ensemble instance
+func NewEnsemble(addr string, connectSerial bool) *Ensemble {
 	// we actually need \r terminators on both sides, but ACK responses
 	// are not terminated, so we strip them everywhere else.
-	terms := comm.Terminators{Rx: '\n', Tx: '\n'}
-	rd := comm.NewRemoteDevice(addr, false, &terms, nil)
-	rd.Timeout = 10 * time.Minute // long timeout for aerotech equipment
+	maker := comm.BackingOffTCPConnMaker(addr, 3*time.Second)
+	pool := comm.NewPool(1, 30*time.Second, maker)
 	return &Ensemble{
-		RemoteDevice: &rd,
-		velocities:   map[string]float64{}}
+		pool:       pool,
+		velocities: map[string]float64{}}
 }
 
-func (e *Ensemble) writeOnlyBus(msg string) error {
-	err := e.Open()
+// writeOnly does a write and reads the response code for OK/NOK
+func (e *Ensemble) writeOnly(msg string) error {
+	conn, err := e.pool.Get()
 	if err != nil {
 		return err
 	}
-	e.Lock()
-	defer e.Unlock()
-	defer e.CloseEventually()
-	err = e.Send([]byte(msg))
+	defer e.pool.Put(conn)
+	wrapper := comm.NewTerminator(conn, Terminator, Terminator)
+	_, err = io.WriteString(wrapper, msg)
 	if err != nil {
 		return err
 	}
-	resp, err := getAnyResponseFromEnsemble(e.RemoteDevice, true)
+	tcpFrameSize := 1500
+	buf := make([]byte, tcpFrameSize)
+	var (
+		n  = 0
+		n2 = 0
+	)
+
+	for n == 0 && err == nil {
+		n2, err = conn.Read(buf)
+		n += n2
+	}
+	resp := buf[:n]
 	if err != nil {
 		return err
 	}
@@ -108,9 +121,37 @@ func (e *Ensemble) writeOnlyBus(msg string) error {
 	return nil
 }
 
+// writeRead does a write and reads an ASCII response
+func (e *Ensemble) writeRead(msg string) (string, error) {
+	conn, err := e.pool.Get()
+	if err != nil {
+		return "", err
+	}
+	defer e.pool.Put(conn)
+	wrapper := comm.NewTerminator(conn, Terminator, Terminator)
+	_, err = io.WriteString(wrapper, msg)
+	if err != nil {
+		return "", err
+	}
+	buf := make([]byte, 1500)
+	n, err := wrapper.Read(buf)
+	if err != nil {
+		return "", err
+	}
+	resp := buf[:n]
+	if resp[0] == BadReqCode {
+		return "", ErrBadResponse{string(resp)}
+	}
+	for resp[0] == OKCode { // strip the OK, which may repeat if we have someone else's reply
+		resp = resp[1:]
+	}
+	return string(resp), nil
+
+}
+
 func (e *Ensemble) gCodeWriteOnly(msg string, more ...string) error {
 	str := strings.Join(append([]string{msg}, more...), " ")
-	return e.writeOnlyBus(str)
+	return e.writeOnly(str)
 }
 
 // Enable commands the controller to enable an axis
@@ -127,7 +168,7 @@ func (e *Ensemble) Disable(axis string) error {
 func (e *Ensemble) GetEnabled(axis string) (bool, error) {
 	// get the status, it is a 32-bit int, which is really a bitfield
 	str := fmt.Sprintf("AXISSTATUS(%s)", axis)
-	resp, err := e.RemoteDevice.OpenSendRecvClose([]byte(str))
+	resp, err := e.writeRead(str)
 	if err != nil {
 		return false, err
 	}
@@ -167,7 +208,7 @@ func (e *Ensemble) MoveRel(axis string, dist float64) error {
 func (e *Ensemble) GetPos(axis string) (float64, error) {
 	// this could be refactored into something like a talkReadSingleFloat
 	str := fmt.Sprintf("PFBK %s", axis)
-	resp, err := e.RemoteDevice.OpenSendRecvClose([]byte(str))
+	resp, err := e.writeRead(str)
 	if err != nil {
 		return 0, err
 	}
