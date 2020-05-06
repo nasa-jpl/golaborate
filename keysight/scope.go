@@ -22,10 +22,9 @@ type Scope struct {
 
 // NewScope creates a new scope instance
 func NewScope(addr string) *Scope {
-	term := comm.Terminators{Tx: '\n', Rx: '\n'}
-	rd := comm.NewRemoteDevice(addr, false, &term, nil)
-	rd.Timeout = 24 * time.Hour
-	return &Scope{scpi.SCPI{RemoteDevice: &rd, Handshaking: true}}
+	maker := comm.BackingOffTCPConnMaker(addr, 1*time.Second)
+	pool := comm.NewPool(1, time.Hour, maker)
+	return &Scope{scpi.SCPI{Pool: pool, Handshaking: true}}
 }
 
 // SetScale gets the vertical scale of the scope
