@@ -98,6 +98,14 @@ func (s *SCPI) WriteRead(cmds ...string) ([]byte, error) {
 // and returns it as a decoded ASCII or UTF-8 string
 func (s *SCPI) ReadString(cmds ...string) (string, error) {
 	resp, err := s.WriteRead(cmds...)
+	if err == nil {
+		if resp[len(resp)-1] == '\n' {
+			resp = resp[:len(resp)-1]
+		}
+		if resp[len(resp)-1] == '\r' {
+			resp = resp[:len(resp)-1]
+		}
+	}
 	return string(resp), err
 }
 

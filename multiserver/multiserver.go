@@ -170,7 +170,7 @@ func BuildMux(c Config) *goji.Mux {
 			httper = cryocon.NewHTTPWrapper(*cryo)
 
 		case "fluke", "dewk":
-			dewK := fluke.NewDewK(node.Addr, node.Serial)
+			dewK := fluke.NewDewK(node.Addr)
 			httper = fluke.NewHTTPWrapper(*dewK)
 
 		case "keysight-scope":

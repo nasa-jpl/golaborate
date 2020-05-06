@@ -7,8 +7,10 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.jpl.nasa.gov/bdube/golab/comm"
+	"github.jpl.nasa.gov/bdube/golab/scpi"
 	"github.jpl.nasa.gov/bdube/golab/temperature"
 )
 
@@ -42,14 +44,14 @@ func parseTempToC(resp string) (float64, error) {
 
 // TemperatureMonitor models a Model 12 or Model 14 temperature monitor
 type TemperatureMonitor struct {
-	*comm.RemoteDevice
+	s scpi.SCPI
 }
 
 // NewTemperatureMonitor creates a new temperature monitor instance
 func NewTemperatureMonitor(addr string) *TemperatureMonitor {
-	term := comm.Terminators{Rx: '\n', Tx: '\n'}
-	rd := comm.NewRemoteDevice(addr, false, &term, nil)
-	return &TemperatureMonitor{RemoteDevice: &rd}
+	maker := comm.BackingOffTCPConnMaker(addr, time.Second)
+	pool := comm.NewPool(1, 10*time.Second, maker)
+	return &TemperatureMonitor{scpi.SCPI{Pool: pool}}
 }
 
 // Identification returns the identifying information from the monitor.
@@ -57,50 +59,22 @@ func NewTemperatureMonitor(addr string) *TemperatureMonitor {
 //
 // Cryocon Model 12/14 Rev <firmware rev code><hardware rev code>
 func (tm *TemperatureMonitor) Identification() (string, error) {
-	cmd := []byte("*IDN?")
-	err := tm.Open()
-	if err != nil {
-		return "", err
-	}
-	defer tm.CloseEventually()
-	resp, err := tm.SendRecv(cmd)
-	return string(resp), err
-}
-
-// SendRecv wraps the underlying RemoteDevice to pick the CR off the end
-func (tm *TemperatureMonitor) SendRecv(b []byte) ([]byte, error) {
-	resp, err := tm.RemoteDevice.SendRecv(b)
-	if err != nil {
-		return []byte{}, err
-	}
-	return resp[:len(resp)-1], nil // slice up to does not include the second index, this chops off one byte
+	return tm.s.ReadString("*IDN?")
 }
 
 // ReadChannelLetter reads the temperature on a given channel in C, where the
 // channel is something like "A"
 func (tm *TemperatureMonitor) ReadChannelLetter(ch string) (float64, error) {
-	cmd := []byte("INP " + ch + ":TEMP?;UNIT?")
-	err := tm.Open()
+	s, err := tm.s.ReadString("INP", ch, ":TEMP?;UNIT?")
 	if err != nil {
 		return 0, err
 	}
-	defer tm.CloseEventually()
-	resp, err := tm.SendRecv(cmd)
-	if err != nil {
-		return 0, err
-	}
-	return parseTempToC(string(resp))
+	return parseTempToC(s)
 }
 
 // ReadAllChannels reads all of the temperature channels of the sensor in C.
 // any unpopulated channels are NaN.
 func (tm *TemperatureMonitor) ReadAllChannels() ([]float64, error) {
-	err := tm.Open()
-	if err != nil {
-		return []float64{}, err
-	}
-	defer tm.CloseEventually()
-
 	// the behavior of the sensor for too large a channel index
 	// depends on firmware, JPL has FW 1~3, so we need a different solution
 	// here, we look for the model number in the identification, and if not found
@@ -120,18 +94,16 @@ func (tm *TemperatureMonitor) ReadAllChannels() ([]float64, error) {
 
 	out := make([]float64, maxCh)
 	for ch := 0; ch < maxCh; ch++ {
-		cmd := []byte(fmt.Sprintf("INP %d:TEMP?;UNIT?", ch))
-		resp, err := tm.SendRecv(cmd)
+		resp, err := tm.s.ReadString("INP", strconv.Itoa(ch), ":TEMP?;UNIT?")
 		if err != nil {
-			break
+			return out, err
 		}
-		rs := string(resp)
-		if rs == "NAK" {
+		if resp == "NAK" {
 			break // past the last channel
 		}
-		t, err := parseTempToC(rs)
+		t, err := parseTempToC(resp)
 		if err != nil {
-			break
+			return out, err
 		}
 		out[ch] = t
 	}
