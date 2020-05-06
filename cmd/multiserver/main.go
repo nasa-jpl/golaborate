@@ -12,8 +12,6 @@ import (
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/structs"
 
-	"github.jpl.nasa.gov/bdube/golab/multiserver"
-
 	yml "gopkg.in/yaml.v2"
 )
 
@@ -27,9 +25,9 @@ var (
 )
 
 func setupconfig() {
-	k.Load(structs.Provider(multiserver.Config{
+	k.Load(structs.Provider(Config{
 		Addr:  ":8000",
-		Nodes: []multiserver.ObjSetup{}}, "koanf"), nil)
+		Nodes: []ObjSetup{}}, "koanf"), nil)
 	if err := k.Load(file.Provider(ConfigFileName), yaml.Parser()); err != nil {
 		errtxt := err.Error()
 		if !strings.Contains(errtxt, "no such") { // file missing, who cares
@@ -100,7 +98,7 @@ Hardware and matching "type" fields, case insensitive, alphabetical by vendor:
 }
 
 func mkconf() {
-	c := multiserver.Config{}
+	c := Config{}
 	err := k.Unmarshal("", &c)
 	if err != nil {
 		log.Fatal(err)
@@ -117,7 +115,7 @@ func mkconf() {
 }
 
 func printconf() {
-	c := multiserver.Config{}
+	c := Config{}
 	k.Unmarshal("", &c)
 	err := yml.NewEncoder(os.Stdout).Encode(c)
 	if err != nil {
@@ -130,12 +128,12 @@ func pversion() {
 }
 
 func run() {
-	c := multiserver.Config{}
+	c := Config{}
 	err := k.Unmarshal("", &c)
 	if err != nil {
 		log.Fatal(err)
 	}
-	mux := multiserver.BuildMux(c)
+	mux := BuildMux(c)
 	log.Println("now listening for requests at ", c.Addr)
 	log.Fatal(http.ListenAndServe(c.Addr, mux))
 }
