@@ -18,10 +18,9 @@ type DAQ struct {
 
 // NewDAQ creates a new scope instance
 func NewDAQ(addr string) *DAQ {
-	term := comm.Terminators{Tx: '\n', Rx: '\n'}
-	rd := comm.NewRemoteDevice(addr, false, &term, nil)
-	rd.Timeout = 1 * time.Hour
-	return &DAQ{scpi.SCPI{RemoteDevice: &rd, Handshaking: true}}
+	maker := comm.BackingOffTCPConnMaker(addr, 1*time.Second)
+	pool := comm.NewPool(1, time.Hour, maker)
+	return &DAQ{scpi.SCPI{Pool: pool, Handshaking: true}}
 }
 
 // SetChannelLabel sets the label for a given channel.  This label has no meaning

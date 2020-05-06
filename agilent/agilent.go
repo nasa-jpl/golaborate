@@ -29,11 +29,15 @@ type FunctionGenerator struct {
 
 // NewFunctionGenerator creates a new FunctionGenerator instance with
 // the communuication set up
-func NewFunctionGenerator(addr string, serial bool) *FunctionGenerator {
-	term := &comm.Terminators{Rx: 10, Tx: 10}
-	cfg := makeSerConf(addr)
-	rd := comm.NewRemoteDevice(addr, serial, term, cfg)
-	return &FunctionGenerator{scpi.SCPI{RemoteDevice: &rd, Handshaking: true}}
+func NewFunctionGenerator(addr string, connectSerial bool) *FunctionGenerator {
+	var maker comm.CreationFunc
+	if connectSerial {
+		maker = comm.SerialConnMaker(makeSerConf(addr))
+	} else {
+		maker = comm.BackingOffTCPConnMaker(addr, time.Second)
+	}
+	pool := comm.NewPool(1, time.Hour, maker)
+	return &FunctionGenerator{scpi.SCPI{Pool: pool, Handshaking: true}}
 }
 
 // SetFunction configures the output function used by the generator

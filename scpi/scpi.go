@@ -5,15 +5,18 @@ package scpi
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 
 	"github.jpl.nasa.gov/bdube/golab/comm"
 )
 
+var tcpFrameSize = 1500
+
 // SCPI is a type for encapsulating SCPI communication
 type SCPI struct {
-	*comm.RemoteDevice
+	Pool *comm.Pool
 
 	// Handshaking indicates if the communication shall use handshaking,
 	// where an error query is sent with every message
@@ -25,74 +28,70 @@ type SCPI struct {
 // it also requests an error response and checks that it is OK
 // it is assumed this is used for set operations and not get.
 func (s *SCPI) Write(cmds ...string) error {
-	err := s.RemoteDevice.Open()
+	conn, err := s.Pool.Get()
 	if err != nil {
 		return err
 	}
-	s.RemoteDevice.Lock()
-	defer func() {
-		s.RemoteDevice.Unlock()
-		s.RemoteDevice.CloseEventually()
-	}()
+	defer func() { s.Pool.ReturnWithError(conn, err) }()
+	wrap := comm.NewTerminator(conn, '\n', '\n')
 	if s.Handshaking {
 		cmds = append([]string{"*CLS;"}, cmds...)
 		cmds = append(cmds, ";:SYSTem:ERRor?")
 	}
 	str := strings.Join(cmds, " ")
+	_, err = io.WriteString(wrap, str)
+	if err != nil {
+		return err
+	}
 	if s.Handshaking {
-		err := s.RemoteDevice.Send([]byte(str))
+		buf := make([]byte, tcpFrameSize)
+		n, err := wrap.Read(buf)
 		if err != nil {
 			return err
 		}
-		resp, err := s.RemoteDevice.Recv()
-		if err != nil {
-			return err
-		}
-		str := string(resp)
+		str := string(buf[:n])
 		if str[0:2] != "+0" {
 			return fmt.Errorf(str)
 		}
 		return nil
 	}
-	return s.RemoteDevice.Send([]byte(str))
+	return nil
 }
 
 // WriteRead is write, but with a read call after.  It is assumed that "get"
 // calls use this underlying mechanism
 func (s *SCPI) WriteRead(cmds ...string) ([]byte, error) {
-	var ret []byte
-	s.RemoteDevice.Lock()
-	defer func() {
-		s.RemoteDevice.Unlock()
-		s.RemoteDevice.CloseEventually()
-	}()
-	err := s.RemoteDevice.Open()
+	var resp []byte
+	conn, err := s.Pool.Get()
 	if err != nil {
-		return ret, err
+		return resp, err
 	}
+	defer func() { s.Pool.ReturnWithError(conn, err) }()
+	wrap := comm.NewTerminator(conn, '\n', '\n')
 	if s.Handshaking {
 		cmds = append([]string{"*CLS;"}, cmds...)
 		cmds = append(cmds, ";:SYSTem:ERRor?")
 	}
 	str := strings.Join(cmds, " ")
-	err = s.RemoteDevice.Send([]byte(str))
+	_, err = io.WriteString(wrap, str)
 	if err != nil {
-		return ret, err
+		return resp, err
 	}
+	buf := make([]byte, tcpFrameSize)
+	n, err := wrap.Read(buf)
+	if err != nil {
+		return resp, err
+	}
+	resp = buf[:n]
 	if s.Handshaking {
-		resp, err := s.RemoteDevice.Recv()
-		if err != nil {
-			return ret, err
-		}
 		pieces := bytes.Split(resp, []byte{';'})
 		errS := string(pieces[len(pieces)-1])
 		if errS[:2] != "+0" {
-			return ret, fmt.Errorf(errS)
+			return resp, fmt.Errorf(errS)
 		}
 		return bytes.Join(pieces[:len(pieces)-1], []byte{}), nil
 	}
-	b, err := s.RemoteDevice.Recv()
-	return b, err
+	return resp, err
 }
 
 // ReadString sends a command to the device, the reads the response
