@@ -87,7 +87,7 @@ func (e *Ensemble) writeOnly(msg string) error {
 	if err != nil {
 		return err
 	}
-	defer e.pool.Put(conn)
+	defer func() { e.pool.ReturnWithError(conn, err) }()
 	wrapper := comm.NewTerminator(conn, Terminator, Terminator)
 	_, err = io.WriteString(wrapper, msg)
 	if err != nil {
@@ -127,7 +127,7 @@ func (e *Ensemble) writeRead(msg string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer e.pool.Put(conn)
+	defer func() { e.pool.ReturnWithError(conn, err) }()
 	wrapper := comm.NewTerminator(conn, Terminator, Terminator)
 	_, err = io.WriteString(wrapper, msg)
 	if err != nil {

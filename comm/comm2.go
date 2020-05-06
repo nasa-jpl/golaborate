@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
+	"github.com/tarm/serial"
 )
 
 // CreationFunc is a function which returns a new "connection" to something
@@ -18,26 +19,26 @@ type CreationFunc func() (io.ReadWriteCloser, error)
 // that will be closed if they are not in use, and re-opened as needed.
 // it is concurrent safe.  Pools must be created with NewPool.
 type Pool struct {
-	maxSize   int                     // maximum number of connections, == cap(conns)
-	onLease   int                     // number of connections given out, <= cap(conns)
-	timeout   time.Duration           // every (timeout) an attempt is made to destroy a connection
-	conns     chan io.ReadWriteCloser // the circular buffer of connections
-	interrupt chan struct{}           // interrupt is used to stop the background closer
-	sem       chan struct{}           // sem is the semaphore used to ensure acquisitions from the pool are atomic
-	maker     func() (io.ReadWriteCloser, error)
+	maxSize     int                     // maximum number of connections, == cap(conns)
+	onLease     int                     // number of connections given out, <= cap(conns)
+	idleTimeout time.Duration           // every (timeout) an attempt is made to destroy a connection
+	conns       chan io.ReadWriteCloser // the circular buffer of connections
+	interrupt   chan struct{}           // interrupt is used to stop the background closer
+	sem         chan struct{}           // sem is the semaphore used to ensure acquisitions from the pool are atomic
+	maker       func() (io.ReadWriteCloser, error)
 }
 
 // NewPool creates a new pool.  At each interval of timeout, a connection
 // may be freed if it is available.  Calling Close terminates the background
 // goroutine which closes idle connections and drains the pool as it is immediately
-func NewPool(maxSize int, timeout time.Duration, maker CreationFunc) *Pool {
+func NewPool(maxSize int, idleTimeout time.Duration, maker CreationFunc) *Pool {
 	p := &Pool{
-		maxSize:   maxSize,
-		timeout:   timeout,
-		conns:     make(chan io.ReadWriteCloser, maxSize),
-		interrupt: make(chan struct{}),
-		sem:       make(chan struct{}, 1),
-		maker:     maker,
+		maxSize:     maxSize,
+		idleTimeout: idleTimeout,
+		conns:       make(chan io.ReadWriteCloser, maxSize),
+		interrupt:   make(chan struct{}),
+		sem:         make(chan struct{}, 1),
+		maker:       maker,
 	}
 	p.sem <- struct{}{}
 	go p.destroyTrash()
@@ -112,6 +113,15 @@ func (p *Pool) Destroy(rw io.ReadWriter) {
 	return
 }
 
+// ReturnWithError calls Put if err == nil, else Destroy
+func (p *Pool) ReturnWithError(rw io.ReadWriter, err error) {
+	if err != nil {
+		p.Destroy(rw)
+	}
+	p.Put(rw)
+
+}
+
 // Size returns the number of connections in the pool, or given out from it
 func (p *Pool) Size() int {
 	return len(p.conns) + p.onLease
@@ -127,7 +137,7 @@ func (p *Pool) Active() int {
 // until the cancellation signal is given, at which time it returns
 func (p *Pool) destroyTrash() {
 	for {
-		time.Sleep(p.timeout)
+		time.Sleep(p.idleTimeout)
 		select {
 		case closer := <-p.conns:
 			closer.Close()
@@ -217,5 +227,13 @@ func BackingOffTCPConnMaker(address string, timeout time.Duration) CreationFunc 
 			Clock:               backoff.SystemClock})
 
 		return conn, err
+	}
+}
+
+// SerialConnMaker creates the closure for a new serial connection based on a
+// config
+func SerialConnMaker(cfg *serial.Config) CreationFunc {
+	return func() (io.ReadWriteCloser, error) {
+		return serial.OpenPort(cfg)
 	}
 }
