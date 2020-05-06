@@ -16,7 +16,6 @@ OR
 import (
 	"errors"
 	"fmt"
-	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -285,8 +284,8 @@ func XPSErr(code int) error {
 /*XPS represents an XPS series motion controller.
 
 Note that the programming manual has a lot of socket numbers sprinkled around.
-We do not see any here because those concern connection pools held by the
-clients.  We only use a single connection, provided by comm.RemoteDevice.
+We do not see any here because the embedded pool manages that for us.  The
+controller supports up to 100 concurrent sockets.
 
 While newport markets the XPS as a more versatile and consistent
 (vis-a-vis communication) product than the older ESP line, this is not really
@@ -305,30 +304,25 @@ You also send commands formatted as C/++ source code, which is presumably
 compiled or interpreted by the controller.
 */
 type XPS struct {
-	*comm.RemoteDevice
+	pool *comm.Pool
 }
 
 // NewXPS makes a new XPS instance
 func NewXPS(addr string) *XPS {
-	rd := comm.NewRemoteDevice(addr, false, nil, makeSerConf(addr))
-	rd.Timeout = 60 * time.Second
-	return &XPS{RemoteDevice: &rd}
+	maker := comm.BackingOffTCPConnMaker(addr, 3*time.Second)
+	pool := comm.NewPool(1, 30*time.Second, maker)
+	return &XPS{pool: pool}
 }
 
 func (xps *XPS) openReadWriteClose(cmd string) (xpsResponse, error) {
-	resp := xpsResponse{}
-	err := xps.Open()
+	var resp xpsResponse
+	conn, err := xps.pool.Get()
 	if err != nil {
 		return resp, err
 	}
-	xps.Lock()
-	defer xps.CloseEventually()
-	conn := (xps.RemoteDevice.Conn).(net.Conn)
-	conn.SetDeadline(time.Now().Add(xps.Timeout))
-	defer xps.Unlock()
-	defer func() { xps.LastComm = time.Now() }()
+	defer xps.pool.Put(conn)
 	msg := []byte(cmd)
-	n, err := xps.Conn.Write(msg)
+	n, err := conn.Write(msg)
 	if err != nil {
 		return resp, err
 	} else if n != len(msg) {
@@ -338,7 +332,7 @@ func (xps *XPS) openReadWriteClose(cmd string) (xpsResponse, error) {
 	// I sure hope so, otherwise we will get data loss since NACKs don't have "EndOfAPI"
 	// and there is nothing to scan for.  Really garbage interface on their part.
 	buf := make([]byte, 1500)
-	n, err = xps.Conn.Read(buf)
+	n, err = conn.Read(buf)
 	if err != nil {
 		return resp, err
 	}

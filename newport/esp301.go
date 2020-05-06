@@ -3,6 +3,7 @@ package newport
 import (
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -10,6 +11,14 @@ import (
 	"github.jpl.nasa.gov/bdube/golab/comm"
 
 	"github.com/tarm/serial"
+)
+
+const (
+	// TxTerm is the outgoing terminator
+	TxTerm = '\r'
+
+	// RxTerm is the incoming terminator
+	RxTerm = '\r'
 )
 
 var (
@@ -221,34 +230,47 @@ func makeSerConf(addr string) *serial.Config {
 
 // ESP301 represents an ESP301 motion controller.
 type ESP301 struct {
-	*comm.RemoteDevice
+	pool *comm.Pool
 }
 
 // NewESP301 makes a new ESP301 motion controller instance
-func NewESP301(addr string, serial bool) *ESP301 {
-	rd := comm.NewRemoteDevice(addr, serial, &comm.Terminators{
-		Rx: '\r',
-		Tx: '\r',
-	}, makeSerConf(addr))
-	rd.Timeout = 10 * time.Minute
-	return &ESP301{RemoteDevice: &rd}
+func NewESP301(addr string, connectSerial bool) *ESP301 {
+	var maker comm.CreationFunc
+	if connectSerial {
+		maker = comm.SerialConnMaker(makeSerConf(addr))
+	} else {
+		maker = comm.BackingOffTCPConnMaker(addr, 1*time.Second)
+	}
+	p := comm.NewPool(1, time.Minute, maker)
+	return &ESP301{pool: p}
 }
 
 // RawCommand sends a command directly to the motion controller (with EOT appended) and returns the response as-is
 func (esp *ESP301) RawCommand(cmd string) (string, error) {
-	err := esp.Open()
+	// set up the connection
+	conn, err := esp.pool.Get()
 	if err != nil {
 		return "", err
 	}
-	defer esp.CloseEventually()
+	defer func() { esp.pool.ReturnWithError(conn, err) }()
+	wrapper := comm.NewTerminator(conn, RxTerm, TxTerm)
+
+	// acquire an almost imperceptible amount of parallel performance here
+	// the message will be in flight or processed by the ESP while we
+	// check if we should read.
+	_, err = io.WriteString(wrapper, cmd)
+	if err != nil {
+		return "", err
+	}
 	if strings.Contains(cmd, "?") {
-		r, err := esp.SendRecv([]byte(cmd))
+		buf := make([]byte, 80) // 80 byte max on Rx side, assume symmetry from ESP
+		n, err := wrapper.Read(buf)
 		if err != nil {
 			return "", err
 		}
-		return string(r), nil
+		return string(buf[:n]), nil
 	}
-	return "", esp.Send([]byte(cmd))
+	return "", err
 }
 
 // Enable enables an axis
@@ -343,7 +365,15 @@ func (esp *ESP301) Wait(axis string) error {
 // SetFollowingErrorConfiguration sets the "following error" configuration
 func (esp *ESP301) SetFollowingErrorConfiguration(axis string, enableChecking, disableMotorPowerOnError, abortMotionOnError bool) error {
 	// this could be cleaner, but it is rare we need to pack bits into bytes
-	bits := [8]bool{enableChecking, disableMotorPowerOnError, abortMotionOnError, false, false, false, false, false}
+	bits := [8]bool{
+		enableChecking,
+		disableMotorPowerOnError,
+		abortMotionOnError,
+		false,
+		false,
+		false,
+		false,
+		false}
 	b := byte(0)
 	for idx := uint(0); idx < 8; idx++ {
 		if bits[idx] {
