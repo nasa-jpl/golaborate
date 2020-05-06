@@ -13,6 +13,8 @@ import (
 	"github.jpl.nasa.gov/bdube/golab/scpi"
 )
 
+var jumboFrameSize = 9000
+
 // Scope is an interface to a keysight oscilloscope
 type Scope struct {
 	scpi.SCPI
@@ -155,10 +157,18 @@ func (s *Scope) XIncrement() (float64, error) {
 
 // getBuffer transfers the data buffer from the scope handling all internal details
 func (s *Scope) getBuffer() ([]byte, error) {
-	s.SCPI.RemoteDevice.Send([]byte(":WAVeform:DATA?"))
 	var ret []byte
-	buf := make([]byte, 9000) // as of 2020, even jumbo frames aren't bigger than this
-	n, err := s.RemoteDevice.Conn.Read(buf)
+	conn, err := s.Pool.Get()
+	if err != nil {
+		return ret, err
+	}
+	defer func() { s.Pool.ReturnWithError(conn, err) }()
+	_, err = conn.Write(append([]byte(":WAVeform:DATA?"), '\n'))
+	if err != nil {
+		return ret, err
+	}
+	buf := make([]byte, jumboFrameSize)
+	n, err := conn.Read(buf)
 	if err != nil {
 		return ret, err
 	}
@@ -176,13 +186,10 @@ func (s *Scope) getBuffer() ([]byte, error) {
 		return ret, err
 	}
 	dataBuf = dataBuf[upper:]
-	s.RemoteDevice.Lock()
-	defer s.RemoteDevice.Unlock()
 	if len(dataBuf) < nbytes { // this if may be removable
 		for len(dataBuf) < nbytes {
-			buf := make([]byte, 9000) // as of 2020, even jumbo frames aren't bigger than this
-			n, err = s.RemoteDevice.Conn.Read(buf)
-			s.RemoteDevice.LastComm = time.Now()
+			buf := make([]byte, jumboFrameSize)
+			n, err = conn.Read(buf)
 			if err != nil {
 				return ret, err
 			}

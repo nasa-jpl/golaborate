@@ -156,7 +156,7 @@ func (m *Module) SendRecvMP(mp MessagePrimitive) (MessagePrimitive, error) {
 	if err != nil {
 		return ret, err
 	}
-	defer m.pool.Put(conn)
+	defer func() { m.pool.ReturnWithError(conn, err) }()
 
 	send, err := mp.EncodeTelegram()
 	if err != nil {

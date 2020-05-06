@@ -320,7 +320,7 @@ func (xps *XPS) openReadWriteClose(cmd string) (xpsResponse, error) {
 	if err != nil {
 		return resp, err
 	}
-	defer xps.pool.Put(conn)
+	defer func() { xps.pool.ReturnWithError(conn, err) }()
 	msg := []byte(cmd)
 	n, err := conn.Write(msg)
 	if err != nil {
