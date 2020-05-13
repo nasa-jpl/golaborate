@@ -2,9 +2,12 @@
 package tmc
 
 import (
+	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"go/types"
+	"io"
 	"net/http"
 
 	"github.jpl.nasa.gov/bdube/golab/generichttp"
@@ -49,6 +52,9 @@ type FunctionGenerator interface {
 
 	// SetOutputLoad sets the output load of the generator in ohms
 	SetOutputLoad(float64) error
+
+	// SetWaveform uplodas an arbitrary waveform to the function generator
+	SetWaveform([]uint16) error
 }
 
 // HTTPFunctionGenerator injects an HTTP interface to a function generator into a route table
@@ -69,6 +75,8 @@ func HTTPFunctionGenerator(fg FunctionGenerator, table server.RouteTable) {
 	rt[pat.Post("/output")] = SetOutput(fg)
 
 	rt[pat.Post("/output-load")] = SetOutputLoad(fg)
+
+	rt[pat.Post("/waveform")] = SetWaveform(fg)
 
 	if rawer, ok := interface{}(fg).(ascii.RawCommunicator); ok {
 		RW := ascii.RawWrapper{Comm: rawer}
@@ -129,6 +137,39 @@ func GetOutput(fg FunctionGenerator) http.HandlerFunc {
 // SetOutputLoad exposes an HTTP interface to the SetOutputLoad method
 func SetOutputLoad(fg FunctionGenerator) http.HandlerFunc {
 	return generichttp.SetFloat(fg.SetOutputLoad)
+}
+
+func SetWaveform(fg FunctionGenerator) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var (
+			waveform []uint16
+			b        bytes.Buffer
+			buf      = &b
+		)
+		_, err := buf.ReadFrom(r.Body)
+		defer r.Body.Close()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		for {
+			v, err := binary.ReadUvarint(buf)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			waveform = append(waveform, uint16(v))
+		}
+		err = fg.SetWaveform(waveform)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
 }
 
 // HTTPFunctionGeneratorT holds an HTTP wrapper to a function generator

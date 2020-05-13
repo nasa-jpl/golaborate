@@ -2,6 +2,10 @@
 package agilent
 
 import (
+	"bytes"
+	"encoding/binary"
+	"errors"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -43,14 +47,16 @@ func NewFunctionGenerator(addr string, connectSerial bool) *FunctionGenerator {
 // SetFunction configures the output function used by the generator
 func (f *FunctionGenerator) SetFunction(fcn string) error {
 	// FUNC: SHAP <fcn>
-	s := strings.Join([]string{"FUNC:", fcn}, "")
+	log.Println(fcn)
+	s := strings.Join([]string{":FUNC:SHAP", fcn}, " ")
+	log.Println(s)
 	return f.Write(s)
 }
 
 // GetFunction returns the current function type used by the generator
 func (f *FunctionGenerator) GetFunction() (string, error) {
 	// FUNC?
-	return f.ReadString("FUNC:SHAP?")
+	return f.ReadString(":FUNC:SHAP?")
 }
 
 // SetFrequency configures the output frequency of the generator in Hz
@@ -113,4 +119,36 @@ func (f *FunctionGenerator) SetOutput(on bool) error {
 func (f *FunctionGenerator) GetOutput() (bool, error) {
 	// OUT? I'm assuming.
 	return f.ReadBool("OUTPUT?")
+}
+
+// SetArbTable uploads an arbitrary functiont able to the generator
+// for the 33250A, the length must be < 2^16 elements
+func (f *FunctionGenerator) SetArbTable(data []uint16) error {
+	if len(data) > 65535 {
+		return errors.New("data too large, len must be <= 65535")
+	}
+	err := f.Write("FORMat:BORDer NORMal") // Big endian
+	if err != nil {
+		return err
+	}
+	length := strconv.Itoa(len(data) * 2)
+	lengthL := strconv.Itoa(len(length))
+	header := []byte("DATA:DAC VOLATILE #" + lengthL + length)
+	buf := bytes.NewBuffer(make([]byte, 2*len(data)+len(header)))
+	buf.Write(header) // nolint - buffer writes are guaranteed to
+	enc := binary.BigEndian
+	for _, d := range data {
+		err := binary.Write(buf, enc, d)
+		if err != nil {
+			return err
+		}
+	}
+	log.Println(string(buf.Bytes()[:50]))
+	conn, err := f.SCPI.Pool.Get()
+	if err != nil {
+		return err
+	}
+	defer func() { f.SCPI.Pool.ReturnWithError(conn, err) }()
+	_, err = buf.WriteTo(conn)
+	return err
 }
