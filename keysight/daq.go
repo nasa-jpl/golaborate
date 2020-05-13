@@ -1,6 +1,7 @@
 package keysight
 
 import (
+	"bufio"
 	"fmt"
 	"strconv"
 	"strings"
@@ -144,11 +145,23 @@ func (d *DAQ) Record() (oscilloscope.Recording, error) {
 	if err != nil {
 		return ret, err
 	}
-	s, err := d.ReadString(":INIT;FETCH?")
+	// don't use the SCPI layer here, easier to do it manually
+	conn, err := d.Pool.Get()
 	if err != nil {
 		return ret, err
 	}
-	pieces := strings.Split(s, ",")
+	defer func() { d.Pool.ReturnWithError(conn, err) }()
+	msg := []byte("INIT;FETCH?" + "\n")
+	_, err = conn.Write(msg)
+	if err != nil {
+		return ret, err
+	}
+	scanner := bufio.NewReader(conn)
+	buf, err := scanner.ReadBytes('\n')
+	if err != nil {
+		return ret, err
+	}
+	pieces := strings.Split(string(buf[:len(buf)-1]), ",")
 	floats := make([]float64, len(pieces))
 	for i := 0; i < len(pieces); i++ {
 		f, err := strconv.ParseFloat(pieces[i], 64)
