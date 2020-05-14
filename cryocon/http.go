@@ -45,9 +45,8 @@ func (h *HTTPWrapper) ReadAll(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	nan := math.NaN()
 	for idx := 0; idx < len(f); idx++ {
-		if f[idx] == nan {
+		if math.IsNaN(f[idx]) {
 			f[idx] = -274
 		}
 	}
