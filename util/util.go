@@ -182,3 +182,15 @@ func ClosestIndex(values []float64, test float64) int {
 func SecsToDuration(secs float64) time.Duration {
 	return time.Duration(secs * float64(time.Second))
 }
+
+// Convert uint16s to float64s.  Computs (v-zero)/max.
+func UintToFloat(vals []uint16, zero uint16, max uint16) []float64 {
+	z := float64(zero)
+	m := float64(max)
+	out := make([]float64, len(vals))
+	for i := 0; i < len(vals); i++ {
+		v := float64(vals[i])
+		out[i] = (v - z) / m
+	}
+	return out
+}
