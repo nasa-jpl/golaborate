@@ -68,9 +68,9 @@ func (p *Pool) Get() (io.ReadWriter, error) {
 			// the user.  May cause a deadlock by not returning, but that
 			// is an error in their program, not the pool.
 			// eventually, they must return one.
-			rv := <-p.conns
+			rw := <-p.conns
 			p.onLease++
-			return rv, nil
+			return rw, nil
 		}
 
 		// due to a subtle race, we need to select again
@@ -117,8 +117,9 @@ func (p *Pool) Destroy(rw io.ReadWriter) {
 func (p *Pool) ReturnWithError(rw io.ReadWriter, err error) {
 	if err != nil {
 		p.Destroy(rw)
+	} else {
+		p.Put(rw)
 	}
-	p.Put(rw)
 
 }
 
