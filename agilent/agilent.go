@@ -4,7 +4,6 @@ package agilent
 import (
 	"errors"
 	"github.jpl.nasa.gov/bdube/golab/util"
-	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -46,9 +45,7 @@ func NewFunctionGenerator(addr string, connectSerial bool) *FunctionGenerator {
 // SetFunction configures the output function used by the generator
 func (f *FunctionGenerator) SetFunction(fcn string) error {
 	// FUNC: SHAP <fcn>
-	log.Println(fcn)
 	s := strings.Join([]string{":FUNC:SHAP", fcn}, " ")
-	log.Println(s)
 	return f.Write(s)
 }
 
