@@ -3,15 +3,14 @@ package tmc
 
 import (
 	"bytes"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"go/types"
-	"io"
-	"net/http"
-
 	"github.jpl.nasa.gov/bdube/golab/generichttp"
 	"github.jpl.nasa.gov/bdube/golab/generichttp/ascii"
+	"go/types"
+	"net/http"
+	"reflect"
+	"unsafe"
 
 	"github.jpl.nasa.gov/bdube/golab/oscilloscope"
 	"github.jpl.nasa.gov/bdube/golab/server"
@@ -142,9 +141,8 @@ func SetOutputLoad(fg FunctionGenerator) http.HandlerFunc {
 func SetWaveform(fg FunctionGenerator) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var (
-			waveform []uint16
-			b        bytes.Buffer
-			buf      = &b
+			b   bytes.Buffer
+			buf = &b
 		)
 		_, err := buf.ReadFrom(r.Body)
 		defer r.Body.Close()
@@ -152,17 +150,15 @@ func SetWaveform(fg FunctionGenerator) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		for {
-			v, err := binary.ReadUvarint(buf)
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			waveform = append(waveform, uint16(v))
-		}
+		buffer := buf.Bytes()
+		header := *(*reflect.SliceHeader)(unsafe.Pointer(&buffer))
+
+		// The length and capacity of the slice are different.
+		header.Len /= 2
+		header.Cap /= 2
+
+		// Convert slice header to an []int32
+		waveform := *(*[]uint16)(unsafe.Pointer(&header))
 		err = fg.SetWaveform(waveform)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)

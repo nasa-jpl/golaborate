@@ -2,9 +2,8 @@
 package agilent
 
 import (
-	"bytes"
-	"encoding/binary"
 	"errors"
+	"github.jpl.nasa.gov/bdube/golab/util"
 	"log"
 	"strconv"
 	"strings"
@@ -123,32 +122,34 @@ func (f *FunctionGenerator) GetOutput() (bool, error) {
 
 // SetArbTable uploads an arbitrary functiont able to the generator
 // for the 33250A, the length must be < 2^16 elements
-func (f *FunctionGenerator) SetArbTable(data []uint16) error {
+func (f *FunctionGenerator) SetWaveform(data []uint16) error {
 	if len(data) > 65535 {
 		return errors.New("data too large, len must be <= 65535")
 	}
-	err := f.Write("FORMat:BORDer NORMal") // Big endian
-	if err != nil {
-		return err
-	}
-	length := strconv.Itoa(len(data) * 2)
-	lengthL := strconv.Itoa(len(length))
-	header := []byte("DATA:DAC VOLATILE #" + lengthL + length)
-	buf := bytes.NewBuffer(make([]byte, 2*len(data)+len(header)))
-	buf.Write(header) // nolint - buffer writes are guaranteed to
-	enc := binary.BigEndian
-	for _, d := range data {
-		err := binary.Write(buf, enc, d)
-		if err != nil {
-			return err
-		}
-	}
-	log.Println(string(buf.Bytes()[:50]))
+	prev := f.SCPI.Handshaking
+	defer func() { f.SCPI.Handshaking = prev }()
+	f.SCPI.Handshaking = false
+
+	floats := util.UintToFloat(data, 2047, 4095)
+	csv := util.Float64SliceToCSV(floats, 'G', 5)
+	b := []byte("DATA VOLATILE," + csv + "\n")
 	conn, err := f.SCPI.Pool.Get()
 	if err != nil {
 		return err
 	}
 	defer func() { f.SCPI.Pool.ReturnWithError(conn, err) }()
-	_, err = buf.WriteTo(conn)
+	chunkSize := 64
+	for i := 0; i < len(b); i += chunkSize {
+		i2 := i + chunkSize
+		if i2 > len(b) {
+			i2 = len(b)
+		}
+		_, err = conn.Write(b[i:i2])
+		if err != nil {
+			return err
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
 	return err
 }
