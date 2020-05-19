@@ -8,9 +8,12 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.jpl.nasa.gov/bdube/golab/comm"
 )
+
+const timeout = 5 * time.Second
 
 var tcpFrameSize = 1500
 
@@ -33,7 +36,9 @@ func (s *SCPI) Write(cmds ...string) error {
 		return err
 	}
 	defer func() { s.Pool.ReturnWithError(conn, err) }()
-	wrap := comm.NewTerminator(conn, '\n', '\n')
+	var wrap io.ReadWriter
+	wrap = comm.NewTerminator(conn, '\n', '\n')
+	wrap = comm.NewTimeout(wrap, timeout)
 	if s.Handshaking {
 		cmds = append([]string{"*CLS;"}, cmds...)
 		cmds = append(cmds, ";:SYSTem:ERRor?")
@@ -67,7 +72,9 @@ func (s *SCPI) WriteRead(cmds ...string) ([]byte, error) {
 		return resp, err
 	}
 	defer func() { s.Pool.ReturnWithError(conn, err) }()
-	wrap := comm.NewTerminator(conn, '\n', '\n')
+	var wrap io.ReadWriter
+	wrap = comm.NewTerminator(conn, '\n', '\n')
+	wrap = comm.NewTimeout(wrap, timeout)
 	if s.Handshaking {
 		cmds = append([]string{"*CLS;"}, cmds...)
 		cmds = append(cmds, ";:SYSTem:ERRor?")
