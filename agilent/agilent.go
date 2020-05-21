@@ -3,10 +3,11 @@ package agilent
 
 import (
 	"errors"
-	"github.jpl.nasa.gov/bdube/golab/util"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.jpl.nasa.gov/bdube/golab/util"
 
 	"github.com/tarm/serial"
 	"github.jpl.nasa.gov/bdube/golab/comm"
