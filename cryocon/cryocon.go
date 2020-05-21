@@ -19,7 +19,7 @@ import (
 // Unpopulated channel responses ("--", "..") return NaN
 func parseTempToC(resp string) (float64, error) {
 	// -- on an unused channel, or ".."
-	if strings.Contains(resp, "--") || strings.Contains(resp, "..") {
+	if strings.Contains(resp, "--") || strings.Contains(resp, "..") || strings.Contains(resp, "       ") {
 		return math.NaN(), nil
 	}
 	pieces := strings.Split(resp, ";")
