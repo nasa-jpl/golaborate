@@ -57,12 +57,10 @@ func (d *DAQ) GetSampleRate() (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	fmt.Println(s, err)
 	if s == "IMM" {
 		return 0, nil
 	}
 	period, err := d.ReadFloat(":TRIGGER:TIM?")
-	fmt.Println(period, err)
 	return 1 / period, err
 }
 
