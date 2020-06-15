@@ -38,7 +38,10 @@ func (s *SCPI) Write(cmds ...string) error {
 	defer func() { s.Pool.ReturnWithError(conn, err) }()
 	var wrap io.ReadWriter
 	wrap = comm.NewTerminator(conn, '\n', '\n')
-	wrap = comm.NewTimeout(wrap, timeout)
+	wrap, err = comm.NewTimeout(wrap, timeout)
+	if err != nil {
+		return err
+	}
 	if s.Handshaking {
 		cmds = append([]string{"*CLS;"}, cmds...)
 		cmds = append(cmds, ";:SYSTem:ERRor?")
@@ -74,7 +77,10 @@ func (s *SCPI) WriteRead(cmds ...string) ([]byte, error) {
 	defer func() { s.Pool.ReturnWithError(conn, err) }()
 	var wrap io.ReadWriter
 	wrap = comm.NewTerminator(conn, '\n', '\n')
-	wrap = comm.NewTimeout(wrap, timeout)
+	wrap, err = comm.NewTimeout(wrap, timeout)
+	if err != nil {
+		return resp, err
+	}
 	if s.Handshaking {
 		cmds = append([]string{"*CLS;"}, cmds...)
 		cmds = append(cmds, ";:SYSTem:ERRor?")

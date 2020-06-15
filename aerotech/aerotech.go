@@ -53,6 +53,38 @@ const (
 	Terminator = '\n'
 )
 
+type response struct {
+	code byte
+	body []byte
+}
+
+func (r response) isOK() bool {
+	return r.code == OKCode
+}
+
+func (r response) string() string {
+	return string(r.body)
+}
+
+func parse(raw []byte) response {
+	var r response
+	var v byte
+	// scan for the ok/nok code.  Assume the last one belongs to us, if there
+	// are multiple (e.g. unread responses)
+	// it's ok to return something invalid if there was a "read" that was not
+	// flushed, this should be considered unrecoverable.
+	for v = raw[0]; v == OKCode || v == BadReqCode; {
+		raw = raw[1:]
+	}
+	r.code = v
+	// strip any terminators
+	for raw[len(raw)-1] == Terminator {
+		raw = raw[:len(raw)-1]
+	}
+	r.body = raw
+	return r
+}
+
 // ErrBadResponse is generated when a bad response comes from the controller
 type ErrBadResponse struct {
 	resp string
@@ -66,6 +98,8 @@ func (e ErrBadResponse) Error() string {
 type Ensemble struct {
 	pool *comm.Pool
 
+	timeout time.Duration
+
 	// velocities holds the velocities of the axes; the controller does not allow this to be queried, so we store it here
 	velocities map[string]float64
 }
@@ -78,75 +112,141 @@ func NewEnsemble(addr string, connectSerial bool) *Ensemble {
 	pool := comm.NewPool(1, 30*time.Second, maker)
 	return &Ensemble{
 		pool:       pool,
-		velocities: map[string]float64{}}
+		velocities: map[string]float64{},
+		timeout:    300 * time.Second}
+}
+
+func (e *Ensemble) writeReadRaw(msg string) (response, error) {
+	/* this function works as follows:
+	Declare some outer scope error and trial counts,
+	these are the overall error and number of attempts.
+	We want to constrain retry to some number of attempts.
+	We do not use off-the-shelf retry, because there are
+	two potential things we want to retry specifically,
+	not just the overall action.
+
+	Get a connection and try writing to it;
+	if it's junk immediately trash it and try the write until it succeeds.
+	Then, reusing the connection or getting a new one if it's junk,
+	read for N/OK.
+	*/
+	var (
+		resp     response
+		conn     io.ReadWriter
+		wrap     io.ReadWriter
+		werr     error = io.EOF
+		tries          = 0
+		MaxTries       = 3
+	)
+	// enter the write attempt, clean slate.  No attempts, no connections.
+	for werr != nil && tries < MaxTries {
+		var err error
+		conn, err = e.pool.Get()
+		if err != nil {
+			// error getting a connection, bail completely
+			return resp, err
+		}
+		wrap, err = comm.NewTimeout(wrap, e.timeout)
+		if err != nil {
+			// timeout unsupported, bail completely
+			return resp, err
+		}
+		_, werr = io.WriteString(wrap, msg)
+		if werr != nil {
+			// write error, need to scan for the magic string "connection reset"
+			errS := werr.Error()
+			if strings.Contains(errS, "reset") {
+				// reset by peer -- try again
+				tries++
+				e.pool.Destroy(conn)
+				continue
+				// do not need to rebuild the connection here, happens on the
+				// next loop entry
+			}
+			// do not know how to handle other errors
+			e.pool.Destroy(conn)
+			return resp, werr
+		}
+		// succeeded in writing, continue to reading
+		// can't defer connection cleanup, because we may trash
+		// it in the read attempt
+		break
+	}
+	/*
+		Now we enter the second part, reading.  The state here is:
+
+		1) we have a connection, which may or may not be junk
+		2) we want to read.  The controller writes everything
+			in one packet, so a single read call with a
+			decent sized buffer suffices.
+			Then we just evaluate the N/OK code.
+			Or return any irrecoverable errors along the way.
+			If the code is OK, return nil.
+	*/
+	n := 0
+	tries = 0
+	werr = io.EOF
+	tcpFrameSize := 1500
+	buf := make([]byte, tcpFrameSize)
+	for werr != nil && tries < MaxTries {
+		// no terminator wrapper here, because the OK/NO
+		// codes come unterminated.  Assume one data block, as commented above.
+		n, werr = wrap.Read(buf)
+		if werr != nil {
+			// an error, check if the connection was reset, and if so recycle
+			// it and get a new one
+			errS := werr.Error()
+			if strings.Contains(errS, "reset") {
+				tries++
+				e.pool.Destroy(conn)
+				// below here copy pasted from above
+				var err error
+				conn, err = e.pool.Get()
+				if err != nil {
+					// error getting a connection, bail completely
+					return resp, err
+				}
+				wrap, err = comm.NewTimeout(wrap, e.timeout)
+				if err != nil {
+					// timeout unsupported, bail completely
+					return resp, err
+				}
+				// now we have remade the connection, reboot the loop
+				continue
+			}
+			// do not know how to handle other errors
+			e.pool.Destroy(conn)
+			return resp, werr
+		}
+		// if we got to this point, we have an intact response
+		break
+	}
+	// finally, (FINALLY) we can clean up the connection
+	e.pool.ReturnWithError(conn, werr)
+	// parse and return
+	resp = parse(buf[:n])
+	return resp, nil
 }
 
 // writeOnly does a write and reads the response code for OK/NOK
 func (e *Ensemble) writeOnly(msg string) error {
-	conn, err := e.pool.Get()
+	resp, err := e.writeReadRaw(msg)
 	if err != nil {
 		return err
 	}
-	defer func() { e.pool.ReturnWithError(conn, err) }()
-	wrapper := comm.NewTerminator(conn, Terminator, Terminator)
-	_, err = io.WriteString(wrapper, msg)
-	if err != nil {
-		return err
-	}
-	tcpFrameSize := 1500
-	buf := make([]byte, tcpFrameSize)
-	var (
-		n  = 0
-		n2 = 0
-	)
-
-	for n == 0 && err == nil {
-		n2, err = conn.Read(buf)
-		n += n2
-	}
-	resp := buf[:n]
-	if err != nil {
-		return err
-	}
-	if resp[len(resp)-1] == '\n' {
-		resp = resp[:len(resp)-1]
-	}
-	// sanitize in case there is the response from a previous message here
-	if len(resp) == 2 {
-		resp = resp[1:] // discard the first byte (it was the old response)
-	}
-	if len(resp) != 1 || resp[0] != OKCode {
-		return ErrBadResponse{string(resp)}
+	if !resp.isOK() {
+		return fmt.Errorf("unexpected response, expected %s got %s", string([]byte{resp.code}), resp.string())
 	}
 	return nil
 }
 
 // writeRead does a write and reads an ASCII response
 func (e *Ensemble) writeRead(msg string) (string, error) {
-	conn, err := e.pool.Get()
-	if err != nil {
-		return "", err
+	resp, err := e.writeReadRaw(msg)
+	if !resp.isOK() {
+		return "", fmt.Errorf("unexpected response, expected %s got %s", string([]byte{resp.code}), resp.string())
 	}
-	defer func() { e.pool.ReturnWithError(conn, err) }()
-	wrapper := comm.NewTerminator(conn, Terminator, Terminator)
-	_, err = io.WriteString(wrapper, msg)
-	if err != nil {
-		return "", err
-	}
-	buf := make([]byte, 1500)
-	n, err := wrapper.Read(buf)
-	if err != nil {
-		return "", err
-	}
-	resp := buf[:n]
-	if resp[0] == BadReqCode {
-		return "", ErrBadResponse{string(resp)}
-	}
-	for resp[0] == OKCode { // strip the OK, which may repeat if we have someone else's reply
-		resp = resp[1:]
-	}
-	return string(resp), nil
-
+	return resp.string(), err
 }
 
 func (e *Ensemble) gCodeWriteOnly(msg string, more ...string) error {

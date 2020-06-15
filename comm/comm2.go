@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"time"
@@ -209,65 +210,59 @@ func NewTerminator(rw io.ReadWriter, Rx, Tx byte) Terminator {
 	return Terminator{w: rw, r: rw, Wterm: Tx, Rterm: Rx}
 }
 
+type deadlineWriter interface {
+	io.Writer
+	SetWriteDeadline(t time.Time) error
+}
+
+type deadlineReader interface {
+	io.Reader
+	SetReadDeadline(t time.Time) error
+}
+
 // Timeout is a wrapper for IO ReadWriter which adds a timeout
 type Timeout struct {
-	w io.Writer
-	r io.Reader
+	w deadlineWriter
+	r deadlineReader
 
 	timeout time.Duration
 }
 
 // NewTimeout creates a new timeout wrapping a read/writer
-func NewTimeout(rw io.ReadWriter, timeout time.Duration) Timeout {
-	return Timeout{
-		w:       rw,
-		r:       rw,
-		timeout: timeout,
+func NewTimeout(rw io.ReadWriter, timeout time.Duration) (Timeout, error) {
+	var ret Timeout
+	dlr, ok := (rw).(deadlineReader)
+	if !ok {
+		return ret, fmt.Errorf("rw does not support read timeouts")
 	}
+	dlw, ok := (rw).(deadlineWriter)
+	if !ok {
+		return ret, fmt.Errorf("rw does not support write timeouts")
+	}
+	ret.w = dlw
+	ret.r = dlr
+	ret.timeout = timeout
+	return ret, nil
 }
 
 // Read passes read to the embedded reader and stops early if
 // the timeout elapses
 func (t Timeout) Read(b []byte) (int, error) {
-	var (
-		n   int
-		err error
-	)
-	ok := make(chan struct{})
-	go func() {
-		n, err = t.r.Read(b)
-		ok <- struct{}{}
-	}()
-	select {
-	case <-ok:
-		break
-	case <-time.After(t.timeout):
-		n = 0
-		err = ErrTimeout
+	err := t.r.SetReadDeadline(time.Now().Add(t.timeout))
+	if err != nil {
+		return 0, err
 	}
-	return n, err
+	return t.r.Read(b)
 }
 
 // Read passes read to the embedded reader and stops early if
 // the timeout elapses
 func (t Timeout) Write(b []byte) (int, error) {
-	var (
-		n   int
-		err error
-	)
-	ok := make(chan struct{})
-	go func() {
-		n, err = t.w.Write(b)
-		ok <- struct{}{}
-	}()
-	select {
-	case <-ok:
-		break
-	case <-time.After(t.timeout):
-		n = 0
-		err = ErrTimeout
+	err := t.w.SetWriteDeadline(time.Now().Add(t.timeout))
+	if err != nil {
+		return 0, err
 	}
-	return n, err
+	return t.w.Write(b)
 }
 
 // NetworkConnMaker builds the closure needed to satisfy the creationFunc interface
