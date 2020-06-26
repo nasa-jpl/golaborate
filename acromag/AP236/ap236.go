@@ -121,7 +121,7 @@ var (
 	ErrVoltageTooLow = errors.New("commanded voltage below lower limit")
 
 	// ErrVoltageTooHigh is generated when a too high voltage is commanded
-	ErrVotlageTooHigh = errors.New("commanded voltage above upper limit")
+	ErrVoltageTooHigh = errors.New("commanded voltage above upper limit")
 
 	// IdealCode is the array from drvr236.c L60-L85
 	// its inner elements, by index:
@@ -183,6 +183,55 @@ var (
 	}
 )
 
+// ValidateOutputRange ensures that an output range is valid
+// s is formatted as "<low>,<high>"
+func ValidateOutputRange(s string) (OutputRange, error) {
+	switch s {
+	case "-10,10":
+		return TenVSymm, nil
+	case "0,10":
+		return TenVPos, nil
+	case "-5,5":
+		return FiveVSymm, nil
+	case "0,5":
+		return FiveVPos, nil
+	case "-2.5,7.5":
+		return N2_5To7_5V, nil
+	case "-3,3":
+		return ThreeVSymm, nil
+	case "0,16":
+		return SixteenVPos, nil
+	case "0,20":
+		return TwentyVPos, nil
+	default:
+		return 0, errors.New("invalid output range")
+	}
+}
+
+// FormatOutputRange converts an output range to a CSV of low,high
+func FormatOutputRange(o OutputRange) string {
+	switch o {
+	case TenVSymm:
+		return "-10,10"
+	case TenVPos:
+		return "0,10"
+	case FiveVSymm:
+		return "-5,5"
+	case FiveVPos:
+		return "0,5"
+	case N2_5To7_5V:
+		return "-2.5,7.5"
+	case ThreeVSymm:
+		return "-3,3"
+	case SixteenVPos:
+		return "0,16"
+	case TwentyVPos:
+		return "0,20"
+	default:
+		return ""
+	}
+}
+
 // enrich returns a new error and decorates with the procedure called
 // if the status is OK, nil is returned
 func enrich(errC C.APSTATUS, procedure string) error {
@@ -240,9 +289,11 @@ func New(deviceIndex int) (*AP236, error) {
 
 // SetRange configures the output range of the DAC
 // this function only returns an error if the range is not allowed
-func (dac *AP236) SetRange(channel int, rng OutputRange) error {
-	if rng < TenVSymm || rng > TwentyVPos {
-		return fmt.Errorf("output range %d is not allowed", rng)
+// rngS is specified as in ValidateOutputRange
+func (dac *AP236) SetRange(channel int, rngS string) error {
+	rng, err := ValidateOutputRange(rngS)
+	if err != nil {
+		return err
 	}
 	Crng := C.int(rng)
 	dac.cfg.opts._chan[C.int(channel)].Range = Crng
@@ -251,10 +302,11 @@ func (dac *AP236) SetRange(channel int, rng OutputRange) error {
 }
 
 // GetRange returns the output range of the DAC in volts.
-// The error value is always nil
-func (dac *AP236) GetRange(channel int) (OutputRange, error) {
+// The error value is always nil; the API looks
+// this way for symmetry with Set
+func (dac *AP236) GetRange(channel int) (string, error) {
 	Crng := dac.cfg.opts._chan[C.int(channel)].Range
-	return OutputRange(Crng), nil
+	return FormatOutputRange(OutputRange(Crng)), nil
 }
 
 // SetPowerUpVoltage configures the voltage set on the DAC at power up
