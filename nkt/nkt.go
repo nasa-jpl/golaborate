@@ -14,10 +14,10 @@ import (
 	"time"
 
 	"github.jpl.nasa.gov/bdube/golab/comm"
+	"github.jpl.nasa.gov/bdube/golab/generichttp"
 	"github.jpl.nasa.gov/bdube/golab/generichttp/laser"
 	"goji.io/pat"
 
-	"github.jpl.nasa.gov/bdube/golab/server"
 	"github.jpl.nasa.gov/bdube/golab/util"
 	"golang.org/x/time/rate"
 
@@ -73,7 +73,7 @@ type ModuleInformation struct {
 	CodeBanks map[string]map[int]string
 
 	// Decoders maps friendly names like "Emission" to decoding functions that return a thinning json-serializable object
-	Decoders map[string]func([]byte) server.HumanPayload
+	Decoders map[string]func([]byte) generichttp.HumanPayload
 }
 
 // AddressScan scans the NKT device to see:

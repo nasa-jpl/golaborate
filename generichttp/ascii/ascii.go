@@ -6,7 +6,7 @@ import (
 	"go/types"
 	"net/http"
 
-	"github.jpl.nasa.gov/bdube/golab/server"
+	"github.jpl.nasa.gov/bdube/golab/generichttp"
 	"goji.io/pat"
 )
 
@@ -22,7 +22,7 @@ type RawWrapper struct {
 
 // HTTPRaw provides access to the raw function over http
 func (rw *RawWrapper) HTTPRaw(w http.ResponseWriter, r *http.Request) {
-	str := server.StrT{}
+	str := generichttp.StrT{}
 	err := json.NewDecoder(r.Body).Decode(&str)
 	defer r.Body.Close()
 	if err != nil {
@@ -34,13 +34,13 @@ func (rw *RawWrapper) HTTPRaw(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	hp := server.HumanPayload{T: types.String, String: resp}
+	hp := generichttp.HumanPayload{T: types.String, String: resp}
 	hp.EncodeAndRespond(w, r)
 	return
 }
 
 // InjectRawComm injects a /raw POST route into the route table of an HTTPer
-func InjectRawComm(other server.HTTPer, raw RawCommunicator) {
+func InjectRawComm(other generichttp.HTTPer, raw RawCommunicator) {
 	wrap := RawWrapper{Comm: raw}
 	rt := other.RT()
 	rt[pat.Post("/raw")] = wrap.HTTPRaw

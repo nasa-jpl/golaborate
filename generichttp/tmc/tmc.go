@@ -5,15 +5,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.jpl.nasa.gov/bdube/golab/generichttp"
-	"github.jpl.nasa.gov/bdube/golab/generichttp/ascii"
 	"go/types"
 	"net/http"
 	"reflect"
 	"unsafe"
 
+	"github.jpl.nasa.gov/bdube/golab/generichttp"
+	"github.jpl.nasa.gov/bdube/golab/generichttp/ascii"
+
 	"github.jpl.nasa.gov/bdube/golab/oscilloscope"
-	"github.jpl.nasa.gov/bdube/golab/server"
 	"goji.io/pat"
 )
 
@@ -57,7 +57,7 @@ type FunctionGenerator interface {
 }
 
 // HTTPFunctionGenerator injects an HTTP interface to a function generator into a route table
-func HTTPFunctionGenerator(fg FunctionGenerator, table server.RouteTable) {
+func HTTPFunctionGenerator(fg FunctionGenerator, table generichttp.RouteTable) {
 	rt := table
 	rt[pat.Get("/function")] = GetFunction(fg)
 	rt[pat.Post("/function")] = SetFunction(fg)
@@ -172,17 +172,17 @@ func SetWaveform(fg FunctionGenerator) http.HandlerFunc {
 type HTTPFunctionGeneratorT struct {
 	FG FunctionGenerator
 
-	RouteTable server.RouteTable
+	RouteTable generichttp.RouteTable
 }
 
-// RT makes this server.httper compliant
-func (h HTTPFunctionGeneratorT) RT() server.RouteTable {
+// RT makes this generichttp.httper compliant
+func (h HTTPFunctionGeneratorT) RT() generichttp.RouteTable {
 	return h.RouteTable
 }
 
 // NewHTTPFunctionGenerator wraps a function generator in an HTTP interface
 func NewHTTPFunctionGenerator(fg FunctionGenerator) HTTPFunctionGeneratorT {
-	rt := server.RouteTable{}
+	rt := generichttp.RouteTable{}
 	gen := HTTPFunctionGeneratorT{FG: fg, RouteTable: rt}
 	HTTPFunctionGenerator(fg, rt)
 	return gen
@@ -309,7 +309,7 @@ func GetScale(o Oscilloscope) http.HandlerFunc {
 		}
 		scale, err := o.GetScale(sc.Channel)
 		fmt.Println(scale)
-		hp := server.HumanPayload{T: types.Float64, Float: scale}
+		hp := generichttp.HumanPayload{T: types.Float64, Float: scale}
 		hp.EncodeAndRespond(w, r)
 	}
 }
@@ -377,17 +377,17 @@ func AcquireWaveform(o Oscilloscope) http.HandlerFunc {
 type HTTPOscilloscope struct {
 	O Oscilloscope
 
-	RouteTable server.RouteTable
+	RouteTable generichttp.RouteTable
 }
 
-// RT makes this server.httper compliant
-func (h HTTPOscilloscope) RT() server.RouteTable {
+// RT makes this generichttp.httper compliant
+func (h HTTPOscilloscope) RT() generichttp.RouteTable {
 	return h.RouteTable
 }
 
 // NewHTTPOscilloscope wraps a function generator in an HTTP interface
 func NewHTTPOscilloscope(o Oscilloscope) HTTPOscilloscope {
-	rt := server.RouteTable{}
+	rt := generichttp.RouteTable{}
 	rt[pat.Get("/scale")] = GetScale(o)
 	rt[pat.Post("/scale")] = SetScale(o)
 
@@ -472,7 +472,7 @@ func SetChannelLabel(d DAQ) http.HandlerFunc {
 // GetChannelLabel retrieves the label associated with a channel over HTTP
 func GetChannelLabel(d DAQ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		i := server.IntT{}
+		i := generichttp.IntT{}
 		err := json.NewDecoder(r.Body).Decode(&i)
 		defer r.Body.Close()
 		if err != nil {
@@ -484,7 +484,7 @@ func GetChannelLabel(d DAQ) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		hp := server.HumanPayload{T: types.String, String: str}
+		hp := generichttp.HumanPayload{T: types.String, String: str}
 		hp.EncodeAndRespond(w, r)
 	}
 }
@@ -527,17 +527,17 @@ func Record(d DAQ) http.HandlerFunc {
 type HTTPDAQ struct {
 	D DAQ
 
-	RouteTable server.RouteTable
+	RouteTable generichttp.RouteTable
 }
 
-// RT satisfies server.HTTPer
-func (h HTTPDAQ) RT() server.RouteTable {
+// RT satisfies generichttp.HTTPer
+func (h HTTPDAQ) RT() generichttp.RouteTable {
 	return h.RouteTable
 }
 
 // NewHTTPDAQ returns a newly HTTP wrapped DAQ
 func NewHTTPDAQ(d DAQ) HTTPDAQ {
-	rt := server.RouteTable{}
+	rt := generichttp.RouteTable{}
 	rt[pat.Get("/channel-label")] = GetChannelLabel(d)
 	rt[pat.Post("/channel-label")] = SetChannelLabel(d)
 

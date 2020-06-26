@@ -6,7 +6,7 @@ import (
 
 	"goji.io/pat"
 
-	"github.jpl.nasa.gov/bdube/golab/server"
+	"github.jpl.nasa.gov/bdube/golab/generichttp"
 )
 
 func httpWriteOnly(f errOnlyFunc, w http.ResponseWriter, r *http.Request) {
@@ -24,7 +24,7 @@ func httpReturnString(f strErrFunc, w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-	hp := server.HumanPayload{String: ss, T: types.String}
+	hp := generichttp.HumanPayload{String: ss, T: types.String}
 	hp.EncodeAndRespond(w, r)
 	return
 }
@@ -36,13 +36,13 @@ type HTTPWrapper struct {
 	Sensor
 
 	// RouteTable maps goji patterns to http handlers
-	RouteTable server.RouteTable
+	RouteTable generichttp.RouteTable
 }
 
 // NewHTTPWrapper returns a new HTTP wrapper with the route table pre-configured
 func NewHTTPWrapper(s Sensor) HTTPWrapper {
 	w := HTTPWrapper{Sensor: s}
-	rt := server.RouteTable{
+	rt := generichttp.RouteTable{
 		pat.Get("pressure"):            w.Read,
 		pat.Delete("factory-reset"):    w.FactoryReset,
 		pat.Delete("void-calibration"): w.VoidCal,
@@ -54,8 +54,8 @@ func NewHTTPWrapper(s Sensor) HTTPWrapper {
 	return w
 }
 
-// RT satisfies server.HTTPer
-func (h HTTPWrapper) RT() server.RouteTable {
+// RT satisfies generichttp.HTTPer
+func (h HTTPWrapper) RT() generichttp.RouteTable {
 	return h.RouteTable
 }
 
@@ -65,7 +65,7 @@ func (h HTTPWrapper) Read(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-	hp := server.HumanPayload{Float: f, T: types.Float64}
+	hp := generichttp.HumanPayload{Float: f, T: types.Float64}
 	hp.EncodeAndRespond(w, r)
 	return
 }

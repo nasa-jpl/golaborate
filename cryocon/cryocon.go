@@ -109,3 +109,8 @@ func (tm *TemperatureMonitor) ReadAllChannels() ([]float64, error) {
 	}
 	return out, err
 }
+
+//// ReadResistance indicates the resistance sensed for a given channel in Ohms
+//func (tm *TemperatureMonitor) ReadResistance(channel string) (float64, error) {
+//	// INP <ch>:SENPr?
+//}

@@ -6,7 +6,7 @@ import (
 	"go/types"
 	"net/http"
 
-	"github.jpl.nasa.gov/bdube/golab/server"
+	"github.jpl.nasa.gov/bdube/golab/generichttp"
 	"goji.io/pat"
 )
 
@@ -30,7 +30,7 @@ func GetTemperatureSetpoint(c Controller) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		hp := server.HumanPayload{T: types.Float64, Float: setpt}
+		hp := generichttp.HumanPayload{T: types.Float64, Float: setpt}
 		hp.EncodeAndRespond(w, r)
 		return
 	}
@@ -39,7 +39,7 @@ func GetTemperatureSetpoint(c Controller) http.HandlerFunc {
 // SetTemperatureSetpoint returns an HTTP handler func that sets the temperature setpoint over HTTP
 func SetTemperatureSetpoint(c Controller) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		f := server.FloatT{}
+		f := generichttp.FloatT{}
 		err := json.NewDecoder(r.Body).Decode(&f)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -64,14 +64,14 @@ func GetTemperature(c Controller) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		hp := server.HumanPayload{T: types.Float64, Float: t}
+		hp := generichttp.HumanPayload{T: types.Float64, Float: t}
 		hp.EncodeAndRespond(w, r)
 		return
 	}
 }
 
 // HTTPController binds routes to control temperature to the table
-func HTTPController(c Controller, table server.RouteTable) {
+func HTTPController(c Controller, table generichttp.RouteTable) {
 	table[pat.Get("/temperature")] = GetTemperature(c)
 	table[pat.Get("/temperature-setpoint")] = GetTemperatureSetpoint(c)
 	table[pat.Post("/temperature-setpoint")] = SetTemperatureSetpoint(c)

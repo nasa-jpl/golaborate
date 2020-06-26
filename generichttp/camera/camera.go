@@ -17,7 +17,6 @@ import (
 	"github.com/astrogo/fitsio"
 	"github.jpl.nasa.gov/bdube/golab/generichttp"
 	"github.jpl.nasa.gov/bdube/golab/imgrec"
-	"github.jpl.nasa.gov/bdube/golab/server"
 	"github.jpl.nasa.gov/bdube/golab/util"
 	"goji.io/pat"
 )
@@ -126,7 +125,7 @@ type ThermalManager interface {
 }
 
 // HTTPThermalManager binds routes for thermal management on the table
-func HTTPThermalManager(t ThermalManager, table server.RouteTable) {
+func HTTPThermalManager(t ThermalManager, table generichttp.RouteTable) {
 	table[pat.Get("/fan")] = GetFan(t)
 	table[pat.Post("/fan")] = SetFan(t)
 	table[pat.Get("/sensor-cooling")] = GetCooling(t)
@@ -309,7 +308,7 @@ func (b *BurstWrapper) ReadAllFrames(w http.ResponseWriter, r *http.Request) {
 }
 
 // Inject puts burst management routes on a table
-func (b *BurstWrapper) Inject(table server.RouteTable) {
+func (b *BurstWrapper) Inject(table generichttp.RouteTable) {
 	table[pat.Post("/burst/setup")] = b.SetupBurst
 	table[pat.Get("/burst/frame")] = b.ReadFrame
 	table[pat.Get("/burst/all-frames")] = b.ReadAllFrames
@@ -322,7 +321,7 @@ type MetadataMaker interface {
 }
 
 // HTTPPicture injects HTTP methods into a route table for a picture taker
-func HTTPPicture(p PictureTaker, table server.RouteTable, rec *imgrec.Recorder) {
+func HTTPPicture(p PictureTaker, table generichttp.RouteTable, rec *imgrec.Recorder) {
 	table[pat.Get("/exposure-time")] = GetExposureTime(p)
 	table[pat.Post("/exposure-time")] = SetExposureTime(p)
 	table[pat.Get("/image")] = GetFrame(p, rec)
@@ -339,7 +338,7 @@ func SetExposureTime(p PictureTaker) http.HandlerFunc {
 		var d time.Duration
 		var err error
 		if texp == "" {
-			f := server.FloatT{}
+			f := generichttp.FloatT{}
 			err = json.NewDecoder(r.Body).Decode(&f)
 			d = time.Duration(int(f.F64*1e9)) * time.Nanosecond // 1e9 s => ns
 		} else {
@@ -367,7 +366,7 @@ func GetExposureTime(p PictureTaker) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		hp := server.HumanPayload{T: types.Float64, Float: f.Seconds()}
+		hp := generichttp.HumanPayload{T: types.Float64, Float: f.Seconds()}
 		hp.EncodeAndRespond(w, r)
 		return
 	}
@@ -455,7 +454,7 @@ func GetFrame(p Camera, rec *imgrec.Recorder) http.HandlerFunc {
 			// for the metadata portion.
 			// this isn't totally clean and decoupled logic, but I think it is the best that
 			// can be done without breaking the implicit interface of
-			// func HTTP<XYZ>(xyz XYZ, table server.RoutTable)
+			// func HTTP<XYZ>(xyz XYZ, table generichttp.RoutTable)
 			//
 			// since FITS write also rightfully lives a layer above the camera (application layer)
 			// that is also introspected through a metadata interface
@@ -504,7 +503,7 @@ type AOIManipulator interface {
 
 // HTTPAOIManipulator injects routes to manipulate the AOI of a camera
 // into a route table
-func HTTPAOIManipulator(a AOIManipulator, table server.RouteTable) {
+func HTTPAOIManipulator(a AOIManipulator, table generichttp.RouteTable) {
 	table[pat.Get("/aoi")] = GetAOI(a)
 	table[pat.Post("/aoi")] = SetAOI(a)
 	table[pat.Get("/binning")] = GetBinning(a)
@@ -653,7 +652,7 @@ func SetEMGain(e EMGainManager) http.HandlerFunc {
 }
 
 // HTTPEMGainManager binds routes that control EM gain to the table
-func HTTPEMGainManager(e EMGainManager, table server.RouteTable) {
+func HTTPEMGainManager(e EMGainManager, table generichttp.RouteTable) {
 	table[pat.Get("/em-gain")] = GetEMGain(e)
 	table[pat.Post("/em-gain")] = SetEMGain(e)
 	table[pat.Get("/em-gain-mode")] = GetEMGainMode(e)
@@ -681,7 +680,7 @@ func GetShutter(s ShutterController) http.HandlerFunc {
 }
 
 // HTTPShutterController binds routes to control the shutter to a route table
-func HTTPShutterController(s ShutterController, table server.RouteTable) {
+func HTTPShutterController(s ShutterController, table generichttp.RouteTable) {
 	table[pat.Get("/shutter")] = GetShutter(s)
 	table[pat.Post("/shutter")] = SetShutter(s)
 }
@@ -696,13 +695,13 @@ type Camera interface {
 type HTTPCamera struct {
 	PictureTaker
 
-	RouteTable server.RouteTable
+	RouteTable generichttp.RouteTable
 }
 
 // NewHTTPCamera returns a new HTTP wrapper around a camera
 func NewHTTPCamera(p PictureTaker, rec *imgrec.Recorder) HTTPCamera {
 	w := HTTPCamera{PictureTaker: p}
-	rt := server.RouteTable{}
+	rt := generichttp.RouteTable{}
 	HTTPPicture(p, rt, rec)
 	if thermal, ok := interface{}(p).(ThermalManager); ok {
 		HTTPThermalManager(thermal, rt)
@@ -726,7 +725,7 @@ func NewHTTPCamera(p PictureTaker, rec *imgrec.Recorder) HTTPCamera {
 	return w
 }
 
-// RT satisfies server.HTTPer
-func (h HTTPCamera) RT() server.RouteTable {
+// RT satisfies generichttp.HTTPer
+func (h HTTPCamera) RT() generichttp.RouteTable {
 	return h.RouteTable
 }

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.jpl.nasa.gov/bdube/golab/server"
+	"github.jpl.nasa.gov/bdube/golab/generichttp"
 	"goji.io/pat"
 )
 
@@ -111,7 +111,7 @@ func (r *Recorder) Incr() {
 
 // HTTPWrapper is an HTTP wrapper around an image recorder that allows the folder and prefix to be changed on the fly
 //
-// it does not implement server.HTTPer, offering an Inject method allowing it to be injected
+// it does not implement generichttp.HTTPer, offering an Inject method allowing it to be injected
 // into another HTTPer
 type HTTPWrapper struct {
 	*Recorder
@@ -124,7 +124,7 @@ func NewHTTPWrapper(r *Recorder) HTTPWrapper {
 
 // SetRoot updates the root folder of the recorder
 func (h HTTPWrapper) SetRoot(w http.ResponseWriter, r *http.Request) {
-	str := server.StrT{}
+	str := generichttp.StrT{}
 	err := json.NewDecoder(r.Body).Decode(&str)
 	defer r.Body.Close()
 	if err != nil {
@@ -144,13 +144,13 @@ func (h HTTPWrapper) SetRoot(w http.ResponseWriter, r *http.Request) {
 
 // GetRoot gets the recorder's root folder and sends it back as JSON
 func (h HTTPWrapper) GetRoot(w http.ResponseWriter, r *http.Request) {
-	hp := server.HumanPayload{T: types.String, String: h.Recorder.Root}
+	hp := generichttp.HumanPayload{T: types.String, String: h.Recorder.Root}
 	hp.EncodeAndRespond(w, r)
 }
 
 // SetPrefix updates the filename prefix of the recorder
 func (h HTTPWrapper) SetPrefix(w http.ResponseWriter, r *http.Request) {
-	str := server.StrT{}
+	str := generichttp.StrT{}
 	err := json.NewDecoder(r.Body).Decode(&str)
 	defer r.Body.Close()
 	if err != nil {
@@ -164,20 +164,20 @@ func (h HTTPWrapper) SetPrefix(w http.ResponseWriter, r *http.Request) {
 
 // GetPrefix gets the recorder's prefix and sends it back as JSON
 func (h HTTPWrapper) GetPrefix(w http.ResponseWriter, r *http.Request) {
-	hp := server.HumanPayload{T: types.String, String: h.Recorder.Prefix}
+	hp := generichttp.HumanPayload{T: types.String, String: h.Recorder.Prefix}
 	hp.EncodeAndRespond(w, r)
 }
 
 // GetEnabled returns the Recorder's Enabled field
 func (h HTTPWrapper) GetEnabled(w http.ResponseWriter, r *http.Request) {
-	hp := server.HumanPayload{T: types.Bool, Bool: h.Recorder.Enabled}
+	hp := generichttp.HumanPayload{T: types.Bool, Bool: h.Recorder.Enabled}
 	hp.EncodeAndRespond(w, r)
 	return
 }
 
 // SetEnabled sets the recorder's Enabled field
 func (h HTTPWrapper) SetEnabled(w http.ResponseWriter, r *http.Request) {
-	bT := server.BoolT{}
+	bT := generichttp.BoolT{}
 	err := json.NewDecoder(r.Body).Decode(&bT)
 	defer r.Body.Close()
 	if err != nil {
@@ -189,7 +189,7 @@ func (h HTTPWrapper) SetEnabled(w http.ResponseWriter, r *http.Request) {
 }
 
 // Inject adds GET and POST routes for /autorwrite/root and /autowrite/prefix to the HTTPer which manipulate this wrapper's recorder
-func (h HTTPWrapper) Inject(other server.HTTPer) {
+func (h HTTPWrapper) Inject(other generichttp.HTTPer) {
 	rt := other.RT()
 	rt[pat.Post("/autowrite/root")] = h.SetRoot
 	rt[pat.Get("/autowrite/root")] = h.GetRoot

@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	"github.jpl.nasa.gov/bdube/golab/generichttp"
-	"github.jpl.nasa.gov/bdube/golab/server"
 	"goji.io/pat"
 )
 
@@ -195,13 +194,13 @@ type HTTPLaserController struct {
 	Ctl Controller
 
 	// RouteTable maps URLs to functions
-	RouteTable server.RouteTable
+	RouteTable generichttp.RouteTable
 }
 
 // NewHTTPLaserController returns a new HTTP wrapper around an existing laser controller
 func NewHTTPLaserController(ctl Controller) HTTPLaserController {
 	h := HTTPLaserController{Ctl: ctl}
-	rt := server.RouteTable{
+	rt := generichttp.RouteTable{
 		pat.Get("/emission"):  GetEmission(ctl),
 		pat.Post("/emission"): SetEmission(ctl),
 	}
@@ -231,7 +230,7 @@ func NewHTTPLaserController(ctl Controller) HTTPLaserController {
 	return h
 }
 
-// RT safisfies the server.HTTPer interface
-func (h HTTPLaserController) RT() server.RouteTable {
+// RT safisfies the generichttp.HTTPer interface
+func (h HTTPLaserController) RT() generichttp.RouteTable {
 	return h.RouteTable
 }

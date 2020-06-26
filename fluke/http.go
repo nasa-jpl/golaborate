@@ -3,8 +3,7 @@ package fluke
 import (
 	"net/http"
 
-	"github.jpl.nasa.gov/bdube/golab/server"
-
+	"github.jpl.nasa.gov/bdube/golab/generichttp"
 	"goji.io/pat"
 )
 
@@ -15,21 +14,21 @@ type HTTPWrapper struct {
 	DewK
 
 	// RouteTable maps goji patterns to http handlers
-	RouteTable server.RouteTable
+	RouteTable generichttp.RouteTable
 }
 
 // NewHTTPWrapper returns a new HTTP wrapper with the route table pre-configured
 func NewHTTPWrapper(dk DewK) HTTPWrapper {
 	w := HTTPWrapper{DewK: dk}
-	rt := server.RouteTable{
+	rt := generichttp.RouteTable{
 		pat.Get("/read"): w.Read,
 	}
 	w.RouteTable = rt
 	return w
 }
 
-// RT satisfies server.HTTPer
-func (h HTTPWrapper) RT() server.RouteTable {
+// RT satisfies generichttp.HTTPer
+func (h HTTPWrapper) RT() generichttp.RouteTable {
 	return h.RouteTable
 }
 

@@ -11,8 +11,8 @@ import (
 
 	"github.com/tarm/serial"
 	"github.jpl.nasa.gov/bdube/golab/comm"
+	"github.jpl.nasa.gov/bdube/golab/generichttp"
 	"github.jpl.nasa.gov/bdube/golab/generichttp/thermal"
-	"github.jpl.nasa.gov/bdube/golab/server"
 	"github.jpl.nasa.gov/bdube/golab/temperature"
 	"github.jpl.nasa.gov/bdube/golab/util"
 	"goji.io/pat"
@@ -289,22 +289,22 @@ func (c *Chiller) RemoteStop() error {
 
 // HTTPChiller is an HTTP wrapper around the thermocube
 type HTTPChiller struct {
-	server.RouteTable
+	generichttp.RouteTable
 
 	c *Chiller
 }
 
 // NewHTTPChiller returns a new HTTP wrapper around the chiller
 func NewHTTPChiller(c *Chiller) HTTPChiller {
-	rt := server.RouteTable{}
+	rt := generichttp.RouteTable{}
 	thermal.HTTPController(c, rt)
 	h := HTTPChiller{RouteTable: rt, c: c}
 	rt[pat.Get("/faults")] = h.Faults
 	return h
 }
 
-// RT satisfies server.HTTPer
-func (h HTTPChiller) RT() server.RouteTable {
+// RT satisfies generichttp.HTTPer
+func (h HTTPChiller) RT() generichttp.RouteTable {
 	return h.RouteTable
 }
 

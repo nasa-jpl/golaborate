@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.jpl.nasa.gov/bdube/golab/agilent"
+	"github.jpl.nasa.gov/bdube/golab/generichttp"
 	"github.jpl.nasa.gov/bdube/golab/keysight"
 	"github.jpl.nasa.gov/bdube/golab/pi"
 	"github.jpl.nasa.gov/bdube/golab/server/middleware/locker"
@@ -30,7 +31,6 @@ import (
 	"github.jpl.nasa.gov/bdube/golab/granvillephillips"
 
 	"github.jpl.nasa.gov/bdube/golab/fluke"
-	"github.jpl.nasa.gov/bdube/golab/server"
 
 	"github.jpl.nasa.gov/bdube/golab/generichttp/ascii"
 	"github.jpl.nasa.gov/bdube/golab/generichttp/laser"
@@ -100,7 +100,7 @@ func BuildMux(c Config) *goji.Mux {
 	// for every node specified, build a submux
 	for _, node := range c.Nodes {
 		var (
-			httper     server.HTTPer
+			httper     generichttp.HTTPer
 			middleware []func(http.Handler) http.Handler
 		)
 		axislocker := false
@@ -217,7 +217,7 @@ func BuildMux(c Config) *goji.Mux {
 		}
 
 		// prepare the URL, "omc/nkt" => "/omc/nkt/*"
-		hndlS := server.SubMuxSanitize(node.Endpoint)
+		hndlS := generichttp.SubMuxSanitize(node.Endpoint)
 
 		// add the endpoints to the graph
 		supergraph[hndlS] = httper.RT().Endpoints()

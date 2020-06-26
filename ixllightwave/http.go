@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.jpl.nasa.gov/bdube/golab/server"
+	"github.jpl.nasa.gov/bdube/golab/generichttp"
 	"github.jpl.nasa.gov/bdube/golab/util"
 	"goji.io/pat"
 )
@@ -19,13 +19,13 @@ type HTTPWrapper struct {
 	LDC3916
 
 	// RouteTable maps goji patterns to http handlers
-	RouteTable server.RouteTable
+	RouteTable generichttp.RouteTable
 }
 
 // NewHTTPWrapper returns a new HTTP wrapper with the route table pre-configured
 func NewHTTPWrapper(ldc LDC3916) HTTPWrapper {
 	w := HTTPWrapper{LDC3916: ldc}
-	rt := server.RouteTable{
+	rt := generichttp.RouteTable{
 		// channel
 		pat.Get("chan"):  w.GetChan,
 		pat.Post("chan"): w.SetChan,
@@ -49,8 +49,8 @@ func NewHTTPWrapper(ldc LDC3916) HTTPWrapper {
 	return w
 }
 
-// RT satisfies server.HTTPer
-func (h HTTPWrapper) RT() server.RouteTable {
+// RT satisfies generichttp.HTTPer
+func (h HTTPWrapper) RT() generichttp.RouteTable {
 	return h.RouteTable
 }
 
@@ -97,7 +97,7 @@ func (h HTTPWrapper) GetTempControl(w http.ResponseWriter, r *http.Request) {
 func (h HTTPWrapper) SetTempControl(w http.ResponseWriter, r *http.Request) {
 	cmd := "temperature-control"
 	typ := "bool"
-	boo := server.BoolT{}
+	boo := generichttp.BoolT{}
 	err := json.NewDecoder(r.Body).Decode(&boo)
 	defer r.Body.Close()
 	if err != nil {
@@ -124,7 +124,7 @@ func (h HTTPWrapper) GetLaserOutput(w http.ResponseWriter, r *http.Request) {
 func (h HTTPWrapper) SetLaserOutput(w http.ResponseWriter, r *http.Request) {
 	cmd := "laser-output"
 	typ := "bool"
-	boo := server.BoolT{}
+	boo := generichttp.BoolT{}
 	err := json.NewDecoder(r.Body).Decode(&boo)
 	defer r.Body.Close()
 	if err != nil {
@@ -151,7 +151,7 @@ func (h HTTPWrapper) GetLaserCurrent(w http.ResponseWriter, r *http.Request) {
 func (h HTTPWrapper) SetLaserCurrent(w http.ResponseWriter, r *http.Request) {
 	cmd := "laser-current"
 	typ := "float"
-	float := server.FloatT{}
+	float := generichttp.FloatT{}
 	err := json.NewDecoder(r.Body).Decode(&float)
 	defer r.Body.Close()
 	if err != nil {
@@ -166,7 +166,7 @@ func (h HTTPWrapper) SetLaserCurrent(w http.ResponseWriter, r *http.Request) {
 
 // Raw sends a 'raw' command to the LDC and returns the raw response as a string
 func (h HTTPWrapper) Raw(w http.ResponseWriter, r *http.Request) {
-	str := server.StrT{}
+	str := generichttp.StrT{}
 	json.NewDecoder(r.Body).Decode(&str)
 	defer r.Body.Close()
 	resp, err := h.LDC3916.processCommand(str.Str, true, "")

@@ -2,14 +2,15 @@ package sdk3
 
 import (
 	"encoding/json"
-	"github.jpl.nasa.gov/bdube/golab/generichttp/camera"
-	"github.jpl.nasa.gov/bdube/golab/imgrec"
-	"github.jpl.nasa.gov/bdube/golab/server"
-	"github.jpl.nasa.gov/bdube/golab/util"
 	"go/types"
-	"goji.io/pat"
 	"net/http"
 	"strings"
+
+	"github.jpl.nasa.gov/bdube/golab/generichttp"
+	"github.jpl.nasa.gov/bdube/golab/generichttp/camera"
+	"github.jpl.nasa.gov/bdube/golab/imgrec"
+	"github.jpl.nasa.gov/bdube/golab/util"
+	"goji.io/pat"
 )
 
 // HTTPWrapper provides an HTTP interface to a camera
@@ -38,8 +39,8 @@ func NewHTTPWrapper(c *Camera, r *imgrec.Recorder) HTTPWrapper {
 	return w
 }
 
-// RT yields the route table and implements the server.HTTPer interface
-func (h HTTPWrapper) RT() server.RouteTable {
+// RT yields the route table and implements the generichttp.HTTPer interface
+func (h HTTPWrapper) RT() generichttp.RouteTable {
 	return h.w.RT()
 }
 
@@ -76,7 +77,7 @@ func (h *HTTPWrapper) GetFeature(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		hp := server.HumanPayload{T: types.Int, Int: i}
+		hp := generichttp.HumanPayload{T: types.Int, Int: i}
 		hp.EncodeAndRespond(w, r)
 	case "float":
 		f, err := GetFloat(h.Camera.Handle, feature)
@@ -84,7 +85,7 @@ func (h *HTTPWrapper) GetFeature(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		hp := server.HumanPayload{T: types.Float64, Float: f}
+		hp := generichttp.HumanPayload{T: types.Float64, Float: f}
 		hp.EncodeAndRespond(w, r)
 	case "bool":
 		b, err := GetBool(h.Camera.Handle, feature)
@@ -92,7 +93,7 @@ func (h *HTTPWrapper) GetFeature(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		hp := server.HumanPayload{T: types.Bool, Bool: b}
+		hp := generichttp.HumanPayload{T: types.Bool, Bool: b}
 		hp.EncodeAndRespond(w, r)
 	case "enum", "string":
 		var (
@@ -108,7 +109,7 @@ func (h *HTTPWrapper) GetFeature(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		hp := server.HumanPayload{T: types.String, String: str}
+		hp := generichttp.HumanPayload{T: types.String, String: str}
 		hp.EncodeAndRespond(w, r)
 	}
 }
@@ -199,7 +200,7 @@ func (h *HTTPWrapper) SetFeature(w http.ResponseWriter, r *http.Request) {
 	}
 	switch feature {
 	case "ExposureTime":
-		f := server.FloatT{}
+		f := generichttp.FloatT{}
 		err := json.NewDecoder(r.Body).Decode(&f)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -218,7 +219,7 @@ func (h *HTTPWrapper) SetFeature(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "cannot set a command feature", http.StatusBadRequest)
 			return
 		case "int":
-			i := server.IntT{}
+			i := generichttp.IntT{}
 			err := json.NewDecoder(r.Body).Decode(&i)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
@@ -233,7 +234,7 @@ func (h *HTTPWrapper) SetFeature(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			return
 		case "float":
-			f := server.FloatT{}
+			f := generichttp.FloatT{}
 			err := json.NewDecoder(r.Body).Decode(&f)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
@@ -248,7 +249,7 @@ func (h *HTTPWrapper) SetFeature(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			return
 		case "bool":
-			b := server.BoolT{}
+			b := generichttp.BoolT{}
 			err := json.NewDecoder(r.Body).Decode(&b)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
@@ -263,7 +264,7 @@ func (h *HTTPWrapper) SetFeature(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			return
 		case "enum", "string":
-			s := server.StrT{}
+			s := generichttp.StrT{}
 			err := json.NewDecoder(r.Body).Decode(&s)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)

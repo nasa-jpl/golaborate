@@ -7,12 +7,12 @@ import (
 	"net/http"
 	"strings"
 
-	"github.jpl.nasa.gov/bdube/golab/server"
+	"github.jpl.nasa.gov/bdube/golab/generichttp"
 	"goji.io/pat"
 )
 
-// Inject adds a lock route to a server.HTTPer which is used to manipulate the locker
-func Inject(other server.HTTPer, l ManipulableLock) {
+// Inject adds a lock route to a generichttp.HTTPer which is used to manipulate the locker
+func Inject(other generichttp.HTTPer, l ManipulableLock) {
 	rt := other.RT()
 	if al, ok := (l).(*AxisLocker); ok {
 		rt[pat.Get("/axis/:axis/lock")] = al.HTTPGet
@@ -90,7 +90,7 @@ func (l *Locker) Check(next http.Handler) http.Handler {
 
 // HTTPSet calls Lock or Unlock based on json:bool on the request body
 func (l *Locker) HTTPSet(w http.ResponseWriter, r *http.Request) {
-	b := server.BoolT{}
+	b := generichttp.BoolT{}
 	err := json.NewDecoder(r.Body).Decode(&b)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -107,7 +107,7 @@ func (l *Locker) HTTPSet(w http.ResponseWriter, r *http.Request) {
 // HTTPGet returns Locked() over HTTP as JSON
 func (l *Locker) HTTPGet(w http.ResponseWriter, r *http.Request) {
 	b := l.Locked()
-	hp := server.HumanPayload{T: types.Bool, Bool: b}
+	hp := generichttp.HumanPayload{T: types.Bool, Bool: b}
 	hp.EncodeAndRespond(w, r)
 	return
 }
@@ -169,7 +169,7 @@ func (al *AxisLocker) Check(next http.Handler) http.Handler {
 
 // HTTPSet calls Lock or Unlock based on json:bool on the request body
 func (al *AxisLocker) HTTPSet(w http.ResponseWriter, r *http.Request) {
-	b := server.BoolT{}
+	b := generichttp.BoolT{}
 	err := json.NewDecoder(r.Body).Decode(&b)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -198,7 +198,7 @@ func (al *AxisLocker) HTTPGet(w http.ResponseWriter, r *http.Request) {
 		locked = al.locked[axis]
 	}
 	b := locked.Locked()
-	hp := server.HumanPayload{T: types.Bool, Bool: b}
+	hp := generichttp.HumanPayload{T: types.Bool, Bool: b}
 	hp.EncodeAndRespond(w, r)
 	return
 }

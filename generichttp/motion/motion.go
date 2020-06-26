@@ -16,7 +16,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.jpl.nasa.gov/bdube/golab/server"
+	"github.jpl.nasa.gov/bdube/golab/generichttp"
 	"github.jpl.nasa.gov/bdube/golab/util"
 	"goji.io/pat"
 )
@@ -38,7 +38,7 @@ type Enabler interface {
 }
 
 // HTTPEnable adds routes for the enabler to the route table
-func HTTPEnable(iface Enabler, table server.RouteTable) {
+func HTTPEnable(iface Enabler, table generichttp.RouteTable) {
 	table[pat.Get("/axis/:axis/enabled")] = GetEnabled(iface)
 	table[pat.Post("/axis/:axis/enabled")] = SetEnabled(iface)
 }
@@ -47,7 +47,7 @@ func HTTPEnable(iface Enabler, table server.RouteTable) {
 func SetEnabled(e Enabler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		axis := pat.Param(r, "axis")
-		boolT := server.BoolT{}
+		boolT := generichttp.BoolT{}
 		err := json.NewDecoder(r.Body).Decode(&boolT)
 		defer r.Body.Close()
 		if err != nil {
@@ -77,7 +77,7 @@ func GetEnabled(e Enabler) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		hp := server.HumanPayload{T: types.Bool, Bool: enabled}
+		hp := generichttp.HumanPayload{T: types.Bool, Bool: enabled}
 		hp.EncodeAndRespond(w, r)
 	}
 }
@@ -98,7 +98,7 @@ type Mover interface {
 }
 
 // HTTPMove adds routes for the mover to the route tabler
-func HTTPMove(iface Mover, table server.RouteTable) {
+func HTTPMove(iface Mover, table generichttp.RouteTable) {
 	table[pat.Post("/axis/:axis/home")] = Home(iface)
 	table[pat.Get("/axis/:axis/pos")] = GetPos(iface)
 	table[pat.Post("/axis/:axis/pos")] = SetPos(iface)
@@ -113,7 +113,7 @@ func GetPos(m Mover) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		hp := server.HumanPayload{T: types.Float64, Float: pos}
+		hp := generichttp.HumanPayload{T: types.Float64, Float: pos}
 		hp.EncodeAndRespond(w, r)
 	}
 }
@@ -137,7 +137,7 @@ func SetPos(m Mover) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		f := server.FloatT{}
+		f := generichttp.FloatT{}
 		err = json.NewDecoder(r.Body).Decode(&f)
 		defer r.Body.Close()
 		if err != nil {
@@ -179,7 +179,7 @@ type Speeder interface {
 }
 
 // HTTPSpeed adds routes for the speeder to the route table
-func HTTPSpeed(iface Speeder, table server.RouteTable) {
+func HTTPSpeed(iface Speeder, table generichttp.RouteTable) {
 	table[pat.Post("/axis/:axis/velocity")] = SetVelocity(iface)
 	table[pat.Get("/axis/:axis/velocity")] = GetVelocity(iface)
 }
@@ -188,7 +188,7 @@ func HTTPSpeed(iface Speeder, table server.RouteTable) {
 func SetVelocity(s Speeder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		axis := pat.Param(r, "axis")
-		floatT := server.FloatT{}
+		floatT := generichttp.FloatT{}
 		err := json.NewDecoder(r.Body).Decode(&floatT)
 		defer r.Body.Close()
 		if err != nil {
@@ -214,7 +214,7 @@ func GetVelocity(s Speeder) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		hp := server.HumanPayload{T: types.Float64, Float: vel}
+		hp := generichttp.HumanPayload{T: types.Float64, Float: vel}
 		hp.EncodeAndRespond(w, r)
 	}
 }
@@ -226,7 +226,7 @@ type Initializer interface {
 }
 
 // HTTPInitialize adds routes for initialization to the route table
-func HTTPInitialize(i Initializer, table server.RouteTable) {
+func HTTPInitialize(i Initializer, table generichttp.RouteTable) {
 	table[pat.Post("/axis/:axis/initialize")] = Initialize(i)
 }
 
@@ -276,7 +276,7 @@ func (l *LimitMiddleware) Check(next http.Handler) http.Handler {
 			return
 		}
 		// get the command
-		f := server.FloatT{}
+		f := generichttp.FloatT{}
 		// downstream functions might want the body...
 		// read it all here, then "paste" it back with ioutil
 		bodyContent, _ := ioutil.ReadAll(r.Body)
@@ -308,7 +308,7 @@ func (l *LimitMiddleware) Check(next http.Handler) http.Handler {
 }
 
 // Inject places a /axis/:axis/limits route on the table of the HTTPer
-func (l LimitMiddleware) Inject(h server.HTTPer) {
+func (l LimitMiddleware) Inject(h generichttp.HTTPer) {
 	h.RT()[pat.Get("/axis/:axis/limits")] = Limits(l)
 }
 
@@ -344,13 +344,13 @@ type Controller interface {
 type HTTPMotionController struct {
 	Controller
 
-	RouteTable server.RouteTable
+	RouteTable generichttp.RouteTable
 }
 
 // NewHTTPMotionController returns a new HTTP wrapper with the route table pre-configured
 func NewHTTPMotionController(c Controller) HTTPMotionController {
 	w := HTTPMotionController{Controller: c}
-	rt := server.RouteTable{}
+	rt := generichttp.RouteTable{}
 	// the interface{}().(foo); ok syntax is an awful go-ism to test if c implements foo
 	HTTPMove(c, rt)
 	if enabler, ok := interface{}(c).(Enabler); ok {
@@ -367,6 +367,6 @@ func NewHTTPMotionController(c Controller) HTTPMotionController {
 }
 
 // RT satisfies the HTTPer interface
-func (h HTTPMotionController) RT() server.RouteTable {
+func (h HTTPMotionController) RT() generichttp.RouteTable {
 	return h.RouteTable
 }

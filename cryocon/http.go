@@ -6,8 +6,7 @@ import (
 	"math"
 	"net/http"
 
-	"github.jpl.nasa.gov/bdube/golab/server"
-
+	"github.jpl.nasa.gov/bdube/golab/generichttp"
 	"goji.io/pat"
 )
 
@@ -18,13 +17,13 @@ type HTTPWrapper struct {
 	TemperatureMonitor
 
 	// RouteTable maps goji patterns to http handlers
-	RouteTable server.RouteTable
+	RouteTable generichttp.RouteTable
 }
 
 // NewHTTPWrapper returns a new HTTP wrapper with the route table pre-configured
 func NewHTTPWrapper(m TemperatureMonitor) HTTPWrapper {
 	w := HTTPWrapper{TemperatureMonitor: m}
-	rt := server.RouteTable{
+	rt := generichttp.RouteTable{
 		pat.Get("/read"):     w.ReadAll,
 		pat.Get("/read/:ch"): w.ReadChan,
 		pat.Get("/version"):  w.Version,
@@ -34,7 +33,7 @@ func NewHTTPWrapper(m TemperatureMonitor) HTTPWrapper {
 }
 
 // RT satisfies the HTTPer interface
-func (h HTTPWrapper) RT() server.RouteTable {
+func (h HTTPWrapper) RT() generichttp.RouteTable {
 	return h.RouteTable
 }
 
@@ -68,7 +67,7 @@ func (h *HTTPWrapper) ReadChan(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	hp := server.HumanPayload{T: types.Float64, Float: f}
+	hp := generichttp.HumanPayload{T: types.Float64, Float: f}
 	hp.EncodeAndRespond(w, r)
 	return
 }
@@ -80,7 +79,7 @@ func (h *HTTPWrapper) Version(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	hp := server.HumanPayload{T: types.String, String: v}
+	hp := generichttp.HumanPayload{T: types.String, String: v}
 	hp.EncodeAndRespond(w, r)
 	return
 }
