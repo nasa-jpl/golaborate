@@ -1,0 +1,862 @@
+
+
+
+
+
+
+
+
+
+
+
+
+                                    Acromag, Inc.
+                                 30765 S.Wixom Road
+              
+                              Wixom, Michigan 48393-7037
+
+                                Phone: (248)295-0310
+                                 FAX: (248)624-9234
+
+                                Linux Software Library
+                        Information File for the AP235 Boards
+                                        V1.0
+                                      12/01/15
+
+
+
+
+               The  information  in this manual is subject to  change
+               without notice.   Acromag,  Inc.  makes no warranty of
+               any kind with regard to this material and accompanying
+               software,  including, but not limited to , the implied
+               warranties  of  merchantability  and  fitness  for   a
+               particular   purpose.    Acromag,   Inc.   assumes  no
+               responsibility for any errors that may appear in  this
+               manual and accompanying software.
+
+               See GPL.txt and LGPL.txt.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   1. Overview
+
+   This  "information"  file  contains a description of  the library
+   programs used for the following models of Acromag Industrial  I/O
+   Boards:
+
+        AP235  16-Bit Analog Output Board
+
+
+
+   2. Introduction
+
+   The  software for  the  AP235  Output  board  is  implemented  as
+   a library of "C" functions.  This will  make  it     possible  to
+   utilize the board by simply  linking  the user's  code  with  the
+   provided   library   and   making   function   calls   for   each
+   "command"  to be accomplished.  Most of the function  calls  will
+   require  a few parameters or the address of a parameter block  to
+   be  passed.   The  parameters will  include  the  board  address,
+   configuration  information,  data storage addresses,  and  status
+   information. These functions accomplish the following tasks:
+
+         - Configuration
+         - Read Status
+         - Write to DAC's
+         - Trigger Output
+
+   Also  included  is  a demonstration program which shows  how  the
+   library  routines  are used. It  is a helpful program to use when
+   first  installing the board, checking it out, and learning how it
+   works.
+
+   In this document, the term "channel" is used to describe  one  of
+   16 channels. Channels are numbered 0 through 15.
+
+
+
+   3. List of Files
+
+   The library  software  for  each  Acromag  I/O  board  is  in   a
+   correspondingly named  subdirectory on  the supplied  media.  The
+   files  which  make  up the  library  for  the AP235 board are
+   stored in the subdirectory named "AP235".   The  user selects
+   the boardtype by modifing the defines found in the file "A235.h".
+
+   There  are two types of program files provided.   Library program
+   files are the files which make up the "library".  Support program
+   files contain example  programs which show how to use the library
+   programs.
+
+
+
+
+				   1
+
+
+
+
+
+
+
+   3.1 Library Program Files
+
+   The  following  files  are   included on the  supplied  media  and
+   make up the actual "library" software.
+
+
+        AP235.h   - include file
+        cd235.c   - routine to calculate corrected data
+        cnfg235.c - configure
+        rsts235.c - reads status
+        rwcc235.c - reads/wirtes calibration coefficients
+        wro235.c  - routine to write to DAC output registers
+
+
+
+
+   3.2 Support Program Files
+
+   The  following files are included on the supplied media.     The
+   test program demonstrates how  the library  programs may be used.
+
+        drvr235.c - test program to  demonstrate  library  programs.
+        apcommon.h - include file for AP support.
+        apcommon.c - source file for AP support.
+
+
+
+   4. Software Installation
+
+   It  is strongly advised that the user make a backup copy  of  the
+   distribution media and that the original  distribution  media  be
+   stored in a safe place.
+
+   The  software is installed by simply copying the library files to
+   the  user's  work directory and compiling and  linking  with  the
+   user's application program.
+
+
+   5. Hardware Installation
+
+   For proper installation of each Acromag I/O board the user should
+   refer to the appropriate user's manual.
+
+
+   6. Usage of the Library and Support Programs
+
+   The  software is installed  by copying the supplied files to your
+   work  directory and compiling  and linking  with your application
+   program.
+
+
+
+
+
+
+
+
+
+				   2
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        It  is recommended that the user read the  User's Manual for  the
+        board  and  thoroughly  familiarize themselves with the hardware.
+
+        For a new user to become familiar with the Acromag Library it may
+        be  most  "straight forward"  to proceed in the following manner:
+
+               (a) Build and load the Acromag device driver module.
+
+                 i)   See  the   information  file  in  the device driver
+                 directory   "/home/AP/AP235/dev235/info.txt"   for
+                 information about building and loading the device driver
+                 module.
+
+               (b) Build and execute the Acromag Library Demonstration.
+
+                  i)  Copy the Acromag Library routines from the "AP235"
+                  directory of the source media to a new directory  under
+                  /home/AP/AP235.
+
+
+                  ii)  Copy   the  apcommon  support routines  from the
+                  "apcommon" directory of the source  media  to  a  new
+                  directory  under /home/AP/apcommon.
+
+
+                  iii) From  a  tty  shell,   make  /home/AP/AP235  the
+                  current directory, then use the makefile  to  build the
+                  project.
+
+                  iv)  Launch  the  debugger,  "gdb a.out"  use the 'run' 
+                  command to start the program or  './a.out' without the
+                  debugger. 
+
+                  v)   The  Acromag  Demonstration  program  menu  should
+                  appear  on  the  target processor's  console  terminal.
+
+
+
+
+
+
+
+
+
+
+
+
+				   3
+
+
+
+
+
+   The following menu is displayed for the AP235:
+
+   AP235 Library Demonstration  Rev. A   Channel: 0, Range:-10.000 to 10.000
+    1. Exit Program
+    2. Read Calibration Coefficients
+    3. Read Status Command
+    4. Attach Exception Handler
+    5. Detach Exception Handler
+    6. Examine/Change Current Channel
+    7. Set Up Configuration Block Parameters
+    8. Configure Current Channel
+    9. Write Ideal Data To Output
+   10. Write Corrected Data To Output
+   11. Software Trigger, Waveform Enable/Disable
+   12. Display Ideal/Corrected Data, Offset/Gain Coefficients
+   13. Clear Data Buffers
+   14. Alter Offset/Gain Coefficients
+   15. Write Waveform Memory or FIFO
+   Select: 
+
+   To perform basic Analog Output functions using the AP235, follow
+   this sequence of main menu selections:
+
+       Select  2: Read calibration coefficients.
+       Select  6: To select the current channel.
+       Select  7: To set up configuration block parameters (select Direct Access).
+       Select  8: To configure the current channel.
+       Select  9: To write ideal data to the DAC channel.
+       Select 10: To write corrected data to the DAC channel.
+
+   Note: Choose 9 or 10, they perform the same basic  function  with
+         the  only  difference  being  that 10  will  give corrected
+         outputs, using on-board  calibration coefficients, that are
+         more accurate.
+
+       Select  11 then 4: To start conversion(s) if the Simultaneous
+                  Trigger mode was selected.
+
+   To perform Waveform Output functions using the AP235, follow this
+   sequence of main menu selections:
+
+       Select  2: Read calibration coefficients.
+       Select  4: To select Attach Exception Handler.
+       Select  6: To select the current channel.
+       Select  7: To set up configuration block parameters (select a waveform mode).
+       Select 15: To select/write corrected waveform data to the DAC channel.
+       Select  8: To configure the current channel.
+       Select 11 then 3: To enable waveform generation.
+
+
+   6.1 Explanation of the Main Demonstration Menu
+
+   The following is an explanation of each menu selection:
+
+        1. Exit this Program
+
+        This selection causes execution to be  returned to the shell.
+
+
+
+
+				   4
+
+
+
+
+        2. Read Calibration Coefficients.
+
+        The rwcc235() function  is  used to  perform  the read  the
+        calibration coefficients for the board.    The routine will
+        use a pointer to reference registers  on the Board and will
+        transfer board information into the Configuration Block.
+
+        3. Read Status
+
+	This menu selection will call the rsts235() function and pass
+	a pointer which points to the Configuration Block  structure.
+	The  current status information is read from the  board  and
+	written into this structure by the rsts235() function.
+
+        4. Attach Exception Handler
+
+        This  menu selection allows the user to attach the interrupt
+        handler for use with the demonstration program.
+
+        5. Detach Exception Handler
+
+        This  menu  selection detaches the  demonstration  program's
+        interrupt exception handler.
+
+        6. Examine/Change Current Channel
+
+	This menu selection will  allow the user  to select  one of
+	sixteen DAC output channels available for use on the module.
+
+        7. Set Up Configuration Block Parameters
+
+	This  selection will cause the Configuration Block Parameter
+	Menu to be displayed.  Through that menu it will be possible
+	to  enter values into the various structure members  of  the
+	Configuration Block structure.   See section 6.2 for details
+	on the Configuration Block Parameter Menu which follows.
+
+        8. Configure Channel
+
+	This  menu selection will call the  cnfg235()  function  and
+	pass  a  pointer  which points to  the  Configuration  Block
+	structure.    Information  in  the  Configuration Block will
+	be written to the channel.
+
+        9. Write Ideal Data to Output
+
+        This command will calculate an ideal(uncorrected) data count
+        based on your desired  voltage and write it  to  the current
+        DAC channel.
+
+        10. Write Corrected Data to Output
+
+        This command will calculate a corrected data count using the
+        gain and offset coefficients and write it to the current DAC
+        channel. Use this selection to obtain greatest accuracy.
+
+
+
+
+
+
+				   5
+
+
+
+
+
+        11. Software Trigger, Waveform Enable/Disable
+
+        This  command will  write a 1 to the  "Simultaneous Trigger"
+        register.  This must be done in order for the board to start
+        generating outputs if the Simultaneous Trigger Mode has been
+        selected.   For  waveform  generation  modes  Enable/disable
+        waveform generation may also be selected.
+
+        12. Display Ideal/Corrected Data, Gain/Offset Coefficients
+
+        Displays the data and coefficients for each  channel on  the
+        board, where ID  = ideal(uncorrected)  data, CD  = corrected
+        data, GD  = gain  data(coefficient), and  OD  = offset  data
+        (coefficient).
+
+        13. Clear Data Buffers
+
+        Clears out all of the ideal and corrected data buffers.
+
+        14. Alter Offset/Gain Coefficients
+
+        This selection allows  the user to  alter the  gain, and  offset
+        coefficients read from the board.   The  user  may determine his
+        own  gain and offset coefficients by measuring the zero and full
+        scale  output voltages  with a DVM,  typing the  values into the
+        program,  and load  them into  the gain and offset data buffers.
+
+        15. Write Waveform Memory or FIFO
+
+        The user may  select one of several  waveform types  to write to
+        waveform memory or the channels FIFO register depending upon the
+        conversion mode selected.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+				   6
+
+
+
+
+   6.2  Explanation of the Configuration Parameter Menu
+
+   This menu  is  displayed  when  the  user  selects  the  "Set  Up
+   Configuration  Block  Parameters"  menu  item  from  the  Library
+   Demonstration Menu.   Through the Configuration Parameter Menu it
+   will  be  possible  for  the  user  to  enter  values  into  the
+   configuration structure.    The configuration structure is used by
+   the cnfg235()function.      Following is the "Set Up Configuration
+   Parameters" menu.
+
+		Configuration Parameters for Channel 0
+
+		 1. Return to Previous Menu
+                 2. Operation Mode:	4
+                 3. Output Update Mode: 0
+                 4. Output Range:       0
+                 5. Power-up Voltage:   1
+                 6. Thermal Shutdown:   0
+                 7. 5% Overrange:       0
+                 8. Clear Voltage:      1
+                 9. Data Reset:         0
+                10. Full Device Reset:  0
+                11. Trigger Source:     1
+                12. Trigger Direction:  0
+                13. Underflow Clear:    1
+                14. Timer Divider:      1000
+                15. Interrupt Source:   1
+
+		Select:
+
+	     Following is an explanation of each menu selection:
+
+	     1. Return to Previous Menu
+
+	     This selection returns the user to the Main Library Menu.
+
+	     2. Operation Mode
+
+	     This  selection  allows  the user to enter  the DAC  channel
+             operation mode.  Valid values are as follows:
+
+	             Value
+	             -----
+		       0 - Direct Access
+		       1 - Continuous
+                       2 - FIFO
+                       3 - Single Burst
+                       4 - FIFO DMA
+
+	     3. Output Update Mode
+
+	     This selection allows  the user to  enter a  value  for  the
+	     Output Update Mode.  Valid values are as follows:
+
+	             Value
+	             -----
+		       0 - Transparent Mode
+		       1 - Simultaneous Mode
+
+
+
+				   7
+
+
+
+
+
+	     4. Output Range
+
+	     This selection allows  the user to  enter a  value  for  the
+	     Output Range.  Valid values are as follows:
+
+	             Value
+	             -----
+		       0 -  -10V to +10V
+		       1 -    0V to +10V
+		       2 -   -5V to +5V
+		       3 -    0V to +5V
+		       4 - -2.5V to +7.5V
+		       5 -   -3V to +3V
+
+	     5. Power-up Voltage
+
+	     This  selection  allows  the user to enter a value  for  the
+	     Power-up Voltage.  Valid values are as follows:
+
+ 	            Value
+	             -----
+		       0 -  Zero Scale
+		       1 -  Mid Scale
+		       2 -  Full Scale
+
+	     6. Thermal Shutdown
+
+	     This  selection  allows  the user to enter a value  for  the
+	     Thermal Shutdown.  Valid values are as follows:
+
+	             Value
+ 	            -----
+		       0 -  Disable
+		       1 -  Enable
+
+	     7. 5% Overrange
+
+	     This  selection  allows  the user to enter a value  for  the
+	     5% Overrange.  Valid values are as follows:
+
+	             Value
+	             -----
+		       0 -  Disable
+		       1 -  Enable
+
+	     8. Clear Voltage
+
+	     This  selection  allows  the user to enter a value  for  the
+	     Clear Voltage.  Valid values are as follows:
+
+ 	            Value
+	             -----
+		       0 -  Zero Scale
+		       1 -  Mid Scale
+		       2 -  Full Scale
+
+
+
+
+
+				   8
+
+
+
+
+
+	     9. Data Reset
+
+	     This  selection  allows  the user to enter a value  for  the
+	     Data Reset.  Valid values are as follows:
+
+ 	            Value
+	             -----
+		       0 -  Disable
+		       1 -  Enable
+
+	     10. Full Device Reset
+
+	     This  selection  allows  the user to enter a value  for  the
+	     Full Device Reset.  Valid values are as follows:
+
+ 	            Value
+	             -----
+		       0 -  Disable
+		       1 -  Enable
+
+	     11. Trigger Source
+
+	     This  selection  allows  the user to enter a value  for  the
+	     Trigger Source.  Valid values are as follows:
+
+ 	            Value
+	             -----
+		       0 -  Software
+		       1 -  Timer
+                       2 -  External Input
+
+	     12. Trigger Direction
+
+	     This  selection  allows  the user to enter a value  for  the
+	     Trigger Direction.  Valid values are as follows:
+
+ 	            Value
+	             -----
+		       0 -  Input
+		       1 -  Output
+
+	     13. Underflow Clear
+
+	     This  selection  allows  the user to enter a value  for  the
+	     Underflow Clear.  Valid values are as follows:
+
+ 	            Value
+	             -----
+		       0 -  No Operation
+		       1 -  Underflow Clear
+
+	     14. Timer Divider
+
+	     This  selection  allows  the user to enter a value  for  the
+	     Timer Divider.      This controls the period of the internal
+             trigger the minimum recommended value is 0x136.
+
+
+
+
+				   9
+
+
+
+
+
+
+	     15. Interrupt Source
+
+	     This  selection  allows  the user to enter a value  for  the
+	     Interrupt Source.  Valid values are as follows:
+
+ 	            Value
+	             -----
+		       0 -  Disabled
+		       1 -  FIFO or Single Burst
+
+
+
+   7. Description of Library Programs.
+
+   Following  are descriptions of the programs and files which  make
+   up the library.
+
+   AP235.h - This module contains  the  definitions  and  structures
+   used by the library.
+
+
+
+   void rcc235 - This  routine is  used  to  read  the  calibration
+   coefficients from the board and store them in an array.
+
+        calling sequence:
+
+        rcc235(ptr)
+
+        where:
+
+        ptr  - (structure  pointer)  This is a pointer  to  the
+        Configuration Block structure.
+
+
+
+
+
+   void cd235 - This routine calculates the corrected data for all channels.
+
+        calling sequence:
+
+        cd235(ptr)
+
+        where:
+
+        ptr  - (structure  pointer)  This is a pointer  to  the
+        Configuration Block structure.
+
+
+     NOTE: the ideal count value must be  calculated and  stored  in
+     the configuration  block structure  for this  function to  work
+     properly.
+
+
+
+
+
+
+				   10
+
+
+
+
+
+
+   void wro235 - This  is  the routine  that  actually  writes  the
+   desired output data into the DAC channel register.
+
+        calling sequence:
+
+        wro235(ptr, channel)
+
+        where:
+        ptr  - (structure  pointer)  This is a pointer  to  the
+        Configuration Block structure.
+
+        channel(int) - is the DAC channel register number to write
+        to (0 - 0xF).
+
+
+
+   void cnfg235 - This module is used to perform the "configure channel"
+   function for the AP235 board.  A pointer to the Configuration Block
+   will be passed to this routine.  The routine will use a pointer
+   within the Configuration Block to reference the registers
+   on the Board.  Based on attributes in the Configuration Block, the
+   board will be configured and various registers will be updated with
+   new information which will be transfered from the Configuration
+   Block to registers on the Board.
+
+        calling sequence:
+
+        cnfg235(ptr, channel)
+
+        where:
+        ptr  - (structure  pointer)  This is a pointer  to  the
+        Configuration Block structure.
+
+        channel(int) - is the DAC channel register number to write
+        to (0 - 0xF).
+
+
+
+
+   void rsts235 - This module is used to perform the read status function
+    for the board.  A pointer to the configuration block will be passed to
+    this routine.  The routine will use a pointer within the configuration
+    block together with offsets to reference the registers on the board and
+    will transfer the information from the board.
+
+        calling sequence:
+
+        rsts235(ptr)
+
+        where:
+        ptr  - (structure  pointer)  This is a pointer  to  the
+        Configuration Block structure.
+
+
+
+
+
+
+
+				   11
+
+
+
+
+
+
+   8. Description of Support Programs
+
+   Following  is  a  description of the support  files  and  program
+   modules  which  provide  examples  for  the  use  of  the library
+   programs.
+
+   apcommon.c - This file provides AP common support routines.
+
+   drvr235.c  - This  is a program which demonstrates the  usage  of
+   the library modules.   This program is menu driven and allows the
+   user to become familiar with the  AP235  board  and  the library
+   software.   The user may,  through menu  selections,   configure,
+   read from, and write to the board.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 				   12
+
+
+
+
+
+
