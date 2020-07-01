@@ -425,7 +425,7 @@ func (dac *AP236) Output(channel int, voltage float64) error {
 	if voltage < minvolt || dn < mindn {
 		return ErrVoltageTooLow
 	} else if voltage > maxvolt || dn > maxdn {
-		return ErrVotlageTooHigh
+		return ErrVoltageTooHigh
 	}
 	dnU := uint16(dn)
 	return dac.OutputDN(channel, dnU)
