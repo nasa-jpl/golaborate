@@ -464,7 +464,7 @@ func (dac *AP235) SetTriggerDirection(b bool) error {
 	if b {
 		i = 1
 	}
-	dac.cfg.TriggerDirection = C.int(i)
+	dac.cfg.TriggerDirection = C.uint32_t(i)
 	// dac.sendCfgToBoard() TODO: need to send to board?
 	return nil
 }
@@ -495,7 +495,7 @@ func (dac *AP235) SetClearOnUnderflow(channel int, b bool) error {
 // GetClearOnUnderflow configures the DAC to clear output on an underflow if true
 // the error is always nil
 func (dac *AP235) GetClearOnUnderflow(channel int) (bool, error) {
-	ci := dac.cfg.UnderflowClear
+	ci := dac.cfg.opts._chan[C.int(channel)].UnderflowClear
 	var b bool
 	if ci == 1 {
 		b = true
@@ -532,7 +532,7 @@ func (dac *AP235) GetOutputSimultaneous(channel int) (bool, error) {
 // no other errors can be generated.
 func (dac *AP235) SetTimerPeriod(nanoseconds uint32) error {
 	tdiv := nanoseconds / 32
-	dac.cfg.TimerDivider = C.uint32(tdiv)
+	dac.cfg.TimerDivider = C.uint32_t(tdiv)
 	if tdiv < 310 {
 		return ErrTimerTooFast
 	}
