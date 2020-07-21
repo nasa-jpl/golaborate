@@ -136,7 +136,7 @@ var (
 	ErrVoltageTooHigh = errors.New("commanded voltage above upper limit")
 
 	// ErrTimerTooFast is generated when a timer is running too fast
-	ErrTimerTooFast = errors.new("timer too fast: DAC cannot settle to < 1LSB before next value given")
+	ErrTimerTooFast = errors.New("timer too fast: DAC cannot settle to < 1LSB before next value given")
 
 	// IdealCode is the array from drvr236.c L60-L85
 	// its inner elements, by index:
@@ -466,6 +466,7 @@ func (dac *AP235) SetTriggerDirection(b bool) error {
 	}
 	dac.cfg.TriggerDirection = C.int(i)
 	// dac.sendCfgToBoard() TODO: need to send to board?
+	return nil
 }
 
 // GetTriggerDirection returns true if the DAC's trigger is output, false if it is input
