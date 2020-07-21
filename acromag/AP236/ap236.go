@@ -415,11 +415,12 @@ func (dac *AP236) sendCfgToBoard(channel int) {
 // the error is only non-nil if the value is out of range
 func (dac *AP236) Output(channel int, voltage float64) error {
 	// TODO: look into cd236 C function
-	rng, _ := dac.GetRange(channel) // output range
-	slp := idealCode[rng][slope]    // slope
-	zro := idealCode[rng][zero]     // zero DN
-	mindn := idealCode[rng][minDN]  // min value allowed
-	maxdn := idealCode[rng][maxDN]  // max value allowed
+	rngS, _ := dac.GetRange(channel) // output range
+	rng, _ := ValidateOutputRange(rngS)
+	slp := idealCode[rng][slope]   // slope
+	zro := idealCode[rng][zero]    // zero DN
+	mindn := idealCode[rng][minDN] // min value allowed
+	maxdn := idealCode[rng][maxDN] // max value allowed
 	minvolt := idealCode[rng][minV]
 	maxvolt := idealCode[rng][maxV]
 	dn := math.Round(voltage*slp + zro)
@@ -429,18 +430,13 @@ func (dac *AP236) Output(channel int, voltage float64) error {
 		return ErrVoltageTooHigh
 	}
 	dnU := uint16(dn)
-	return dac.OutputDN(channel, dnU)
+	return dac.OutputDN16(channel, dnU)
 }
 
-// OutputDN writes a value to the board in DN.
-// Value is of type interface{} for compatibility but must be a uint16
-// or an error will be generated
-func (dac *AP236) OutputDN(channel int, value interface{}) error {
-	v, ok := (value).(uint16)
-	if !ok {
-		return fmt.Errorf("output value is not a uint16")
-	}
-	C.wro236(&dac.cfg, C.int(channel), C.word(v))
+// OutputDN16 writes a value to the board in DN.
+// the error is always nil
+func (dac *AP236) OutputDN16(channel int, value uint16) error {
+	C.wro236(&dac.cfg, C.int(channel), C.word(value))
 	return nil
 }
 
@@ -478,9 +474,9 @@ func (dac *AP236) OutputMulti(channels []int, voltages []float64) error {
 	return nil
 }
 
-// OutputMultiDN is equivalent to OutputMulti, but with DNs instead of volts.
+// OutputMultiDN16 is equivalent to OutputMulti, but with DNs instead of volts.
 // see the docstring of OutputMulti for more information.
-func (dac *AP236) OutputMultiDN(channels []int, uint16s []interface{}) error {
+func (dac *AP236) OutputMultiDN16(channels []int, uint16s []uint16) error {
 	// ensure channels are homogeneous
 	sim, _ := dac.GetOutputSimultaneous(channels[0])
 	for i := 0; i < len(channels); i++ { // old for is faster than range, this code may be hot
@@ -491,7 +487,7 @@ func (dac *AP236) OutputMultiDN(channels []int, uint16s []interface{}) error {
 		}
 	}
 	for i := 0; i < len(channels); i++ {
-		err := dac.OutputDN(channels[i], uint16s[i])
+		err := dac.OutputDN16(channels[i], uint16s[i])
 		if err != nil {
 			return fmt.Errorf("channel %d DN %f: %w", channels[i], uint16s[i], err)
 		}
