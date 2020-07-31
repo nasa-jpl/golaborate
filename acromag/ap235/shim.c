@@ -47,3 +47,24 @@ void Setup_board_corrected_buffer(struct cblk235* cfg)
 	cfg2.bInitialized = TRUE;
 	cfg2.bAP = TRUE;
 }
+
+void Teardown_board_corrected_buffer(struct cblk235 *cfg)
+{
+	unsigned long scatter_info[4];
+	struct cblk235 cfg2;
+	cfg2 = *cfg;
+	scatter_info[0] = (unsigned long)cfg2.pAP->nDevInstance; /* get board instance */
+	ioctl(cfg2.pAP->nAPDeviceHandle, 9, &scatter_info[0]);   /* unmap user pages and scatter-gather list */
+
+	munlock(cfg2.pcor_buf, sizeof(short[16][MAXSAMPLES])); /* unlock pages in memory */
+	aligned_free((void *)cfg2.pcor_buf);					 /* free allocated DMA buffer on exit */
+}
+
+short* MkDataArray(int size)
+{
+	short *array = calloc(size, sizeof(short));
+	if (array == NULL) {
+		return -1;
+	}
+	return array;
+}
