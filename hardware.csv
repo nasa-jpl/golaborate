@@ -16,3 +16,4 @@ Keysight,DAQ/Logger,DAQ970 series (34970 probably works; untested),keysight-daq
 Agilent,Function Generator,33250A (and series),function-generator
 PI,Motion Controller,GCS2 compatible (post-2010ish peizo/stepper/DC motors),pi-motion
 Acromag,DAC,AP236,AP236
+Acromag,DAC,AP235,AP235

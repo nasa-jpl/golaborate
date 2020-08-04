@@ -9,3 +9,7 @@ void Setup_board_corrected_buffer(struct cblk235 *cfg);
 void Teardown_board_corrected_buffer(struct cblk235 *cfg);
 
 short* MkDataArray(int size);
+
+void* aligned_malloc(int size, int align);
+
+void aligned_free(void *ptr);

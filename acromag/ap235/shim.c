@@ -64,7 +64,7 @@ short* MkDataArray(int size)
 {
 	short *array = calloc(size, sizeof(short));
 	if (array == NULL) {
-		return -1;
+		return NULL;
 	}
 	return array;
 }

@@ -6,6 +6,7 @@ require (
 	github.com/astrogo/fitsio v0.1.0
 	github.com/brandondube/pctl v0.0.0-20200219055522-5b74d42bad2d
 	github.com/cenkalti/backoff v2.2.1+incompatible
+	github.com/go-chi/chi v4.0.3+incompatible // indirect
 	github.com/go-yaml/yaml v2.1.0+incompatible
 	github.com/google/gousb v0.0.0-20190812193832-18f4c1d8a750
 	github.com/knadh/koanf v0.8.2

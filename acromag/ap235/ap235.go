@@ -1,48 +1,3 @@
-/*Package ap235 provides an interface to Acromag AP235 16-bit waveform DAC modules
-
-Some performance-limiting design changes are made from the C SDK provided
-by acromag.  Namely: there are Go functions for each channel configuration,
-and a call to any of them issues a transfer of the configuration to the board.
-This will prevent the last word in performance under obscure conditions (e.g.
-updating the config 10,000s of times per second) but is not generally harmful
-and simplifies interfacing to the device, as there can be no "I updated the
-config but forgot to write to the device" errors.
-
-Basic usage is as followed:
- dac, err := ap235.New(0) // 0 is the 0th card in the system, in range 0~4
- if err != nil {
- 	log.fatal(err)
- }
- defer dac.Close()
- // single channel, immediate mode (output immediately on write)
- // see method docs on error values, this example ignores them
- // there is a get for each set
- ch := 1
- dac.SetRange(ch, TenVSymm)
- dac.SetPowerUpVoltage(ch, ap235.MidScale)
- dac.SetClearVoltage(ch, ap235.MidScale)
- dac.SetOverTempBehavior(ch, true) // shut down if over temp
- dac.SetOverRange(ch, false) // over range not allowed
- dac.SetOutputSimultaneous(ch, false) // this is what puts it in immediate mode
- dac.Output(ch, 1.) // 1 volt as close as can be quantized.  Calibrated.
- dac.OutputDN(ch, 2000) // 2000 DN, uncalibrated
-
- // multi-channel, synchronized
- chs := []int{1,2,3}
- // setup
- for _, ch := range chs {
- 	dac.SetRange(ch, TenVSymm)
-	dac.SetPowerUpVoltage(ch, ap235.MidScale)
-	dac.SetClearVoltage(ch, ap235.MidScale)
-	dac.SetOverTempBehavior(ch, true)
-	dac.SetOverRange(ch, false)
- 	dac.SetOutputSimultaneous(ch, true)
- }
- // in your code
- dac.OutputMulit(chs, []float64{1, 2, 3} // calibrated
- dac.OutputMultiDN(chs, []uint16{1000, 2000, 3000}) // uncalibrated
-
-*/
 package ap235
 
 /*
@@ -56,96 +11,9 @@ import "C"
 import (
 	"errors"
 	"fmt"
-	"math"
 	"reflect"
-	"time"
 	"unsafe"
 )
-
-/* steaming workflow, from AP235 man:
-1. Start in a known state by writing the Control Register with the
-	Software Reset bit set to logic ‘1’.
-2. Reset the DACs by writing the Control Register with the DAC reset bit set
-	to logic ‘1’.
-3. Configure each DAC channel by writing to the appropriate
-	Channel Direct Access register. Set the output range, power-up voltage,
-	clear voltage, and data format.
-4. Set the initial output voltage for all DACs by writing the
-	Control Register with the DAC clear bit set to logic ‘1’. This will
-	power up the DAC outputs. The DACs will output the voltage configured
-	with the previous step.
-5. Set the FIFO size for each channel by writing the Channel Start Address
-	and Channel End Address registers. If all channels will be outputting
-	data at the same frequency, make all the FIFOs equal size.
-6. Configure the operating mode of each channel as FIFO mode, and set the
-	appropriate bits to select the trigger source.
-7. Initialize the DMA scatter-gather descriptor chain list in block RAM. Up
-	to sixteen descriptors could be needed each time a transfer is initiated.
-	All the host memory addresses written to the descriptors must take into
-	consideration the address translation that is performed by the PCIe
-	interface. The Next Descriptor Pointer field must be set for each of the
-	sixteen descriptors. The destination address will be the appropriate
-	Channel FIFO register. Set the bytes to transfer field in the descriptor
-	to one half the size of the sample memory allocated to each channel.
-	The source address will be a host memory address where the next set of
-	sample data for each channel is stored. Write zeroes to the
-	Transfer Descriptor Status Word for each descriptor to indicate that it
-	has not completed.
-8. Reset the CDMA by writing the Reset bit in the CDMA Control Register.
-9. Poll the CDMA control register until the Reset bit indicates reset not in
-	progress.
-10. Configure the CDMA by writing the CMDA Control Register with
-	Tail Pointer Mode enabled, Scatter Gather Mode selected, Key Hole write
-	enabled, and Cyclic BD Disabled.
-11. Write the address of the first scatter-gather descriptor to the CDMA
-	Current Descriptor Pointer Register.
-12. Write the address of the descriptor set up for channel fifteen to the
-	CDMA Tail Descriptor Pointer Register. This initiates the DMA transfers.
-13. Poll the CDMA Status Register until the CDMA idle bit indicates the CMDA
-	is in the idle state. Each of the FIFOs are now half full.
-14. Write the Interrupt Enable register with 0xFFFF. This enables each DAC
-	channel to generate interrupts. Since each channel is configured in
-		FIFO mode, an interrupt will be generated when any of the channels’
-		FIFOs becomes half full. Also, note the CDMA interrupt is not enabled.
-15. Write the following fields of the Master Enable Register:
-	Master IRQ Enable = 1
-	Hardware Interrupt Enable = 1
-16. Write the Waveform Output Enable bit in the Control Register to start
-	waveform output. The DACs will output the data stored in their FIFOs at
-	the rate of the trigger pulses.
-17. Wait for an interrupt from the AP2x5 module.
-18. Read the Interrupt Pending Register. Store the value read for later use
-	in the DMA complete interrupt handler. For each DAC channel interrupt
-	bit in the Interrupt Pending Register that is set to a logic ‘1’ set up
-	the scatter-gather descriptor to transfer up to one half of the
-	channel’s FIFO size.
-19. For each DAC channel interrupt bit in the Interrupt Pending Register
-	that is not set to a logic ‘1’, remove the channel’s descriptor from the
-	scatter-gather chain.
-20. Write the address of the scatter-gather descriptor of the first channel
-	requiring service to the CDMA Current Descriptor Pointer Register.
-21. Write the following fields of the CDMA control register:
-	Scatter Gather Mode = 1
-	Key Hole Write = 1
-	Cyclic BD Enable = 0
-	Interrupt on Complete Interrupt Enable = 1
-	Interrupt on Delay Timer = 0
-	Interrupt on Error Interrupt Enable = 1
-	Interrupt Threshold Value = number of descriptors to transfer
-	Interrupt Delay Timeout = 0
-22. Write 0x10000 to the Interrupt Enable Register. This disables all DAC
-	channel interrupts and enables the CDMA interrupt.
-23. Write the address of the descriptor of the last channel requiring
-service to the CMDA Tail Descriptor Pointer Register. This will initiate the
-DMA transfers.
-24. Wait for an interrupt from the AP2x5 module.
-25. Read the CMDA status register. Check for error bits that are set.
-26. Write the Interrupt Acknowledge Register with the saved value from the
-	Interrupt Pending Register from above. This will clear the interrupts
-	for the channels that were serviced by the DMA transfer.
-27. Write 0xFFFF to the Interrupt Enable Register to re-enable the DAC
-	interrupts.
-*/
 
 func init() {
 	errCode := C.InitAPLib()
@@ -163,6 +31,9 @@ type OutputRange int
 
 // TriggerMode is a triggering mode
 type TriggerMode int
+
+// OperatingMode is a mode of operating the DAC for a given channel
+type OperatingMode int
 
 const (
 	// ZeroScale represents a power up zero scale signal.
@@ -194,12 +65,16 @@ const (
 	// TwentyVPos is an output range of 0-20V, this requires an external voltage source
 	TwentyVPos
 
-	slope = C.IDEALSLOPE
-	zero  = C.IDEALZEROBTC
-	maxV  = C.ENDPOINTHI
-	minV  = C.ENDPOINTLO
-	maxDN = C.CLIPHI
-	minDN = C.CLIPLO
+	// from ap235.h
+	idealZeroSB  = 0
+	idealZeroBTC = 1
+	idealSlope   = 2
+	endpointLo   = 3
+	endpointHi   = 4
+	clipLo       = 5
+	clipHi       = 6
+	offset       = 0
+	gain         = 1
 
 	// TriggerSoftware represents a software triggering mode
 	TriggerSoftware TriggerMode = iota
@@ -210,9 +85,20 @@ const (
 	// TriggerExternal represents a triggering mode which is externally clocked
 	TriggerExternal
 
+	// OperatingSingle is an operating mode corresponding to a single sample at a time
+	// it is compatible with software triggering only.  It is compatible with simultaneous output.
+	OperatingSingle OperatingMode = 0 // from ap235.h
+
+	// OperatingWaveform is an operating mode corresponding to waveform output.
+	// it is incompatible with the software triggering mode.
+	OperatingWaveform OperatingMode = 4 // from ap235.h
+
 	// MAXSAMPLES is the maximum number of samples in the buffer of a single
 	// channel.  It is repeated from AP235.h to avoid an unnecessary CFFI call
 	MAXSAMPLES = 4096
+
+	// DMAXferSize is the (max) number of samples to send in one DMA transfer
+	DMAXferSize = MAXSAMPLES / 2
 )
 
 var (
@@ -227,7 +113,10 @@ var (
 	ErrVoltageTooHigh = errors.New("commanded voltage above upper limit")
 
 	// ErrTimerTooFast is generated when a timer is running too fast
-	ErrTimerTooFast = errors.New("timer too fast: DAC cannot settle to < 1LSB before next value given")
+	ErrTimerTooFast = errors.New("timer too fast: DAC cannot settle to < 1LSB before next value given.  Value accepted")
+
+	// ErrIncompatibleOperatingTrigger is generated when the triggering and operating modes are incompatible
+	ErrIncompatibleOperatingTrigger = errors.New("operating mode and trigger source are incompatible, software+single or (external|timer)+waveform are the only valid combinations.  Change accepted, state inconsistent")
 
 	// IdealCode is the array from drvr236.c L60-L85
 	// its inner elements, by index:
@@ -349,7 +238,7 @@ func ValidateTriggerMode(s string) (TriggerMode, error) {
 	case "external":
 		return TriggerExternal, nil
 	default:
-		return -1, fmt.Errorf("triggering mode must be a member of {software, timer, external}")
+		return -1, errors.New("triggering mode must be a member of {software, timer, external}")
 	}
 }
 
@@ -363,6 +252,31 @@ func FormatTriggerMode(t TriggerMode) string {
 		return "timer"
 	case TriggerExternal:
 		return "external"
+	default:
+		return ""
+	}
+}
+
+// ValidateOperatingMode checks that an operating mode is valid
+// s is a member of {'single', 'waveform'}
+func ValidateOperatingMode(s string) (OperatingMode, error) {
+	switch s {
+	case "single":
+		return OperatingSingle, nil
+	case "waveform":
+		return OperatingWaveform, nil
+	default:
+		return -1, errors.New("operating mode must be a member of {single, waveform}")
+	}
+}
+
+// FormatOperatingMode formats the operating mode to either single or waveform.
+func FormatOperatingMode(o OperatingMode) string {
+	switch o {
+	case OperatingSingle:
+		return "single"
+	case OperatingWaveform:
+		return "waveform"
 	default:
 		return ""
 	}
@@ -385,6 +299,29 @@ func enrich(errC C.APSTATUS, procedure string) error {
 // AP235 is an acromag 16-bit DAC of the same type
 type AP235 struct {
 	cfg C.struct_cblk235
+
+	idealCode [8][7]float64
+
+	// cursors hold the index into buffer
+	// that corresponds to the current sample offset of each channel
+	cursor [16]int
+
+	// sample_count holds the number of samples in a supplied waveform
+	// on a per-channel basis
+	sampleCount [16]int
+
+	// buffers is the singular buffer of 16-bit values
+	// holding all 16 channels of DAC memory.
+	// it is strided and really looks like [16][4096][N]
+	// 16 = nchan
+	// 4096 = samples per channel of on-DAC memory
+	// N = number of "pages"
+	// get indices into it with dac.ptrs()
+	buffer [16][]uint16
+	// cptrs holds the pointers in C to be used to free the buffers later
+	cptr [16]*C.short
+
+	playingBack bool
 }
 
 // New creates a new instance and opens the connection to the DAC
@@ -400,7 +337,9 @@ func New(deviceIndex int) (*AP235, error) {
 	// is a valid way to generate the pointer that C wants
 	// see also: several ways to get the same address of the
 	// data: https://play.golang.org/p/fpkOIT9B3BB
-	cptr := (*[8][7]C.double)(unsafe.Pointer(&idealCode))
+
+	// TODO: rwcc235 here
+	cptr := (*[8][7]C.double)(unsafe.Pointer(&o.idealCode))
 	o.cfg.pIdealCode = cptr
 
 	// open the board, initialize it, get its address, and populate its config
@@ -537,7 +476,13 @@ func (dac *AP235) SetTriggerMode(channel int, triggerMode string) error {
 		return err
 	}
 	dac.cfg.opts._chan[C.int(channel)].TriggerSource = C.int(tm)
+	opMode, _ := dac.GetOperatingMode(channel)
 	dac.sendCfgToBoard(channel)
+	if opMode == "waveform" {
+		if (triggerMode != "external") && (triggerMode != "timer") {
+			return ErrIncompatibleOperatingTrigger
+		}
+	}
 	return nil
 }
 
@@ -569,6 +514,37 @@ func (dac *AP235) GetTriggerDirection() (bool, error) {
 		b = true
 	}
 	return b, nil
+}
+
+// SetOperatingMode changes the operating mode of the DAC.
+//
+// Valid modes are 'single', 'waveform'.
+//
+// a non-nil error will be generated if the triggering mode
+// for this channel is incomaptible.  The config change will
+// still be made.
+// err should be checked on the later of the two calls to
+// SetOperatingMode and SetTriggerMode
+func (dac *AP235) SetOperatingMode(channel int, mode string) error {
+	o, err := ValidateOperatingMode(mode)
+	if err != nil {
+		return err
+	}
+	dac.cfg.opts._chan[C.int(channel)].OpMode = C.int(o)
+	trigger, _ := dac.GetTriggerMode(channel)
+	dac.sendCfgToBoard(channel)
+	if mode == "waveform" {
+		if (trigger != "external") && (trigger != "timer") {
+			return ErrIncompatibleOperatingTrigger
+		}
+	}
+	return nil
+}
+
+// GetOperatingMode retrieves whether the DAC is in single sample or waveform mode
+func (dac *AP235) GetOperatingMode(channel int) (string, error) {
+	modeC := dac.cfg.opts._chan[C.int(channel)].OpMode
+	return FormatOperatingMode(OperatingMode(modeC)), nil
 }
 
 // SetClearOnUnderflow configures the DAC to clear output on an underflow if true
@@ -647,25 +623,11 @@ func (dac *AP235) sendCfgToBoard(channel int) {
 // the error is only non-nil if the value is out of range
 func (dac *AP235) Output(channel int, voltage float64) error {
 	// TODO: look into cd235 C function
-	// this function copied and unchanged from AP236; same logic,
-	// only difference is in OutputDN
-	rngS, _ := dac.GetRange(channel)    // output range
-	rng, _ := ValidateOutputRange(rngS) // from the board, the range cannot be invalid; ignore error
-
-	slp := idealCode[rng][slope]   // slope
-	zro := idealCode[rng][zero]    // zero DN
-	mindn := idealCode[rng][minDN] // min value allowed
-	maxdn := idealCode[rng][maxDN] // max value allowed
-	minvolt := idealCode[rng][minV]
-	maxvolt := idealCode[rng][maxV]
-	dn := math.Round(voltage*slp + zro)
-	if voltage < minvolt || dn < mindn {
-		return ErrVoltageTooLow
-	} else if voltage > maxvolt || dn > maxdn {
-		return ErrVoltageTooHigh
-	}
-	dnU := uint16(dn)
-	return dac.OutputDN16(channel, dnU)
+	// this is a hack to improve code reuse, no need to allocate slices here
+	vB := []float64{voltage}
+	vU := []uint16{0}
+	dac.calibrateData(channel, vB, vU)
+	return dac.OutputDN16(channel, vU[0])
 }
 
 // OutputDN16 writes a value to the board in DN.
@@ -693,7 +655,7 @@ func (dac *AP235) OutputDN16(channel int, value uint16) error {
 //
 // if an error is encountered in case 2, the output buffer of the DAC may be
 // partially updated from proceeding valid commands.  No invalid values escape
-// to the DAC.
+// to the DAC output.
 //
 // The device is flushed after writing if the channels are simultaneous output.
 //
@@ -763,7 +725,7 @@ func (dac *AP235) OutputMultiDN16(channels []int, uint16s []uint16) error {
 	for i := 0; i < len(channels); i++ {
 		err := dac.OutputDN16(channels[i], uint16s[i])
 		if err != nil {
-			return fmt.Errorf("channel %d DN %f: %w", channels[i], uint16s[i], err)
+			return fmt.Errorf("channel %d DN %d: %w", channels[i], uint16s[i], err)
 		}
 	}
 	if sim {
@@ -778,8 +740,15 @@ func (dac *AP235) Flush() {
 }
 
 // StartWaveform starts waveform playback on all waveform channels
-// the error is always nil
+// the error is only non-nil if playback is already occuring
 func (dac *AP235) StartWaveform() error {
+	if dac.playingBack {
+		return errors.New("AP235 is already playing back a waveform")
+	}
+	// first step is to prep DMA for each channel
+	// and start the interrupt servicing thread
+	// prepping DMA means
+
 	h := dac.cfg.nHandle
 	// CommonControl is a uint (32 bits), long is at least 32 bits.
 	// Need unsafe pointer due to lack of guarantee about same size
@@ -787,20 +756,140 @@ func (dac *AP235) StartWaveform() error {
 	tmp := C.input_long(h, addr)
 	tmp |= 1
 	C.output_long(h, addr, tmp)
+	dac.playingBack = true
 	return nil
 }
 
-// StopWaveform stops waveform playback on all waveform channels
-// the error is always nil
-func (dac *AP235) StopWaveform() error {
-	h := dac.cfg.nHandle
-	// CommonControl is a uint (32 bits), long is at least 32 bits.
-	// Need unsafe pointer due to lack of guarantee about same size
-	addr := (*C.long)(unsafe.Pointer(&dac.cfg.brd_ptr.CommonControl))
-	tmp := C.input_long(h, addr)
-	tmp &= 0xFFFFFFFE
-	C.output_long(h, addr, tmp)
+// StopWaveformPlayback stops playback on all channels.
+// the error is non-nil only if playback is not occuring
+func (dac *AP235) StopWaveformPlayback() error {
+	if !dac.playingBack {
+		return errors.New("AP235 is not playing back a waveform")
+	}
+	// stop playback
+	C.output_long(dac.cfg.nHandle,
+		(*C.long)(unsafe.Pointer(&dac.cfg.brd_ptr.CommonControl)),
+		C.long(0x10))
+
+	// disable interrupts
+	C.output_long(dac.cfg.nHandle,
+		(*C.long)(unsafe.Pointer(&dac.cfg.brd_ptr.AXI_ClearInterruptEnableRegister)),
+		C.long(0x1FFFF))
+	C.output_long(dac.cfg.nHandle,
+		(*C.long)(unsafe.Pointer(&dac.cfg.brd_ptr.AXI_MasterEnableRegister)),
+		C.long(C.MasterInterruptDisable))
+
+	C.APTerminateBlockedStart(dac.cfg.nHandle)
 	return nil
+}
+
+// need software reset?  drvr235.c, L475
+
+// calibrateData converts a f64 value to uint16.  This is basically cd235
+// len(buffer) shall == len(volts)
+func (dac *AP235) calibrateData(channel int, volts []float64, buffer []uint16) {
+	// see AP235 manual (PDF), page 68
+	cCh := C.int(channel)
+	rngS, _ := dac.GetRange(channel)    // err always nil
+	rng, _ := ValidateOutputRange(rngS) // err always nil
+	gainCoef := 1 + float64(dac.cfg.ogc235[cCh][rng][gain])/(65535*16)
+	slopeCoef := float64(dac.cfg.pIdealCode[rng][idealSlope])
+	offset := float64(dac.cfg.pIdealCode[rng][idealZeroBTC] + dac.cfg.pIdealCode[rng][offset]/16)
+	gain := gainCoef * slopeCoef
+	min := float64(dac.cfg.pIdealCode[rng][clipLo])
+	max := float64(dac.cfg.pIdealCode[rng][clipHi])
+
+	for i := 0; i < len(volts); i++ {
+		in := volts[i]
+		out := gain*in + offset // could optimize this by premuling gain and slope
+		if out > max {
+			out = max
+		} else if out < min {
+			out = min
+		}
+		// buffer[i] = int16(out) ^ 0x8000 // or with 0x8000 per the manual
+		buffer[i] = uint16(out + 0x8000)
+	}
+}
+
+// PopulateWaveform populates the waveform table for a given channel
+// the error is only non-nil if the DAC is currently playing back a waveform
+func (dac *AP235) PopulateWaveform(channel int, data []float64) error {
+	// need to:
+	// 1) convert f64 => uint16
+	// 2) handle buffer, cursor, sample count
+	//    sampleCount in Go, not SampleCount in C (which is <= 4096)
+	// 3) free old buffers if this isn't the first time we're populating
+	// 5) put the channel in FIFO_DMA mode
+	// 4) do the first dma transfer
+	// we do not start the background thread until waveform playback starts
+	// since we only want to start the one thread, not one per channel.
+
+	// create a buffer long enough to hold the waveform in uint16s
+	if dac.playingBack {
+		return errors.New("AP235 cannot change waveform table during playback")
+	}
+
+	err := dac.SetOperatingMode(channel, "waveform")
+	if err != nil {
+		return err // err is beneign, but force users to reconfigure DAC first
+	}
+	l := len(data)
+	buf, cptr, err := cMkarrayU16(l)
+	if err != nil {
+		return err
+	}
+	if dac.cptr[channel] != nil {
+		// free old buffer and replace
+		C.aligned_free(unsafe.Pointer(dac.cptr[channel]))
+	}
+	dac.cptr[channel] = cptr
+
+	// now convert each value to a u16 and update the buffer
+	dac.calibrateData(channel, data, buf) // "moves" data->buf
+	dac.sampleCount[channel] = l
+	dac.cursor[channel] = 0
+	dac.buffer[channel] = buf
+	dac.doDMATransfer(channel)
+	return nil
+}
+
+// serviceInterrupts should be run as a background goroutine;
+// it advances the cursor into the data buffer for each channel
+// and triggers new DMA writes to keep the DAC fed
+func (dac *AP235) serviceInterrupts() {
+	// the minimum recommended timer period is 0x136
+	// which is (310 * 32 ns) = 9.9us
+	// so this loop could happen as frequently as
+	// 9.9us * 2048 samples = 20 ms
+	// it's not all that hot after all.
+	for {
+		Cstatus := C.APBlockingStartConvert(dac.cfg.nHandle,
+			(*C.long)(unsafe.Pointer(&dac.cfg.brd_ptr.AXI_MasterEnableRegister)),
+			C.long(C.MasterInterruptEnable), C.long(2))
+
+		status := uint(Cstatus)
+
+		if status == 0 {
+			return
+		}
+		// at least one channel requires updating
+		for i := 0; i < 16; i++ { // i = channel index
+			var mask uint = 1 << i
+			if (mask & status) != 0 {
+				dac.doDMATransfer(i)
+			}
+		}
+		// ACK the interrupt
+		C.output_long(dac.cfg.nHandle,
+			(*C.long)(unsafe.Pointer(&dac.cfg.brd_ptr.AXI_InterruptAcknowledgeRegister)),
+			C.long(status&0xFFFF))
+
+		// re-enable interrupt
+		C.output_long(dac.cfg.nHandle,
+			(*C.long)(unsafe.Pointer(&dac.cfg.brd_ptr.AXI_SetInterruptEnableRegister)),
+			C.long(status&0xFFFF))
+	}
 }
 
 // Clear soft resets the DAC, clearing the output but not configuration
@@ -821,113 +910,37 @@ func (dac *AP235) Reset(channel int) error {
 	return nil
 }
 
-// need software reset?  drvr235.c, L475
-
-// PopulateWaveform populates the waveform table for a given channel
-func (dac *AP235) PopulateWaveform(channel int, data []float64) error {
-	cCh := C.int(channel)
-	// TODO: not true if len(data) < MAXSAMPLES
-	dac.cfg.SampleCount[cCh] = MAXSAMPLES
-	head := (*C.short)(&dac.cfg.pcor_buf[cCh][0])
-	// need to do pointer arithmetic, see OutputDN16 for where this
-	// came from, or drvr235.c L740
-	ptr := &dac.cfg.pcor_buf[cCh][0]
-	ptr2 := unsafe.Pointer(uintptr(unsafe.Pointer(ptr)) + MAXSAMPLES) // TODO: again, not MAXSAMPLES
-	dac.cfg.cfg.current_ptr[cCh] = ptr
-	dac.cfg.head_ptr[cCh] = ptr
-	dac.cfg.tail_ptr[cCh] = (*C.short)(ptr2)
-
-	// "pointer to start address, as a long"
-	addr := (*C.long)(unsafe.Pointer(&dac.cfg.brd_ptr.DAC[cCh].StartAddr))
-	value := (C.long)(cCh * MAXSAMPLES)
-	C.output_long(dac.cfg.nHandle, addr, value)
-	return nil
-}
-
-// setModeFIFODMO sets the output mode for a given channel to FIFO DMA
-func (dac *AP235) setupFIFO(channel int, waveformLen int, triggerMode string) error {
-	if waveformLen%2 != 0 {
-		return fmt.Errorf("waveform length must be divisible by 2")
-	}
-	// not sure if the cfg sends are needed
-	cCh := c.Int(channel)
-	registers := dac.cfg.brd_ptr.DAC[cCh]
-	registers.Control &= (1 << 5) // step 1 - software reset "resets the registers in the AD5721 interface"
-	dac.sendCfgToBoard(channel)
-	registers.Control &= (1 << 2) // step 2 - DAC reset "sets all outputs to ground, output buffers powered down"
-	dac.sendCfgToBoard(channel)
-	// configure channel here
-	// the above is really more of a bootup time thing, or to put the DAC in a known state
-	// step 3 omitted
-	registers.Control &= (1 << 3) // step 4
-	dac.sendCfgToBoard(channel)
-
-	// step 5
-	if waveformLen > 4096 {
-		waveformlen = 4096
-	}
-	startOffset := C.long(channel * waveformLen)
-	endOffset := C.long(startOffset + waveformLen - 1) // TODO: m1 is incorrect...?
-	startAddr := (*C.long)(unsafe.Pointer(&registers.StartAddr))
-	endAddr := (*C.long)(unsafe.Pointer(&registers.EndAddr))
-	h := dac.cfg.nHandle
-	C.output_long(h, startAddr, startPffset)
-	C.output_long(h, endAddr, endOffset)
-
-	// step 6
-	dac.cfg._opts[cCh].OpMod = C.DAC_FIFO_DMA
-	dac.SetTriggerMode(channel, triggerMode)
-
-	// step 7 -- done as part of DAC New() ?
-
-	// step 8
-	// special caution - cannot put in scatter/gather unless CDMA engine is idle
-	// must flip to 0, then 1 to trigger a change
-	// first, reset
-	// registers.CDMAControlRegister &= ^(1 << 2) // commented out - do not need?
-	registers.CDMAControlRegister &= (1 << 2)
-	var (
-		counter  = 0
-		maxTries = 100 // = 100ms
-	)
-	// step 9, for ; (a); (b) just has no init clause
-	for ; (registers.CDMAControlRegister>>2)&1 != 1; counter++ {
-		// poll until reset not in progress, test bit 2 != 1
-		time.Sleep(time.Millisecond)
-		if counter > maxTries {
-			return fmt.Errorf("CDMA reset did not end after 5ms")
-		}
-	}
-
-	// step 10
-	// now, in order from the manual,
-	// tail pointer mode enable
-	// scatter/gather mode enable
-	// key hole write enable (forces waveformLen % 2 == 0, asserted at head of fcn)
-	// cyclic BD disabled
-	// TODO: where is tail pointer bit?
-	registers.CDMAControlRegister &= (1 << 3)  // scatter/gather bit 3
-	registers.CDMAControlRegister &= (1 << 5)  // keyhole bit 5
-	registers.CDMAControlRegister &= ^(1 << 6) // cyclic bit 6
-
-	// step 11
-
-	const resetBit = 0b001
-
-}
-
 // Close the dac, freeing hardware.
 func (dac *AP235) Close() error {
-	C.Teardown_board_corrected_buffer(dac.cfg)
+	C.Teardown_board_corrected_buffer(&dac.cfg)
 	errC := C.APClose(dac.cfg.nHandle)
 	return enrich(errC, "APClose")
+}
+
+func (dac *AP235) doDMATransfer(channel int) {
+	// TODO: check this thoroughly for off-by-one errors
+	head := dac.cursor[channel]
+	tailOffset := dac.sampleCount[channel] - dac.cursor[channel]
+	if tailOffset > DMAXferSize {
+		tailOffset = DMAXferSize
+	}
+	tail := head + tailOffset
+	p1 := (*C.short)(unsafe.Pointer(&dac.buffer[channel][head]))
+	p2 := (*C.short)(unsafe.Pointer(&dac.buffer[channel][tail]))
+	cCh := C.int(channel)
+	dac.cfg.SampleCount[cCh] = C.uint(tailOffset) // sample count
+	// no need for bytes to transfer, since that only applies in simple DMA mode
+	dac.cfg.head_ptr[cCh] = p1 // pointers
+	dac.cfg.current_ptr[cCh] = p1
+	dac.cfg.tail_ptr[cCh] = p2 // this triggers a DMA Xfer
+	C.fifodmawro235(&dac.cfg, cCh)
 }
 
 // CMkarrayU16 allocates a []uint16 in C and returns a Go slice without copying
 // as well as the pointer for freeing, and error if malloc failed.
 func cMkarrayU16(size int) ([]uint16, *C.short, error) {
 	cptr := C.MkDataArray(C.int(size))
-	if cptr == -1 {
+	if cptr == nil {
 		return nil, nil, fmt.Errorf("cMkarrayU16: cmalloc failed")
 	}
 	var slc []uint16

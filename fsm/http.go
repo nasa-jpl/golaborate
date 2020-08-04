@@ -6,15 +6,12 @@ import (
 	"net/http"
 	"time"
 
-	"github.jpl.nasa.gov/bdube/golab/server"
 	"goji.io/pat"
 )
 
 // HTTPDisturbance is an HTTPer that exposes an HTTP interface to a disturbance
 type HTTPDisturbance struct {
 	d *Disturbance
-
-	RouteTable server.RouteTable
 }
 
 // NewHTTPDisturbance creates an HTTP wrapper around a disturbance
