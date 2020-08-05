@@ -631,8 +631,8 @@ func (dac *AP235) Output(channel int, voltage float64) error {
 }
 
 // OutputDN16 writes a value to the board in DN.
-// Value is of type interface{} for compatibility but must be a uint16
-// or an error will be generated
+//
+// the error is always nil
 func (dac *AP235) OutputDN16(channel int, value uint16) error {
 	// set FIFO configuration for this channel to 1 sample
 	cCh := C.int(channel)
@@ -757,12 +757,13 @@ func (dac *AP235) StartWaveform() error {
 	tmp |= 1
 	C.output_long(h, addr, tmp)
 	dac.playingBack = true
+	go dac.serviceInterrupts()
 	return nil
 }
 
-// StopWaveformPlayback stops playback on all channels.
+// StopWaveform stops playback on all channels.
 // the error is non-nil only if playback is not occuring
-func (dac *AP235) StopWaveformPlayback() error {
+func (dac *AP235) StopWaveform() error {
 	if !dac.playingBack {
 		return errors.New("AP235 is not playing back a waveform")
 	}

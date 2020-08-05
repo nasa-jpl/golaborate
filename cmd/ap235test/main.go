@@ -3,17 +3,18 @@ package main
 import (
 	"bufio"
 	"log"
+	"math"
 	"os"
 	"strconv"
 	"time"
 
-	"github.jpl.nasa.gov/bdube/golab/acromag/ap236"
+	"github.jpl.nasa.gov/bdube/golab/acromag/ap235"
 )
 
 func main() {
 	reader := bufio.NewReader(os.Stdin)
 	log.Println("connecting to AP236 in slot 1")
-	dac, err := ap236.New(1)
+	dac, err := ap235.New(1)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -71,21 +72,23 @@ func main() {
 	dac.OutputDN16(channel, up)
 	dac.OutputDN16(channel, start)
 
-	log.Println("advancing to ramp test")
-	log.Println("start=0, stop=65535, step=100, dT=15ms, steps=655 (~10s)")
-	log.Println("press enter to start")
-	reader.ReadString('\n')
-	var (
-		out  uint16
-		stop uint16 = 65535
-		step uint16 = 100
-		dT          = 15 * time.Millisecond
-	)
-	for ; out < stop; out += step {
-		dac.OutputDN16(channel, out)
-		time.Sleep(dT)
+	log.Println("advancing to waveform test")
+	floats := make([]float64, 100000)
+	for i := 0; i < len(floats); i++ {
+		floats[i] = float64(i) / math.Pi / 5
 	}
-
+	dac.SetTriggerMode(channel, "timer")
+	dac.SetTimerPeriod(160000) // 160us/sample
+	dac.SetTriggerDirection(true)
+	dac.SetOperatingMode(channel, "waveform")
+	err = dac.PopulateWaveform(channel, floats)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("length=100,000 samples, period=100 samples")
+	log.Println("press enter to start playback for 10 seconds")
+	reader.ReadString('\n')
+	dac.StartWaveform()
+	time.Sleep(10)
 	log.Println("test complete")
-
 }
