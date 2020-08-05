@@ -4,7 +4,7 @@
 #endif
 APSTATUS GetAPAddress2(int nhandle, struct mapap235** addr);
 
-void Setup_board_corrected_buffer(struct cblk235 *cfg);
+int Setup_board_corrected_buffer(struct cblk235 *cfg);
 
 void Teardown_board_corrected_buffer(struct cblk235 *cfg);
 

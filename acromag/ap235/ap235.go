@@ -365,8 +365,12 @@ func New(deviceIndex int) (*AP235, error) {
 	}
 
 	// assign the buffer pointer
-	C.Setup_board_corrected_buffer(&o.cfg)
+	errCode := C.Setup_board_corrected_buffer(&o.cfg)
+	if errCode != 0 {
+		return nil, errors.New("error reading calibration data from AP235")
+	}
 	// binitialize and bAP are set in Setup_board
+	fmt.Printf("%+v", out)
 	return out, nil
 }
 
