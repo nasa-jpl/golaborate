@@ -13,8 +13,8 @@ import (
 
 func main() {
 	reader := bufio.NewReader(os.Stdin)
-	log.Println("connecting to AP236 in slot 1")
-	dac, err := ap235.New(1)
+	log.Println("connecting to AP235 #0")
+	dac, err := ap235.New(0)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -24,7 +24,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	channel, err := strconv.Atoi(str)
+	channel, err := strconv.Atoi(str[:len(str)-1])
 	if err != nil {
 		log.Fatal(err)
 	}
