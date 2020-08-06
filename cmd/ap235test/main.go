@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"log"
 	"math"
 	"os"
@@ -34,6 +35,8 @@ func main() {
 	dac.SetOverRange(channel, false)
 	log.Println("setting thermal protection (shut down overtemp) true")
 	dac.SetOverTempBehavior(channel, true)
+	log.Println("putting DAC in transparent mode")
+	dac.SetOutputSimultaneous(channel, false)
 
 	log.Println("advancing to basic range testing.")
 	log.Println("floating point interface:")
@@ -45,13 +48,36 @@ func main() {
 	}
 	log.Println("press enter to move to +10V")
 	reader.ReadString('\n')
+	err = dac.Output(channel, 10)
+	if err != nil {
+		log.Fatal(err)
+	}
 	log.Println("DN interface:")
-	log.Println("press enter to command 0 (-10V)")
+	log.Println("press enter to command 0 DN")
 	reader.ReadString('\n')
-	dac.OutputDN16(channel, 0)
-	log.Println("press enter to command 65535 (+10V)")
+	err = dac.OutputDN16(channel, 0)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("press enter to command 32768 DN")
 	reader.ReadString('\n')
-	dac.OutputDN16(channel, 65535)
+	err = dac.OutputDN16(channel, 32768)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("press enter to command 65535 DN")
+	reader.ReadString('\n')
+	err = dac.OutputDN16(channel, 65535)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	dns := []uint16{0, 10000, 20000, 30000, 40000, 50000, 60000}
+	for _, dn := range dns {
+		log.Println(dn)
+		dac.OutputDN16(channel, dn)
+		time.Sleep(100 * time.Millisecond)
+	}
 
 	log.Println("advancing to step test")
 	log.Println("press enter to reset DAC to -10V")
@@ -75,8 +101,9 @@ func main() {
 	log.Println("advancing to waveform test")
 	floats := make([]float64, 100000)
 	for i := 0; i < len(floats); i++ {
-		floats[i] = float64(i) / math.Pi / 5
+		floats[i] = math.Sin(float64(i)/math.Pi/5) * 10 // +/- 10V
 	}
+	fmt.Println(floats[:100])
 	dac.SetTriggerMode(channel, "timer")
 	dac.SetTimerPeriod(160000) // 160us/sample
 	dac.SetTriggerDirection(true)
@@ -89,6 +116,6 @@ func main() {
 	log.Println("press enter to start playback for 10 seconds")
 	reader.ReadString('\n')
 	dac.StartWaveform()
-	time.Sleep(10)
+	time.Sleep(10 * time.Second)
 	log.Println("test complete")
 }

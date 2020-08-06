@@ -80,3 +80,55 @@ short* MkDataArray(int size)
 	}
 	return array;
 }
+
+void start_waveform(struct cblk235 *cfg)
+{
+	output_long(cfg->nHandle, (long *)&cfg->brd_ptr->AXI_MasterEnableRegister, (long)(MasterInterruptEnable));
+	long temp = input_long(cfg->nHandle, (long *)&cfg->brd_ptr->CommonControl);
+	temp |= 1;
+	output_long(cfg->nHandle, (long *)&cfg->brd_ptr->CommonControl, (long)temp);
+
+}
+
+void stop_waveform(struct cblk235 *cfg)
+{
+	// long temp = input_long(cfg->nHandle, (long *)&cfg->brd_ptr->CommonControl);
+	// temp &= 0xFFFFFFFE;	/* Stop All Waveforms */
+	// output_long(cfg->nHandle, (long *)&cfg->brd_ptr->CommonControl, (long)temp);
+	output_long(cfg->nHandle, (long *)(&cfg->brd_ptr->CommonControl), (long)(0x10));
+
+	// disable interrupts
+	output_long(cfg->nHandle, (long *)(&cfg->brd_ptr->AXI_ClearInterruptEnableRegister), (long)(0x1FFFF));
+	output_long(cfg->nHandle, (long *)(&cfg->brd_ptr->AXI_MasterEnableRegister), (long)(MasterInterruptDisable));
+	APTerminateBlockedStart(cfg->nHandle);
+}
+
+unsigned long fetch_status(struct cblk235 *cfg)
+{
+	return APBlockingStartConvert(cfg->nHandle, (long *)(&cfg->brd_ptr->AXI_MasterEnableRegister), (long)(MasterInterruptEnable), (long)(2));
+}
+
+void refresh_interrupt(struct cblk235 *cfg, unsigned long status)
+{
+	// ACK the interrupt
+	output_long(cfg->nHandle, (long *)(&cfg->brd_ptr->AXI_InterruptAcknowledgeRegister), (long)(status&0xFFFF));
+
+	// re-enable interrupt
+	output_long(cfg->nHandle, (long *)(&cfg->brd_ptr->AXI_SetInterruptEnableRegister), (long)(status&0xFFFF));
+}
+
+void do_DMA_transfer(struct cblk235 *cfg, int channel, uint samples, short *p1, short *p2)
+{
+	cfg->SampleCount[channel] = samples;
+	// no need for bytes to transfer, since that only applies in simple DMA mode
+	cfg->head_ptr[channel] = p1;
+	cfg->current_ptr[channel] = p1;
+	cfg->tail_ptr[channel] = p2;
+	fifodmawro235(cfg, channel);
+}
+
+void set_DAC_sample_addresses(struct cblk235 *cfg, int channel)
+{
+	output_long(cfg->nHandle, (long *)&cfg->brd_ptr->DAC[channel].StartAddr, (long)channel * MAXSAMPLES);
+	output_long(cfg->nHandle, (long *)&cfg->brd_ptr->DAC[channel].EndAddr, (long)channel * MAXSAMPLES + (cfg->SampleCount[channel] - 1));
+}

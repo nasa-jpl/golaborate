@@ -12,6 +12,8 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strconv"
+	"strings"
 	"unsafe"
 )
 
@@ -47,7 +49,8 @@ const (
 
 	// FullScale boots the DAC at its maximum output value
 	FullScale
-
+)
+const (
 	// TenVSymm is a -10 to +10V output range
 	TenVSymm OutputRange = iota
 	// TenVPos is a 0 to 10V output range
@@ -75,7 +78,8 @@ const (
 	clipHi       = 6
 	offset       = 0
 	gain         = 1
-
+)
+const (
 	// TriggerSoftware represents a software triggering mode
 	TriggerSoftware TriggerMode = iota
 
@@ -227,6 +231,17 @@ func FormatOutputRange(o OutputRange) string {
 	}
 }
 
+// RangeToMinMax converts a range string, <min,max> to floats.
+// the input is assumed to be well formed; 0,0 is returned for badly formed inputs,
+// or a panic occurs for inputs not containing a 0
+func RangeToMinMax(rangeS string) (float64, float64) {
+	// assume well-formed input,
+	pieces := strings.Split(rangeS, ",")
+	f1, _ := strconv.ParseFloat(pieces[0], 64)
+	f2, _ := strconv.ParseFloat(pieces[1], 64)
+	return f1, f2
+}
+
 // ValidateTriggerMode ensures that a triggering mode is valid
 // s is a member of {software, timer, external}
 func ValidateTriggerMode(s string) (TriggerMode, error) {
@@ -298,7 +313,7 @@ func enrich(errC C.APSTATUS, procedure string) error {
 
 // AP235 is an acromag 16-bit DAC of the same type
 type AP235 struct {
-	cfg C.struct_cblk235
+	cfg *C.struct_cblk235
 
 	idealCode [8][7]float64
 
@@ -310,13 +325,7 @@ type AP235 struct {
 	// on a per-channel basis
 	sampleCount [16]int
 
-	// buffers is the singular buffer of 16-bit values
-	// holding all 16 channels of DAC memory.
-	// it is strided and really looks like [16][4096][N]
-	// 16 = nchan
-	// 4096 = samples per channel of on-DAC memory
-	// N = number of "pages"
-	// get indices into it with dac.ptrs()
+	// buffers are the sample queues for each channel, owned by C
 	buffer [16][]uint16
 	// cptrs holds the pointers in C to be used to free the buffers later
 	cptr [16]*C.short
@@ -333,13 +342,15 @@ func New(deviceIndex int) (*AP235, error) {
 		cs   = C.CString(C.DEVICE_NAME) // untyped constant in C needs enforcement in Go
 	)
 	defer C.free(unsafe.Pointer(cs))
+
+	cfgPtr := (*C.struct_cblk235)(C.malloc(C.sizeof_struct_cblk235))
+	o.cfg = cfgPtr
 	// confirmed by Kate Blanketship on Gophers slack that this
 	// is a valid way to generate the pointer that C wants
 	// see also: several ways to get the same address of the
 	// data: https://play.golang.org/p/fpkOIT9B3BB
 
-	// TODO: rwcc235 here
-	cptr := (*[8][7]C.double)(unsafe.Pointer(&o.idealCode))
+	cptr := (*[8][7]C.double)(unsafe.Pointer(&idealCode))
 	o.cfg.pIdealCode = cptr
 
 	// open the board, initialize it, get its address, and populate its config
@@ -365,12 +376,11 @@ func New(deviceIndex int) (*AP235, error) {
 	}
 
 	// assign the buffer pointer
-	errCode := C.Setup_board_corrected_buffer(&o.cfg)
+	errCode := C.Setup_board_corrected_buffer(o.cfg)
 	if errCode != 0 {
 		return nil, errors.New("error reading calibration data from AP235")
 	}
-	// binitialize and bAP are set in Setup_board
-	fmt.Printf("%+v", out)
+	// binitialize and bAP are set in Setup_board, ditto for rwcc235
 	return out, nil
 }
 
@@ -383,6 +393,7 @@ func (dac *AP235) SetRange(channel int, rngS string) error {
 		return err
 	}
 	Crng := C.int(rng)
+	fmt.Println(Crng)
 	dac.cfg.opts._chan[C.int(channel)].Range = Crng
 	dac.sendCfgToBoard(channel)
 	return nil
@@ -619,7 +630,7 @@ func (dac *AP235) GetTimerPeriod() (uint32, error) {
 
 // sendCfgToBoard updates the configuration on the board
 func (dac *AP235) sendCfgToBoard(channel int) {
-	C.cnfg235(&dac.cfg, C.int(channel))
+	C.cnfg235(dac.cfg, C.int(channel))
 	return
 }
 
@@ -638,17 +649,25 @@ func (dac *AP235) Output(channel int, voltage float64) error {
 //
 // the error is always nil
 func (dac *AP235) OutputDN16(channel int, value uint16) error {
+	// going to round trip, since we want to use the DAC in calibrated mode
+	// convert value to a f64
+	rng, _ := dac.GetRange(channel)
+	min, max := RangeToMinMax(rng)
+	step := (max - min) / 65535
+	fV := []float64{min + step*float64(value)}
+
 	// set FIFO configuration for this channel to 1 sample
 	cCh := C.int(channel)
-	cfg := dac.cfg
-	cfg.SampleCount[cCh] = 1
-	ptr := &cfg.ideal_buf[cCh][0]
-	ptr2 := unsafe.Pointer(uintptr(unsafe.Pointer(ptr)) + 1)
-	cfg.current_ptr[cCh] = ptr
-	cfg.head_ptr[cCh] = ptr
-	cfg.tail_ptr[cCh] = (*C.short)(ptr2)
-	cfg.ideal_buf[cCh][0] = C.short(int16(value - 32768)) // TODO: commented out here; 0x8000 overflows int16 ^ 0x8000) // BTC to straight binary via ^
-	C.fifowro235(&dac.cfg, cCh)
+	dac.cfg.SampleCount[cCh] = 1
+	ptr := &dac.cfg.pcor_buf[cCh][0]
+	ptr2 := &dac.cfg.pcor_buf[cCh][1]
+	dac.cfg.current_ptr[cCh] = ptr
+	dac.cfg.head_ptr[cCh] = ptr
+	dac.cfg.tail_ptr[cCh] = ptr2
+	// dac.cfg.ideal_buf[cCh][0] = C.short(int16(value - 32768)) // OR with 0x8000 converts u16 to i16
+	C.cd235(dac.cfg, C.int(channel), (*C.double)(&fV[0]))
+	C.fifowro235(dac.cfg, cCh)
+	// fmt.Println(value, dac.cfg.ideal_buf[cCh][0])
 	return nil
 }
 
@@ -740,7 +759,7 @@ func (dac *AP235) OutputMultiDN16(channels []int, uint16s []uint16) error {
 
 // Flush writes any pending output values to the device
 func (dac *AP235) Flush() {
-	C.simtrig235(&dac.cfg)
+	C.simtrig235(dac.cfg)
 }
 
 // StartWaveform starts waveform playback on all waveform channels
@@ -752,14 +771,18 @@ func (dac *AP235) StartWaveform() error {
 	// first step is to prep DMA for each channel
 	// and start the interrupt servicing thread
 	// prepping DMA means
-
-	h := dac.cfg.nHandle
-	// CommonControl is a uint (32 bits), long is at least 32 bits.
-	// Need unsafe pointer due to lack of guarantee about same size
-	addr := (*C.long)(unsafe.Pointer(&dac.cfg.brd_ptr.CommonControl))
-	tmp := C.input_long(h, addr)
-	tmp |= 1
-	C.output_long(h, addr, tmp)
+	fmt.Println("operating mode = ", dac.cfg.opts._chan[0].OpMode)
+	fmt.Println("output update mode = ", dac.cfg.opts._chan[0].UpdateMode)
+	fmt.Println("range mode = ", dac.cfg.opts._chan[0].Range)
+	fmt.Println("power up voltage = ", dac.cfg.opts._chan[0].PowerUpVoltage)
+	fmt.Println("data reset = ", dac.cfg.opts._chan[0].DataReset)
+	fmt.Println("full reset = ", dac.cfg.opts._chan[0].FullReset)
+	fmt.Println("trigger source = ", dac.cfg.opts._chan[0].TriggerSource)
+	fmt.Println("timer divider = ", dac.cfg.TimerDivider)
+	fmt.Println("interrupt source = ", dac.cfg.opts._chan[0].InterruptSource)
+	C.rsts235(dac.cfg)
+	fmt.Printf("Ch0 status = %02X\n", dac.cfg.ChStatus[0])
+	C.start_waveform(dac.cfg)
 	dac.playingBack = true
 	go dac.serviceInterrupts()
 	return nil
@@ -771,20 +794,7 @@ func (dac *AP235) StopWaveform() error {
 	if !dac.playingBack {
 		return errors.New("AP235 is not playing back a waveform")
 	}
-	// stop playback
-	C.output_long(dac.cfg.nHandle,
-		(*C.long)(unsafe.Pointer(&dac.cfg.brd_ptr.CommonControl)),
-		C.long(0x10))
-
-	// disable interrupts
-	C.output_long(dac.cfg.nHandle,
-		(*C.long)(unsafe.Pointer(&dac.cfg.brd_ptr.AXI_ClearInterruptEnableRegister)),
-		C.long(0x1FFFF))
-	C.output_long(dac.cfg.nHandle,
-		(*C.long)(unsafe.Pointer(&dac.cfg.brd_ptr.AXI_MasterEnableRegister)),
-		C.long(C.MasterInterruptDisable))
-
-	C.APTerminateBlockedStart(dac.cfg.nHandle)
+	C.stop_waveform(dac.cfg)
 	return nil
 }
 
@@ -850,11 +860,16 @@ func (dac *AP235) PopulateWaveform(channel int, data []float64) error {
 	}
 	dac.cptr[channel] = cptr
 
+	// set the interrupt source for this channel (needed for DMA)
+	dac.cfg.opts._chan[channel].InterruptSource = 1
+
 	// now convert each value to a u16 and update the buffer
 	dac.calibrateData(channel, data, buf) // "moves" data->buf
 	dac.sampleCount[channel] = l
 	dac.cursor[channel] = 0
 	dac.buffer[channel] = buf
+	fmt.Println(dac.buffer[channel][:100])
+	C.set_DAC_sample_addresses(dac.cfg, C.int(channel))
 	dac.doDMATransfer(channel)
 	return nil
 }
@@ -868,11 +883,11 @@ func (dac *AP235) serviceInterrupts() {
 	// so this loop could happen as frequently as
 	// 9.9us * 2048 samples = 20 ms
 	// it's not all that hot after all.
+	fmt.Println("starting to service interrupts")
 	for {
-		Cstatus := C.APBlockingStartConvert(dac.cfg.nHandle,
-			(*C.long)(unsafe.Pointer(&dac.cfg.brd_ptr.AXI_MasterEnableRegister)),
-			C.long(C.MasterInterruptEnable), C.long(2))
+		Cstatus := C.fetch_status(dac.cfg)
 
+		fmt.Println("Cstatus =", Cstatus)
 		status := uint(Cstatus)
 
 		if status == 0 {
@@ -885,15 +900,8 @@ func (dac *AP235) serviceInterrupts() {
 				dac.doDMATransfer(i)
 			}
 		}
-		// ACK the interrupt
-		C.output_long(dac.cfg.nHandle,
-			(*C.long)(unsafe.Pointer(&dac.cfg.brd_ptr.AXI_InterruptAcknowledgeRegister)),
-			C.long(status&0xFFFF))
-
-		// re-enable interrupt
-		C.output_long(dac.cfg.nHandle,
-			(*C.long)(unsafe.Pointer(&dac.cfg.brd_ptr.AXI_SetInterruptEnableRegister)),
-			C.long(status&0xFFFF))
+		fmt.Println("refreshing interrupts")
+		C.refresh_interrupt(dac.cfg, Cstatus)
 	}
 }
 
@@ -917,7 +925,7 @@ func (dac *AP235) Reset(channel int) error {
 
 // Close the dac, freeing hardware.
 func (dac *AP235) Close() error {
-	C.Teardown_board_corrected_buffer(&dac.cfg)
+	C.Teardown_board_corrected_buffer(dac.cfg)
 	errC := C.APClose(dac.cfg.nHandle)
 	return enrich(errC, "APClose")
 }
@@ -932,13 +940,8 @@ func (dac *AP235) doDMATransfer(channel int) {
 	tail := head + tailOffset
 	p1 := (*C.short)(unsafe.Pointer(&dac.buffer[channel][head]))
 	p2 := (*C.short)(unsafe.Pointer(&dac.buffer[channel][tail]))
-	cCh := C.int(channel)
-	dac.cfg.SampleCount[cCh] = C.uint(tailOffset) // sample count
-	// no need for bytes to transfer, since that only applies in simple DMA mode
-	dac.cfg.head_ptr[cCh] = p1 // pointers
-	dac.cfg.current_ptr[cCh] = p1
-	dac.cfg.tail_ptr[cCh] = p2 // this triggers a DMA Xfer
-	C.fifodmawro235(&dac.cfg, cCh)
+	fmt.Printf("doing DMA transfer %d %d %p %p\n", channel, tailOffset, p1, p2)
+	C.do_DMA_transfer(dac.cfg, C.int(channel), C.uint(tailOffset), p1, p2)
 }
 
 // CMkarrayU16 allocates a []uint16 in C and returns a Go slice without copying
