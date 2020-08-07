@@ -319,8 +319,6 @@ func enrich(errC C.APSTATUS, procedure string) error {
 type AP235 struct {
 	cfg *C.struct_cblk235
 
-	idealCode [8][7]float64
-
 	// cursors hold the index into buffer
 	// that corresponds to the current sample offset of each channel
 	cursor [16]int
@@ -334,7 +332,7 @@ type AP235 struct {
 	// cptrs holds the pointers in C to be used to free the buffers later
 	cptr [16]*C.short
 
-	cScatterInfo *[4]C.ulong
+	cScatterInfo *C.ulong
 
 	playingBack bool
 }
@@ -364,6 +362,7 @@ func New(deviceIndex int) (*AP235, error) {
 	if err != nil {
 		return out, err
 	}
+
 	errC = C.APInitialize(o.cfg.nHandle)
 	err = enrich(errC, "APInitialize")
 	if err != nil {
@@ -381,11 +380,11 @@ func New(deviceIndex int) (*AP235, error) {
 	}
 
 	// assign the buffer pointer
-	ptr := &o.cScatterInfo[0]
-	errCode := C.Setup_board_corrected_buffer(o.cfg, &ptr)
-	if errCode != 0 {
+	ptr := C.Setup_board_corrected_buffer(o.cfg)
+	if ptr == nil {
 		return nil, errors.New("error reading calibration data from AP235")
 	}
+	o.cScatterInfo = ptr
 	// binitialize and bAP are set in Setup_board, ditto for rwcc235
 	return out, nil
 }
