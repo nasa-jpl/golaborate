@@ -25,6 +25,10 @@ func init() {
 	}
 }
 
+// TODO: scatter_list might fuck me.  FGPA is holding some data about host memory
+// and something about only 26 bits.
+/// need to copy data into pcor_buf..?????????????
+
 // OutputScale is the output scale of the DAC at power up or clear
 type OutputScale int
 
@@ -330,6 +334,8 @@ type AP235 struct {
 	// cptrs holds the pointers in C to be used to free the buffers later
 	cptr [16]*C.short
 
+	cScatterInfo *[4]C.ulong
+
 	playingBack bool
 }
 
@@ -350,8 +356,7 @@ func New(deviceIndex int) (*AP235, error) {
 	// see also: several ways to get the same address of the
 	// data: https://play.golang.org/p/fpkOIT9B3BB
 
-	cptr := (*[8][7]C.double)(unsafe.Pointer(&idealCode))
-	o.cfg.pIdealCode = cptr
+	o.cfg.pIdealCode = cMkCopyOfIdealData(idealCode)
 
 	// open the board, initialize it, get its address, and populate its config
 	errC := C.APOpen(C.int(deviceIndex), &o.cfg.nHandle, cs)
@@ -376,7 +381,8 @@ func New(deviceIndex int) (*AP235, error) {
 	}
 
 	// assign the buffer pointer
-	errCode := C.Setup_board_corrected_buffer(o.cfg)
+	ptr := &o.cScatterInfo[0]
+	errCode := C.Setup_board_corrected_buffer(o.cfg, &ptr)
 	if errCode != 0 {
 		return nil, errors.New("error reading calibration data from AP235")
 	}
@@ -957,4 +963,17 @@ func cMkarrayU16(size int) ([]uint16, *C.short, error) {
 	hdr.Len = size
 	hdr.Data = uintptr(unsafe.Pointer(cptr))
 	return slc, cptr, nil
+}
+
+// cMkCopyOfIdealData copies all values from idealCodes to a C owned
+// array.  C.free must be called on it at a later date.
+func cMkCopyOfIdealData(idealCodes [8][7]float64) *[8][7]C.double {
+	cPtr := C.malloc(C.sizeof_double * 8 * 7)
+	cArr := (*[8][7]C.double)(cPtr)
+	for i := 0; i < 8; i++ {
+		for j := 0; j < 7; j++ {
+			cArr[i][j] = C.double(idealCodes[i][j])
+		}
+	}
+	return cArr
 }

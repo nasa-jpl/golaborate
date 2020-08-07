@@ -27,7 +27,7 @@ void aligned_free(void *ptr)
 }
 
 // refactored/taken from acromag drvr235.c, L251-262
-int Setup_board_corrected_buffer(struct cblk235* cfg)
+int Setup_board_corrected_buffer(struct cblk235 *cfg, unsigned long **scattermap)
 {
 	unsigned long scatter_info[4]; /* scatter-gather input parameters, space for 4 parameters */
 	struct cblk235 cfg2;
@@ -57,6 +57,7 @@ int Setup_board_corrected_buffer(struct cblk235* cfg)
     {
 		rcc235(cfg); /* read the calibration coef. into an array */
 	}
+	*scattermap = &scatter_info[0];
 	return 0;
 }
 
