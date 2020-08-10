@@ -230,3 +230,36 @@ func GetOutputSimultaneous(d ExtendedDAC) http.HandlerFunc {
 		hp.EncodeAndRespond(w, r)
 	}
 }
+
+// WaveformDAC is a DAC which allows waveform playback
+type WaveformDAC interface {
+	ExtendedDAC
+
+	SetOperatingMode(int, string) error
+
+	GetOperatingMode(int) (string, error)
+
+	SetTriggerMode(int, string) error
+
+	GetTriggerMode(int) (string, error)
+
+	PopulateWaveform(int, []float64) error
+
+	StartWaveform() error
+
+	StopWaveform() error
+}
+
+// Timer describes a clock
+type Timer interface {
+	SetTimerPeriod(uint32) error
+
+	GetTimerPeriod() (uint32, error)
+}
+
+// TriggerExport describes a piece of hardware which imports or exports a trigger
+type TriggerExport interface {
+	SetTriggerDirection(bool) error
+
+	GetTriggerDirection() (bool, error)
+}
