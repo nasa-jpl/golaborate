@@ -319,8 +319,6 @@ func enrich(errC C.APSTATUS, procedure string) error {
 type AP235 struct {
 	cfg *C.struct_cblk235
 
-	idealCode [8][7]float64
-
 	// cursors hold the index into buffer
 	// that corresponds to the current sample offset of each channel
 	cursor [16]int
@@ -334,7 +332,7 @@ type AP235 struct {
 	// cptrs holds the pointers in C to be used to free the buffers later
 	cptr [16]*C.short
 
-	cScatterInfo *[4]C.ulong
+	cScatterInfo *C.ulong
 
 	playingBack bool
 }
@@ -349,13 +347,7 @@ func New(deviceIndex int) (*AP235, error) {
 	)
 	defer C.free(unsafe.Pointer(cs))
 
-	cfgPtr := (*C.struct_cblk235)(C.malloc(C.sizeof_struct_cblk235))
-	o.cfg = cfgPtr
-	// confirmed by Kate Blanketship on Gophers slack that this
-	// is a valid way to generate the pointer that C wants
-	// see also: several ways to get the same address of the
-	// data: https://play.golang.org/p/fpkOIT9B3BB
-
+	o.cfg = (*C.struct_cblk235)(C.malloc(C.sizeof_struct_cblk235))
 	o.cfg.pIdealCode = cMkCopyOfIdealData(idealCode)
 
 	// open the board, initialize it, get its address, and populate its config
@@ -381,10 +373,9 @@ func New(deviceIndex int) (*AP235, error) {
 	}
 
 	// assign the buffer pointer
-	ptr := &o.cScatterInfo[0]
-	errCode := C.Setup_board_corrected_buffer(o.cfg, &ptr)
+	errCode := C.Setup_board_corrected_buffer(o.cfg, &o.cScatterInfo)
 	if errCode != 0 {
-		return nil, errors.New("error reading calibration data from AP235")
+		return out, errors.New("error reading calibration data from AP235")
 	}
 	// binitialize and bAP are set in Setup_board, ditto for rwcc235
 	return out, nil
@@ -399,7 +390,6 @@ func (dac *AP235) SetRange(channel int, rngS string) error {
 		return err
 	}
 	Crng := C.int(rng)
-	fmt.Println(Crng)
 	dac.cfg.opts._chan[C.int(channel)].Range = Crng
 	dac.sendCfgToBoard(channel)
 	return nil
@@ -621,7 +611,7 @@ func (dac *AP235) GetOutputSimultaneous(channel int) (bool, error) {
 func (dac *AP235) SetTimerPeriod(nanoseconds uint32) error {
 	tdiv := nanoseconds / 32
 	dac.cfg.TimerDivider = C.uint32_t(tdiv)
-	if tdiv < 310 {
+	if tdiv < 310 { // minimum recommended value from Acromag, based on DAC settling time
 		return ErrTimerTooFast
 	}
 	return nil
@@ -822,7 +812,7 @@ func (dac *AP235) calibrateData(channel int, volts []float64, buffer []uint16) {
 
 	for i := 0; i < len(volts); i++ {
 		in := volts[i]
-		out := gain*in + offset // could optimize this by premuling gain and slope
+		out := gain*in + offset
 		if out > max {
 			out = max
 		} else if out < min {
@@ -931,7 +921,7 @@ func (dac *AP235) Reset(channel int) error {
 
 // Close the dac, freeing hardware.
 func (dac *AP235) Close() error {
-	C.Teardown_board_corrected_buffer(dac.cfg)
+	C.Teardown_board_corrected_buffer(dac.cfg, dac.cScatterInfo)
 	errC := C.APClose(dac.cfg.nHandle)
 	return enrich(errC, "APClose")
 }

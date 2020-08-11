@@ -129,3 +129,20 @@ DMA transfers.
 27. Write 0xFFFF to the Interrupt Enable Register to re-enable the DAC
 	interrupts.
 */
+
+/*
+
+streaming call sequence, in Go:
+1. ap235.PopulateWaveform(ch, data)
+2. ap235.SetTriggerSource("timer"|"external")
+	make sure import/export of timer clock is set properly,
+	and that timer period is as desired
+3. ap235.StartPlayback()
+	this launches a worker goroutine which manages the DMA transfers
+4. ... time passes
+5. ap235.StopPlayback()
+
+need to at some time add options to control looping around end of data
+or stopping playback
+
+*/
