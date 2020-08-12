@@ -99,14 +99,14 @@ const (
 
 	// OperatingWaveform is an operating mode corresponding to waveform output.
 	// it is incompatible with the software triggering mode.
-	OperatingWaveform OperatingMode = 4 // from ap235.h
+	OperatingWaveform OperatingMode = 2 // from ap235.h
 
 	// MAXSAMPLES is the maximum number of samples in the buffer of a single
 	// channel.  It is repeated from AP235.h to avoid an unnecessary CFFI call
 	MAXSAMPLES = 4096
 
-	// DMAXferSize is the (max) number of samples to send in one DMA transfer
-	DMAXferSize = MAXSAMPLES / 2
+	// MaxXferSize is the (max) number of samples to send in one DMA transfer
+	MaxXferSize = MAXSAMPLES / 2
 )
 
 var (
@@ -329,6 +329,7 @@ type AP235 struct {
 
 	// buffers are the sample queues for each channel, owned by C
 	buffer [16][]uint16
+
 	// cptrs holds the pointers in C to be used to free the buffers later
 	cptr [16]*C.short
 
@@ -614,6 +615,9 @@ func (dac *AP235) SetTimerPeriod(nanoseconds uint32) error {
 	if tdiv < 310 { // minimum recommended value from Acromag, based on DAC settling time
 		return ErrTimerTooFast
 	}
+	if tdiv < 620 {
+		return errors.New("timer too fast for transfer to DAC to keep up if all channels used; still accepted")
+	}
 	return nil
 }
 
@@ -856,7 +860,7 @@ func (dac *AP235) PopulateWaveform(channel int, data []float64) error {
 	}
 	dac.cptr[channel] = cptr
 
-	// set the interrupt source for this channel (needed for DMA)
+	// set the interrupt source for this channel (needed for transfer interrupt)
 	dac.cfg.opts._chan[channel].InterruptSource = 1
 
 	// now convert each value to a u16 and update the buffer
@@ -864,9 +868,7 @@ func (dac *AP235) PopulateWaveform(channel int, data []float64) error {
 	dac.sampleCount[channel] = l
 	dac.cursor[channel] = 0
 	dac.buffer[channel] = buf
-	fmt.Println(dac.buffer[channel][:100])
 	C.set_DAC_sample_addresses(dac.cfg, C.int(channel))
-	dac.doDMATransfer(channel)
 	return nil
 }
 
@@ -879,6 +881,17 @@ func (dac *AP235) serviceInterrupts() {
 	// so this loop could happen as frequently as
 	// 9.9us * 2048 samples = 20 ms
 	// it's not all that hot after all.
+	//
+	// the above was for DMA, and is true
+	// however, now we are considering the non-DMA case
+	// where it is 1us/sample transfer time
+	// so the interrupt could come and we need
+	// 2048*16 = 32768 samples = 32768 or more us
+	// per interrupt, given a period of only about 20 ms.
+	// this is not viable.
+	// suggest to add an error to the timer period
+	// function for periods < 2x the recommended limit
+	// which is ~50kHz
 	fmt.Println("starting to service interrupts")
 	for {
 		Cstatus := C.fetch_status(dac.cfg)
@@ -893,7 +906,7 @@ func (dac *AP235) serviceInterrupts() {
 		for i := 0; i < 16; i++ { // i = channel index
 			var mask uint = 1 << i
 			if (mask & status) != 0 {
-				dac.doDMATransfer(i)
+				dac.doTransfer(i)
 			}
 		}
 		fmt.Println("refreshing interrupts")
@@ -926,18 +939,24 @@ func (dac *AP235) Close() error {
 	return enrich(errC, "APClose")
 }
 
-func (dac *AP235) doDMATransfer(channel int) {
+func (dac *AP235) doTransfer(channel int) {
 	// TODO: check this thoroughly for off-by-one errors
 	head := dac.cursor[channel]
 	tailOffset := dac.sampleCount[channel] - dac.cursor[channel]
-	if tailOffset > DMAXferSize {
-		tailOffset = DMAXferSize
+	if tailOffset > MaxXferSize {
+		tailOffset = MaxXferSize
 	}
 	tail := head + tailOffset
 	p1 := (*C.short)(unsafe.Pointer(&dac.buffer[channel][head]))
 	p2 := (*C.short)(unsafe.Pointer(&dac.buffer[channel][tail]))
-	fmt.Printf("doing DMA transfer %d %d %p %p\n", channel, tailOffset, p1, p2)
-	C.do_DMA_transfer(dac.cfg, C.int(channel), C.uint(tailOffset), p1, p2)
+	dac.cfg.SampleCount[channel] = C.uint(tailOffset)
+	// no need for bytes to transfer, since that only applies in simple DMA mode
+	dac.cfg.head_ptr[channel] = p1
+	dac.cfg.current_ptr[channel] = p1
+	dac.cfg.tail_ptr[channel] = p2
+	fmt.Printf("doing transfer %d %d %p %p\n", channel, tailOffset, p1, p2)
+	C.fifowro235(dac.cfg, C.int(channel))
+	dac.cursor[channel] += tailOffset // todo: wrap around
 }
 
 // CMkarrayU16 allocates a []uint16 in C and returns a Go slice without copying

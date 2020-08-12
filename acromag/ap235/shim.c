@@ -118,16 +118,6 @@ void refresh_interrupt(struct cblk235 *cfg, unsigned long status)
 	output_long(cfg->nHandle, (long *)(&cfg->brd_ptr->AXI_SetInterruptEnableRegister), (long)(status&0xFFFF));
 }
 
-void do_DMA_transfer(struct cblk235 *cfg, int channel, uint samples, short *p1, short *p2)
-{
-	cfg->SampleCount[channel] = samples;
-	// no need for bytes to transfer, since that only applies in simple DMA mode
-	cfg->head_ptr[channel] = p1;
-	cfg->current_ptr[channel] = p1;
-	cfg->tail_ptr[channel] = p2;
-	fifodmawro235(cfg, channel);
-}
-
 void set_DAC_sample_addresses(struct cblk235 *cfg, int channel)
 {
 	output_long(cfg->nHandle, (long *)&cfg->brd_ptr->DAC[channel].StartAddr, (long)channel * MAXSAMPLES);
