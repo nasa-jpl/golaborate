@@ -18,7 +18,7 @@ type DAC interface {
 	Output(int, float64) error
 
 	// OutputDN sends a data number on a given channel
-	OutputDN(int, uint16) error
+	OutputDN16(int, uint16) error
 }
 
 type channelVoltage struct {
@@ -77,8 +77,8 @@ type MultiChannelDAC interface {
 	// OutputMulti writes a sequence of voltages to a sequence of channels
 	OutputMulti([]int, []float64) error
 
-	// OutputMultiDN outputs a sequence of data numbers to a sequence of channels
-	OutputMultiDN([]int, []uint16) error
+	// OutputMultiDN16 outputs a sequence of data numbers to a sequence of channels
+	OutputMultiDN16([]int, []uint16) error
 }
 
 type channelsVoltages struct {
