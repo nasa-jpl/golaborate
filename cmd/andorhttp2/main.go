@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.jpl.nasa.gov/bdube/golab/andor/sdk2"
+	"github.jpl.nasa.gov/bdube/golab/generichttp"
 	"github.jpl.nasa.gov/bdube/golab/generichttp/camera"
 	"github.jpl.nasa.gov/bdube/golab/imgrec"
 
@@ -19,7 +20,6 @@ import (
 	"github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/structs"
-	"github.jpl.nasa.gov/bdube/golab/server"
 
 	yml "gopkg.in/yaml.v2"
 )
@@ -191,7 +191,7 @@ func run() {
 
 	// clean up the submux string
 	hndlrS := cfg.Root
-	hndlrS = server.SubMuxSanitize(hndlrS)
+	hndlrS = generichttp.SubMuxSanitize(hndlrS)
 	root := goji.NewMux()
 	mux := goji.SubMux()
 	root.Handle(pat.New(hndlrS), mux)

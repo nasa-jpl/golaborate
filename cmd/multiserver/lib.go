@@ -25,10 +25,6 @@ import (
 	"github.jpl.nasa.gov/bdube/golab/newport"
 
 	"github.jpl.nasa.gov/bdube/golab/ixllightwave"
-	"github.jpl.nasa.gov/bdube/golab/lesker"
-
-	"github.jpl.nasa.gov/bdube/golab/commonpressure"
-	"github.jpl.nasa.gov/bdube/golab/granvillephillips"
 
 	"github.jpl.nasa.gov/bdube/golab/fluke"
 
@@ -176,25 +172,18 @@ func BuildMux(c Config) *goji.Mux {
 		case "keysight-scope":
 			scope := keysight.NewScope(node.Addr)
 			httper = tmc.NewHTTPOscilloscope(scope)
+
 		case "agilent-function-generator":
 			gen := agilent.NewFunctionGenerator(node.Addr, node.Serial)
 			httper = tmc.NewHTTPFunctionGenerator(gen)
+
 		case "keysight-daq":
 			daq := keysight.NewDAQ(node.Addr)
 			httper = tmc.NewHTTPDAQ(daq)
-		case "convectron", "gpconvectron":
-			cv := granvillephillips.NewSensor(node.Addr, node.Serial)
-			httper = commonpressure.NewHTTPWrapper(*cv)
 
 		case "lightwave", "ldc3916", "ixl":
 			ldc := ixllightwave.NewLDC3916(node.Addr)
 			httper = ixllightwave.NewHTTPWrapper(*ldc)
-
-		// reserved for lakeshore
-
-		case "lesker", "kjc":
-			kjc := lesker.NewSensor(node.Addr, node.Serial)
-			httper = commonpressure.NewHTTPWrapper(*kjc)
 
 		case "nkt", "superk":
 			sk := nkt.NewSuperK(node.Addr, node.Serial)
