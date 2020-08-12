@@ -43,6 +43,11 @@ type IntT struct {
 	Int int `json:"int"`
 }
 
+// Uint32T is a struct with a single int field.  It almost looks like IntT
+type Uint32T struct {
+	Uint uint32 `json:"uint"`
+}
+
 // BufferT is a struct with a single Int field
 type BufferT struct {
 	Int []byte `json:"int"`

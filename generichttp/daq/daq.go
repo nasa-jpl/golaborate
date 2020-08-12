@@ -51,8 +51,8 @@ func Output(d DAC) http.HandlerFunc {
 	}
 }
 
-// OutputDN returns an HTTP handlerfunc that will write a data number to a channel
-func OutputDN(d DAC) http.HandlerFunc {
+// OutputDN16 returns an HTTP handlerfunc that will write a data number to a channel
+func OutputDN16(d DAC) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var input channelDN
 		err := json.NewDecoder(r.Body).Decode(&input)
@@ -60,7 +60,7 @@ func OutputDN(d DAC) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		err = d.OutputDN(input.Channel, input.DN)
+		err = d.OutputDN16(input.Channel, input.DN)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -111,8 +111,8 @@ func OutputMulti(d MultiChannelDAC) http.HandlerFunc {
 	}
 }
 
-// OutputMultiDN returns an HTTP handlerfunc that will write a data number to a channel
-func OutputMultiDN(d MultiChannelDAC) http.HandlerFunc {
+// OutputMultiDN16 returns an HTTP handlerfunc that will write a data number to a channel
+func OutputMultiDN16(d MultiChannelDAC) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var input channelsDNs
 		err := json.NewDecoder(r.Body).Decode(&input)
@@ -120,7 +120,7 @@ func OutputMultiDN(d MultiChannelDAC) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		err = d.OutputMultiDN(input.Channels, input.DNs)
+		err = d.OutputMultiDN16(input.Channels, input.DNs)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -257,9 +257,80 @@ type Timer interface {
 	GetTimerPeriod() (uint32, error)
 }
 
+// SetTimerPeriod invokes the function of the same name on a timer
+func SetTimerPeriod(t Timer) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		u := generichttp.Uint32T{}
+		err := json.NewDecoder(r.Body).Decode(&u)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		err = t.SetTimerPeriod(u.Uint)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+// GetTimerPeriod invokes the function of the same name on a timer
+func GetTimerPeriod(t Timer) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ns, err := t.GetTimerPeriod()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		s := struct {
+			Uint uint32 `json:"uint"`
+		}{ns}
+		w.Header().Set("Content-Type", "application/json")
+
+		err = json.NewEncoder(w).Encode(s)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
 // TriggerExport describes a piece of hardware which imports or exports a trigger
 type TriggerExport interface {
 	SetTriggerDirection(bool) error
 
 	GetTriggerDirection() (bool, error)
+}
+
+// SetTriggerDirection causes the device to export a trigger if True, else import
+func SetTriggerDirection(t TriggerExport) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		b := generichttp.BoolT{}
+		err := json.NewDecoder(r.Body).Decode(&b)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		err = t.SetTriggerDirection(b.Bool)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+// GetTriggerDirection invokes the function of the same name on a Trigger
+func GetTriggerDirection(t TriggerExport) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		export, err := t.GetTriggerDirection()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		hp := generichttp.HumanPayload{T: types.Bool, Bool: export}
+		hp.EncodeAndRespond(w, r)
+	}
 }
