@@ -3,6 +3,7 @@
 #include "../apcommon/apcommon.h"
 #include "AP235.h"
 #include <sys/mman.h>
+#include <stdio.h>
 
 APSTATUS GetAPAddress2(int nHandle, struct mapap235** pAddress)
 {
@@ -79,13 +80,18 @@ short* MkDataArray(int size)
 	return array;
 }
 
+void enable_interrupts(struct cblk235 *cfg)
+{
+	output_long(cfg->nHandle, (long*)&cfg->brd_ptr->AXI_MasterEnableRegister, MasterInterruptEnable);
+}
+
 void start_waveform(struct cblk235 *cfg)
 {
-	output_long(cfg->nHandle, (long *)&cfg->brd_ptr->AXI_MasterEnableRegister, (long)(MasterInterruptEnable));
 	long temp = input_long(cfg->nHandle, (long *)&cfg->brd_ptr->CommonControl);
-	temp |= 1;
+	printf("CC before %d\n", temp);
+	temp |= 1;	/* Start All Waveforms */
+    printf("CC after %d\n", temp);
 	output_long(cfg->nHandle, (long *)&cfg->brd_ptr->CommonControl, (long)temp);
-
 }
 
 void stop_waveform(struct cblk235 *cfg)
@@ -103,6 +109,7 @@ void stop_waveform(struct cblk235 *cfg)
 
 unsigned long fetch_status(struct cblk235 *cfg)
 {
+
 	return APBlockingStartConvert(cfg->nHandle, (long *)(&cfg->brd_ptr->AXI_MasterEnableRegister), (long)(MasterInterruptEnable), (long)(2));
 }
 
@@ -118,5 +125,5 @@ void refresh_interrupt(struct cblk235 *cfg, unsigned long status)
 void set_DAC_sample_addresses(struct cblk235 *cfg, int channel)
 {
 	output_long(cfg->nHandle, (long *)&cfg->brd_ptr->DAC[channel].StartAddr, (long)channel * MAXSAMPLES);
-	output_long(cfg->nHandle, (long *)&cfg->brd_ptr->DAC[channel].EndAddr, (long)channel * MAXSAMPLES + (cfg->SampleCount[channel] - 1));
+	output_long(cfg->nHandle, (long *)&cfg->brd_ptr->DAC[channel].EndAddr, (long)channel * MAXSAMPLES + 4095);
 }

@@ -71,7 +71,7 @@ uint32_t wdata, cnt;
     Write the output data to the output channel on the board.
 */
 
-   if( c_blk->opts.chan[channel].OpMode == DAC_FIFO )	/* DAC_FIFO conversion mode ? */ 
+   if( c_blk->opts.chan[channel].OpMode == DAC_FIFO )	/* DAC_FIFO conversion mode ? */
    {
      /* write half the number of samples from the buffer into the channel FIFO */
      /* pack two 16 bit samples into a 32 bit value to increase data throughput when writing to the DAC */
@@ -168,7 +168,7 @@ void fifodmawro235(struct cblk235 *c_blk, int channel)
 /*
     Declare local data areas
 */
-  
+
     int i;
     uint32_t lValue;
     struct mapap235* pAPCard;/* board pointer */
@@ -184,11 +184,11 @@ void fifodmawro235(struct cblk235 *c_blk, int channel)
     /*            Internal Address 0xA000              */
     /*   --------------------------------------------  */
     /*  |                8 KByte RAM                 | */
-    /*  |                                            | */ 
-    /*  |    Room for 128, 64 byte Scatter-gather    | */  
-    /*  |                Descriptors                 | */ 
+    /*  |                                            | */
+    /*  |    Room for 128, 64 byte Scatter-gather    | */
+    /*  |                Descriptors                 | */
     /*   --------------------------------------------  */
-    /* On board Scatter-gather list for DMA from system memory to board channel FIFO registers */		
+    /* On board Scatter-gather list for DMA from system memory to board channel FIFO registers */
 
     output_long( c_blk->nHandle, (long*)&c_blk->brd_ptr->CDMAControlRegister, DMAReset );	/* Reset device */
 

@@ -1,14 +1,17 @@
 package main
 
 import (
+	"bufio"
 	"log"
+	"math"
+	"os"
 	"time"
 
 	"github.jpl.nasa.gov/bdube/golab/acromag/ap235"
 )
 
 func main() {
-	// reader := bufio.NewReader(os.Stdin)
+	reader := bufio.NewReader(os.Stdin)
 	log.Println("connecting to AP235 #0")
 	dac, err := ap235.New(0)
 	if err != nil {
@@ -24,7 +27,8 @@ func main() {
 	// if err != nil {
 	// 	log.Fatal(err)
 	// }
-	channel := 1
+	channel := 0
+	dac.Reset(channel)
 	log.Println("setting range to +/- 10V")
 	dac.SetRange(channel, "-10,10")
 	log.Println("setting overrange false")
@@ -44,10 +48,10 @@ func main() {
 	// }
 	log.Println("-10V")
 	dac.OutputDN16(channel, 0)
-	time.Sleep(1 * time.Second)
+	time.Sleep(1 * time.Millisecond)
 	log.Println("0V")
 	dac.OutputDN16(channel, 32767)
-	time.Sleep(1 * time.Second)
+	time.Sleep(1 * time.Millisecond)
 	log.Println("+10V")
 	dac.OutputDN16(channel, 65535)
 	// log.Println("advancing to basic range testing.")
@@ -113,24 +117,24 @@ func main() {
 	///
 	///
 
-	// log.Println("advancing to waveform test")
-	// floats := make([]float64, 100000)
-	// for i := 0; i < len(floats); i++ {
-	// 	floats[i] = math.Sin(float64(i)/math.Pi/5) * 10 // +/- 10V
-	// }
-	// fmt.Println(floats[:100])
-	// dac.SetTriggerMode(channel, "timer")
-	// dac.SetTimerPeriod(160000) // 160us/sample
-	// dac.SetTriggerDirection(true)
-	// dac.SetOperatingMode(channel, "waveform")
-	// err = dac.PopulateWaveform(channel, floats)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	// log.Println("length=100,000 samples, period=100 samples")
-	// log.Println("press enter to start playback for 10 seconds")
-	// reader.ReadString('\n')
-	// dac.StartWaveform()
-	// time.Sleep(10 * time.Second)
-	// log.Println("test complete")
+	log.Println("advancing to waveform test")
+	floats := make([]float64, 100000)
+	for i := 0; i < len(floats); i++ {
+		floats[i] = math.Sin(float64(i)/math.Pi/5) * 9 // +/- 10V
+	}
+	dac.SetTriggerMode(channel, "timer")
+	dac.SetTimerPeriod(160000) // 160us/sample
+	dac.SetTriggerDirection(false)
+	dac.SetClearOnUnderflow(channel, true)
+	err = dac.PopulateWaveform(channel, floats)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("length=100,000 samples, period=100 samples")
+	log.Println("press enter to start playback for 10 seconds")
+	reader.ReadString('\n')
+	dac.StartWaveform()
+	time.Sleep(10 * time.Second)
+	dac.StopWaveform()
+	log.Println("test complete")
 }

@@ -11,9 +11,11 @@ import "C"
 import (
 	"errors"
 	"fmt"
+	"log"
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"unsafe"
 )
 
@@ -315,8 +317,33 @@ func enrich(errC C.APSTATUS, procedure string) error {
 	return fmt.Errorf("%b: %s encountered at call to %s", i, v, procedure)
 }
 
+// ChannelStatus contains the status of a given DAC channel
+type ChannelStatus struct {
+	// Channel is the associated channel
+	Channel int
+
+	// FIFOEmpty - if true, the FIFO queue is empty
+	FIFOEmpty bool
+
+	// FIFOHalfFull - if true, the FIFO queue is half full
+	FIFOHalfFull bool
+	// FIFOFull - if true, the FIFO queue is full
+	FIFOFull bool
+
+	// FIFOUnderflow - if true, the FIFO queue was emptied while draining
+	FIFOUnderflow bool
+
+	// BurstSingleComplete - if true, the FIFO queue was emptied while draining for a single burst playback
+	BurstSingleComplete bool
+
+	// Busy - if true, the channel's DAC is busy
+	Busy bool
+}
+
 // AP235 is an acromag 16-bit DAC of the same type
 type AP235 struct {
+	sync.Mutex
+
 	cfg *C.struct_cblk235
 
 	// cursors hold the index into buffer
@@ -375,12 +402,13 @@ func New(deviceIndex int) (*AP235, error) {
 	}
 
 	// assign the buffer pointer
-	errCode := C.Setup_board_corrected_buffer(o.cfg, &o.cScatterInfo)
-	if errCode != 0 {
+	ptr := C.Setup_board_corrected_buffer(o.cfg)
+	if ptr == nil {
 		return out, errors.New("error reading calibration data from AP235")
 	}
 	o.cScatterInfo = ptr
 	// binitialize and bAP are set in Setup_board, ditto for rwcc235
+	// go out.serviceInterrupts()
 	return out, nil
 }
 
@@ -540,6 +568,7 @@ func (dac *AP235) GetTriggerDirection() (bool, error) {
 // err should be checked on the later of the two calls to
 // SetOperatingMode and SetTriggerMode
 func (dac *AP235) SetOperatingMode(channel int, mode string) error {
+	log.Println("set operating mode")
 	o, err := ValidateOperatingMode(mode)
 	if err != nil {
 		return err
@@ -770,23 +799,23 @@ func (dac *AP235) StartWaveform() error {
 	if dac.playingBack {
 		return errors.New("AP235 is already playing back a waveform")
 	}
+	go dac.serviceInterrupts()
 	// first step is to prep DMA for each channel
 	// and start the interrupt servicing thread
 	// prepping DMA means
-	fmt.Println("operating mode = ", dac.cfg.opts._chan[0].OpMode)
-	fmt.Println("output update mode = ", dac.cfg.opts._chan[0].UpdateMode)
-	fmt.Println("range mode = ", dac.cfg.opts._chan[0].Range)
-	fmt.Println("power up voltage = ", dac.cfg.opts._chan[0].PowerUpVoltage)
-	fmt.Println("data reset = ", dac.cfg.opts._chan[0].DataReset)
-	fmt.Println("full reset = ", dac.cfg.opts._chan[0].FullReset)
-	fmt.Println("trigger source = ", dac.cfg.opts._chan[0].TriggerSource)
-	fmt.Println("timer divider = ", dac.cfg.TimerDivider)
-	fmt.Println("interrupt source = ", dac.cfg.opts._chan[0].InterruptSource)
-	C.rsts235(dac.cfg)
-	fmt.Printf("Ch0 status = %02X\n", dac.cfg.ChStatus[0])
-	C.start_waveform(dac.cfg)
+	// fmt.Println("operating mode = ", dac.cfg.opts._chan[0].OpMode)
+	// fmt.Println("output update mode = ", dac.cfg.opts._chan[0].UpdateMode)
+	// fmt.Println("range mode = ", dac.cfg.opts._chan[0].Range)
+	// fmt.Println("power up voltage = ", dac.cfg.opts._chan[0].PowerUpVoltage)
+	// fmt.Println("data reset = ", dac.cfg.opts._chan[0].DataReset)
+	// fmt.Println("full reset = ", dac.cfg.opts._chan[0].FullReset)
+	// fmt.Println("trigger source = ", dac.cfg.opts._chan[0].TriggerSource)
+	// fmt.Println("timer divider = ", dac.cfg.TimerDivider)
+	// fmt.Println("interrupt source = ", dac.cfg.opts._chan[0].InterruptSource)
+	// fmt.Printf("%+v\n", dac.cfg.opts._chan[0])
 	dac.playingBack = true
-	go dac.serviceInterrupts()
+
+	C.start_waveform(dac.cfg)
 	return nil
 }
 
@@ -843,6 +872,10 @@ func (dac *AP235) PopulateWaveform(channel int, data []float64) error {
 	// since we only want to start the one thread, not one per channel.
 
 	// create a buffer long enough to hold the waveform in uint16s
+	log.Println("populate waveform")
+	log.Println("populate waveform locking")
+	dac.Lock()
+	defer dac.Unlock()
 	if dac.playingBack {
 		return errors.New("AP235 cannot change waveform table during playback")
 	}
@@ -864,6 +897,7 @@ func (dac *AP235) PopulateWaveform(channel int, data []float64) error {
 
 	// set the interrupt source for this channel (needed for transfer interrupt)
 	dac.cfg.opts._chan[channel].InterruptSource = 1
+	dac.sendCfgToBoard(channel) // need to make sure this value propagates to the FPGA
 
 	// now convert each value to a u16 and update the buffer
 	dac.calibrateData(channel, data, buf) // "moves" data->buf
@@ -871,6 +905,7 @@ func (dac *AP235) PopulateWaveform(channel int, data []float64) error {
 	dac.cursor[channel] = 0
 	dac.buffer[channel] = buf
 	C.set_DAC_sample_addresses(dac.cfg, C.int(channel))
+	dac.doTransfer(channel)
 	return nil
 }
 
@@ -894,11 +929,11 @@ func (dac *AP235) serviceInterrupts() {
 	// suggest to add an error to the timer period
 	// function for periods < 2x the recommended limit
 	// which is ~50kHz
-	fmt.Println("starting to service interrupts")
+	C.enable_interrupts(dac.cfg)
 	for {
 		Cstatus := C.fetch_status(dac.cfg)
 
-		fmt.Println("Cstatus =", Cstatus)
+		log.Println("Cstatus =", Cstatus)
 		status := uint(Cstatus)
 
 		if status == 0 {
@@ -908,10 +943,14 @@ func (dac *AP235) serviceInterrupts() {
 		for i := 0; i < 16; i++ { // i = channel index
 			var mask uint = 1 << i
 			if (mask & status) != 0 {
+				log.Println("servicing interrupt for channel", i)
+				log.Println("service int locking")
+				dac.Lock()
 				dac.doTransfer(i)
+				dac.Unlock()
 			}
 		}
-		fmt.Println("refreshing interrupts")
+		log.Println("refreshing interrupts")
 		C.refresh_interrupt(dac.cfg, Cstatus)
 	}
 }
@@ -941,6 +980,20 @@ func (dac *AP235) Close() error {
 	return enrich(errC, "APClose")
 }
 
+// Status retrieves the status of a given channel of the DAC
+func (dac *AP235) Status(channel int) ChannelStatus {
+	C.rsts235(dac.cfg)
+	out := ChannelStatus{Channel: channel}
+	stat := dac.cfg.ChStatus[channel]
+	out.FIFOEmpty = (stat>>0)&1 == 1
+	out.FIFOHalfFull = (stat>>1)&1 == 1
+	out.FIFOFull = (stat>>2)&1 == 1
+	out.FIFOUnderflow = (stat>>3)&1 == 1
+	out.BurstSingleComplete = (stat>>4)&1 == 1
+	out.Busy = (stat>>5)&1 == 1
+	return out
+}
+
 func (dac *AP235) doTransfer(channel int) {
 	// TODO: check this thoroughly for off-by-one errors
 	head := dac.cursor[channel]
@@ -949,6 +1002,7 @@ func (dac *AP235) doTransfer(channel int) {
 		tailOffset = MaxXferSize
 	}
 	tail := head + tailOffset
+	log.Println("do transfer: buf len = ", len(dac.buffer[channel]))
 	p1 := (*C.short)(unsafe.Pointer(&dac.buffer[channel][head]))
 	p2 := (*C.short)(unsafe.Pointer(&dac.buffer[channel][tail]))
 	dac.cfg.SampleCount[channel] = C.uint(tailOffset)
@@ -956,7 +1010,7 @@ func (dac *AP235) doTransfer(channel int) {
 	dac.cfg.head_ptr[channel] = p1
 	dac.cfg.current_ptr[channel] = p1
 	dac.cfg.tail_ptr[channel] = p2
-	fmt.Printf("doing transfer %d %d %p %p\n", channel, tailOffset, p1, p2)
+	fmt.Printf("doing transfer %d %d %p %d %p %d\n", channel, tailOffset, p1, dac.buffer[channel][head], p2, dac.buffer[channel][tail])
 	C.fifowro235(dac.cfg, C.int(channel))
 	dac.cursor[channel] += tailOffset // todo: wrap around
 }

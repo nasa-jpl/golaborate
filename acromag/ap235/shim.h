@@ -14,6 +14,8 @@ void* aligned_malloc(int size, int align);
 
 void aligned_free(void *ptr);
 
+void enable_interrupts(struct cblk235 *cfg);
+
 void start_waveform(struct cblk235 *cfg);
 
 void stop_waveform(struct cblk235 *cfg);
