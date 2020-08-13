@@ -27,11 +27,11 @@ void aligned_free(void *ptr)
 }
 
 // refactored/taken from acromag drvr235.c, L251-262
-int Setup_board_corrected_buffer(struct cblk235 *cfg, unsigned long **scattermap)
+unsigned long *Setup_board_corrected_buffer(struct cblk235 *cfg)
 {
-	unsigned long scatter_info[4]; /* scatter-gather input parameters, space for 4 parameters */
-	struct cblk235 cfg2;
-	cfg2 = *cfg;
+	unsigned long *scatter_info = malloc(4*sizeof(unsigned long));
+	// unsigned long *scatter_info; /* scatter-gather input parameters, space for 4 parameters */
+	// scatter_info = ptr;
 	cfg->pcor_buf = aligned_malloc(sizeof(short[16][MAXSAMPLES]), ALIGNMENT); /* allocate DMA buffer */
 	mlock(cfg->pcor_buf, sizeof(short[16][MAXSAMPLES]));						/* lock pages in memory */
 
@@ -51,26 +51,23 @@ int Setup_board_corrected_buffer(struct cblk235 *cfg, unsigned long **scattermap
     ReadFlashID235(cfg, &cfg->IDbuf[0]);
 
     if( (strstr( (const char *)&cfg->IDbuf[0], (const char *)FlashIDString ) == NULL) )	{/* AP2X5 ID */
-		  return -1;
+		  return NULL;
 	}
     else
     {
 		rcc235(cfg); /* read the calibration coef. into an array */
 	}
-	*scattermap = &scatter_info[0];
-	return 0;
+	return scatter_info;
 }
 
 void Teardown_board_corrected_buffer(struct cblk235 *cfg)
 {
 	unsigned long scatter_info[4];
-	struct cblk235 cfg2;
-	cfg2 = *cfg;
-	scatter_info[0] = (unsigned long)cfg2.pAP->nDevInstance; /* get board instance */
-	ioctl(cfg2.pAP->nAPDeviceHandle, 9, &scatter_info[0]);   /* unmap user pages and scatter-gather list */
+	scatter_info[0] = (unsigned long)cfg->pAP->nDevInstance; /* get board instance */
+	ioctl(cfg->pAP->nAPDeviceHandle, 9, &scatter_info[0]);   /* unmap user pages and scatter-gather list */
 
-	munlock(cfg2.pcor_buf, sizeof(short[16][MAXSAMPLES])); /* unlock pages in memory */
-	aligned_free((void *)cfg2.pcor_buf);					 /* free allocated DMA buffer on exit */
+	munlock(cfg->pcor_buf, sizeof(short[16][MAXSAMPLES])); /* unlock pages in memory */
+	aligned_free((void *)cfg->pcor_buf);					 /* free allocated DMA buffer on exit */
 }
 
 short* MkDataArray(int size)

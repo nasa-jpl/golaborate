@@ -357,6 +357,7 @@ func New(deviceIndex int) (*AP235, error) {
 	if err != nil {
 		return out, err
 	}
+
 	errC = C.APInitialize(o.cfg.nHandle)
 	err = enrich(errC, "APInitialize")
 	if err != nil {
@@ -378,6 +379,7 @@ func New(deviceIndex int) (*AP235, error) {
 	if errCode != 0 {
 		return out, errors.New("error reading calibration data from AP235")
 	}
+	o.cScatterInfo = ptr
 	// binitialize and bAP are set in Setup_board, ditto for rwcc235
 	return out, nil
 }
