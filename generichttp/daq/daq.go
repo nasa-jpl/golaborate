@@ -282,8 +282,9 @@ func HTTPWaveform(iface WaveformDAC, table generichttp.RouteTable2) {
 	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/trigger-mode"}] = SetTriggerMode(iface)
 	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/trigger-mode"}] = GetTriggerMode(iface)
 
-	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/playback/upload/float/csv"}] = StartWaveform(iface)
-	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/playback/upload/dn-16/csv"}] = StartWaveform(iface)
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/playback/upload/float/csv"}] = UploadWaveformFloatCSV(iface)
+	// line for upload DN
+
 	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/playback/start"}] = StartWaveform(iface)
 	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/playback/stop"}] = StopWaveform(iface)
 }
@@ -426,6 +427,12 @@ type Timer interface {
 	SetTimerPeriod(uint32) error
 
 	GetTimerPeriod() (uint32, error)
+}
+
+// HTTPTimer adds routes for basic Timer operation to a table
+func HTTPTimer(iface Timer, table generichttp.RouteTable2) {
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/timer-period"}] = SetTimerPeriod(iface)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/timer-period"}] = GetTimerPeriod(iface)
 }
 
 // SetTimerPeriod invokes the function of the same name on a timer
@@ -612,6 +619,9 @@ func NewHTTPDAC(d DAC) HTTPDAC {
 	}
 	if wd, ok := (d).(WaveformDAC); ok {
 		HTTPWaveform(wd, rt)
+	}
+	if t, ok := (d).(Timer); ok {
+		HTTPTimer(t, rt)
 	}
 	w.RouteTable = rt
 	return w
