@@ -696,6 +696,9 @@ func (dac *AP235) doTransfer(channel int) {
 	}
 	tailOffset-- // 2048 => 2047, etc.
 	tail := head + tailOffset
+	if tail == dac.sampleCount[channel] {
+		tail--
+	}
 	p1 := (*C.short)(unsafe.Pointer(&dac.buffer[channel][head]))
 	p2 := (*C.short)(unsafe.Pointer(&dac.buffer[channel][tail]))
 	// no need for bytes to transfer, since that only applies in simple DMA mode
