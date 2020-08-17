@@ -539,14 +539,13 @@ func (dac *AP235) calibrateData(channel int, volts []float64, buffer []uint16) {
 	rng, _ := ValidateOutputRange(rngS) // err always nil
 	gainCoef := 1 + float64(dac.cfg.ogc235[cCh][rng][gain])/(65535*16)
 	slopeCoef := float64(dac.cfg.pIdealCode[rng][idealSlope])
-	offset := float64(dac.cfg.pIdealCode[rng][idealZeroBTC] + dac.cfg.pIdealCode[rng][offset]/16)
+	off := float64(dac.cfg.pIdealCode[rng][idealZeroBTC]) + float64(dac.cfg.ogc235[channel][rng][offset])/16
 	gain := gainCoef * slopeCoef
 	min := float64(dac.cfg.pIdealCode[rng][clipLo])
 	max := float64(dac.cfg.pIdealCode[rng][clipHi])
-
 	for i := 0; i < len(volts); i++ {
 		in := volts[i]
-		out := gain*in + offset
+		out := gain*in + off
 		if out > max {
 			out = max
 		} else if out < min {
