@@ -294,6 +294,15 @@ type HTTPer interface {
 // RouteTable maps goji patterns to handler funcs
 type RouteTable map[*pat.Pattern]http.HandlerFunc
 
+// MethodPath is a path and method
+type MethodPath struct {
+	Method, Path string
+}
+
+// RouteTable2 is like RouteTable, but agnostic to the router backend instead
+// of tied to Goji
+type RouteTable2 map[MethodPath]http.HandlerFunc
+
 // Endpoints returns the endpoints in the route table
 func (rt RouteTable) Endpoints() []string {
 	routes := make([]string, len(rt))

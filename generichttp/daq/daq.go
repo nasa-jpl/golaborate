@@ -5,9 +5,12 @@
 package daq
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"go/types"
+	"io"
 	"net/http"
+	"strconv"
 
 	"github.jpl.nasa.gov/bdube/golab/generichttp"
 )
@@ -19,6 +22,12 @@ type DAC interface {
 
 	// OutputDN sends a data number on a given channel
 	OutputDN16(int, uint16) error
+}
+
+// HTTPBasicDAC adds routes for basic DAC operation to a table
+func HTTPBasicDAC(iface DAC, table generichttp.RouteTable2) {
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/output"}] = Output(iface)
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/output-dn-16"}] = OutputDN16(iface)
 }
 
 type channelVoltage struct {
@@ -79,6 +88,12 @@ type MultiChannelDAC interface {
 
 	// OutputMultiDN16 outputs a sequence of data numbers to a sequence of channels
 	OutputMultiDN16([]int, []uint16) error
+}
+
+// HTTPMultiChannel adds routes for multi channel output to the table
+func HTTPMultiChannel(iface MultiChannelDAC, table generichttp.RouteTable2) {
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/output-multi"}] = OutputMulti(iface)
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/output-multi-dn-16"}] = OutputMultiDN16(iface)
 }
 
 type channelsVoltages struct {
@@ -144,6 +159,15 @@ type ExtendedDAC interface {
 
 	// GetOutputSimultaneous returns true if a channel is configured for simultaneous output
 	GetOutputSimultaneous(int) (bool, error)
+}
+
+// HTTPExtended adds routes for multi channel output to the table
+func HTTPExtended(iface ExtendedDAC, table generichttp.RouteTable2) {
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/range"}] = SetRange(iface)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/range"}] = GetRange(iface)
+
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/simultaneous"}] = SetOutputSimultaneous(iface)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/simultaneous"}] = GetOutputSimultaneous(iface)
 }
 
 type channelRange struct {
@@ -250,6 +274,153 @@ type WaveformDAC interface {
 	StopWaveform() error
 }
 
+// HTTPWaveform adds routes for multi channel output to the table
+func HTTPWaveform(iface WaveformDAC, table generichttp.RouteTable2) {
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/operating-mode"}] = SetOperatingMode(iface)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/operating-mode"}] = GetOperatingMode(iface)
+
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/trigger-mode"}] = SetTriggerMode(iface)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/trigger-mode"}] = GetTriggerMode(iface)
+
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/playback/upload/float/csv"}] = StartWaveform(iface)
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/playback/upload/dn-16/csv"}] = StartWaveform(iface)
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/playback/start"}] = StartWaveform(iface)
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/playback/stop"}] = StopWaveform(iface)
+}
+
+type channelOpMode struct {
+	Channel int `json:"channel"`
+
+	OperatingMode string `json:"operatingMode"`
+}
+
+type channelTriggerMode struct {
+	Channel int `json:"channel"`
+
+	TriggerMode string `json:"triggerMode"`
+}
+
+// SetOperatingMode configures the operating mode of a DAC between "single"
+// and "waveform" modes
+func SetOperatingMode(d WaveformDAC) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var input channelOpMode
+		err := json.NewDecoder(r.Body).Decode(&input)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		err = d.SetOperatingMode(input.Channel, input.OperatingMode)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+// GetOperatingMode retrieves whether the dac is in "single" or "waveform" mode
+func GetOperatingMode(d WaveformDAC) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var input channelOpMode
+		err := json.NewDecoder(r.Body).Decode(&input)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		mode, err := d.GetOperatingMode(input.Channel)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		hp := generichttp.HumanPayload{T: types.String, String: mode}
+		hp.EncodeAndRespond(w, r)
+	}
+}
+
+// SetTriggerMode configures the operating mode of a DAC between "single"
+// and "waveform" modes
+func SetTriggerMode(d WaveformDAC) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var input channelTriggerMode
+		err := json.NewDecoder(r.Body).Decode(&input)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		err = d.SetTriggerMode(input.Channel, input.TriggerMode)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+// GetTriggerMode retrieves whether the dac is in "single" or "waveform" mode
+func GetTriggerMode(d WaveformDAC) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var input channelTriggerMode
+		err := json.NewDecoder(r.Body).Decode(&input)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		mode, err := d.GetTriggerMode(input.Channel)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		hp := generichttp.HumanPayload{T: types.String, String: mode}
+		hp.EncodeAndRespond(w, r)
+	}
+}
+
+// UploadWaveformFloatCSV is an HTTP interface to multiple
+// PopulateWaveform calls from one CSV file
+func UploadWaveformFloatCSV(d WaveformDAC) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		data, err := csvToWaveformFloat(r.Body)
+		defer r.Body.Close()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		for i := 0; i < len(data); i++ {
+			err = d.PopulateWaveform(data[i].channel, data[i].waveform)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+	}
+}
+
+// StartWaveform commences waveform playback
+func StartWaveform(d WaveformDAC) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		err := d.StartWaveform()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+// StopWaveform ceases waveform playback
+func StopWaveform(d WaveformDAC) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		err := d.StartWaveform()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+
+	}
+}
+
 // Timer describes a clock
 type Timer interface {
 	SetTimerPeriod(uint32) error
@@ -333,4 +504,115 @@ func GetTriggerDirection(t TriggerExport) http.HandlerFunc {
 		hp := generichttp.HumanPayload{T: types.Bool, Bool: export}
 		hp.EncodeAndRespond(w, r)
 	}
+}
+
+type channelWaveformVolt struct {
+	channel int
+
+	waveform []float64
+}
+
+type channelWaveformDN struct {
+	channel int
+
+	waveform []uint16
+}
+
+func csvToWaveformFloat(r io.Reader) ([]channelWaveformVolt, error) {
+	var out []channelWaveformVolt
+	reader := csv.NewReader(r)
+	skip := true
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return out, err
+		}
+		if skip {
+			skip = false
+			// allocate; one column per channel.  Leak to outer scope
+			out = make([]channelWaveformVolt, len(record))
+			for i := 0; i < len(record); i++ {
+				c, err := strconv.Atoi(record[i])
+				if err != nil {
+					return out, err
+				}
+				out[i].channel = c
+			}
+			continue
+		}
+		for i := 0; i < len(record); i++ {
+			f, err := strconv.ParseFloat(record[i], 64)
+			if err != nil {
+				return out, err
+			}
+			out[i].waveform = append(out[i].waveform, f)
+		}
+	}
+	return out, nil
+}
+
+func csvToWaveformDN(r io.Reader) ([]channelWaveformDN, error) {
+	// good old copy paste from f64 version, with one line (strconv.ParseFloat) changed
+	var out []channelWaveformDN
+	reader := csv.NewReader(r)
+	skip := true
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return out, err
+		}
+		if skip {
+			skip = false
+			// allocate; one column per channel.  Leak to outer scope
+			out = make([]channelWaveformDN, len(record))
+			for i := 0; i < len(record); i++ {
+				c, err := strconv.Atoi(record[i])
+				if err != nil {
+					return out, err
+				}
+				out[i].channel = c
+			}
+			continue
+		}
+		for i := 0; i < len(record); i++ {
+			u, err := strconv.ParseUint(record[i], 10, 64)
+			if err != nil {
+				return out, err
+			}
+			out[i].waveform = append(out[i].waveform, uint16(u))
+		}
+	}
+	return out, nil
+}
+
+// HTTPDAC is a type that allows setting up a DAC satisfying any combination
+// of the interfaces in this package to an HTTP interface
+type HTTPDAC struct {
+	d DAC
+
+	RouteTable generichttp.RouteTable2
+}
+
+// NewHTTPDAC sets up an HTTP interface to a DAC
+func NewHTTPDAC(d DAC) HTTPDAC {
+	w := HTTPDAC{d: d}
+	rt := generichttp.RouteTable2{}
+	HTTPBasicDAC(d, rt)
+	if md, ok := (d).(MultiChannelDAC); ok {
+		HTTPMultiChannel(md, rt)
+	}
+	if ed, ok := (d).(ExtendedDAC); ok {
+		HTTPExtended(ed, rt)
+	}
+	if wd, ok := (d).(WaveformDAC); ok {
+		HTTPWaveform(wd, rt)
+	}
+	w.RouteTable = rt
+	return w
 }
