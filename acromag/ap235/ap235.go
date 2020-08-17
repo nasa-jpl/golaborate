@@ -11,7 +11,6 @@ import "C"
 import (
 	"errors"
 	"fmt"
-	"log"
 	"reflect"
 	"sync"
 	"unsafe"
@@ -699,9 +698,10 @@ func (dac *AP235) doTransfer(channel int) {
 	tail := head + tailOffset
 	p1 := (*C.short)(unsafe.Pointer(&dac.buffer[channel][head]))
 	p2 := (*C.short)(unsafe.Pointer(&dac.buffer[channel][tail]))
-	log.Printf("%d => %d, %p => %p\n", head, tail, p1, p2)
 	// no need for bytes to transfer, since that only applies in simple DMA mode
-	dac.cfg.SampleCount[channel] = C.uint(tailOffset + 1)
+	// fifowro235 only writes half, we want it to write all since we are only
+	// sending half to begin with
+	dac.cfg.SampleCount[channel] = C.uint(tailOffset*2) + 1
 	dac.cfg.current_ptr[channel] = p1
 	dac.cfg.tail_ptr[channel] = p2
 	C.fifowro235(dac.cfg, C.int(channel))
