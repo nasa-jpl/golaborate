@@ -209,12 +209,13 @@ func GetRange(d ExtendedDAC) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		err = d.SetRange(input.Channel, input.Range)
+		rng, err := d.GetRange(input.Channel)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		w.WriteHeader(http.StatusOK)
+		hp := generichttp.HumanPayload{T: types.String, String: rng}
+		hp.EncodeAndRespond(w, r)
 	}
 }
 
