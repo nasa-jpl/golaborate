@@ -2,7 +2,6 @@ package ap235
 
 import (
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 )
@@ -281,20 +280,6 @@ func FormatOperatingMode(o OperatingMode) string {
 	default:
 		return ""
 	}
-}
-
-// enrich returns a new error and decorates with the procedure called
-// if the status is OK, nil is returned
-func enrich(errC C.APSTATUS, procedure string) error {
-	i := int(errC)
-	v, ok := StatusCodes[i]
-	if !ok {
-		return fmt.Errorf("unknown error code")
-	}
-	if v == "OK" {
-		return nil
-	}
-	return fmt.Errorf("%b: %s encountered at call to %s", i, v, procedure)
 }
 
 // ChannelStatus contains the status of a given DAC channel

@@ -11,6 +11,7 @@ import "C"
 import (
 	"errors"
 	"fmt"
+	"log"
 	"reflect"
 	"sync"
 	"unsafe"
@@ -22,6 +23,20 @@ func init() {
 		panicS := fmt.Sprintf("initializing Acromag library failed with code %d", errCode)
 		panic(panicS)
 	}
+}
+
+// enrich returns a new error and decorates with the procedure called
+// if the status is OK, nil is returned
+func enrich(errC C.APSTATUS, procedure string) error {
+	i := int(errC)
+	v, ok := StatusCodes[i]
+	if !ok {
+		return fmt.Errorf("unknown error code")
+	}
+	if v == "OK" {
+		return nil
+	}
+	return fmt.Errorf("%b: %s encountered at call to %s", i, v, procedure)
 }
 
 // AP235 is an acromag 16-bit DAC of the same type
@@ -431,7 +446,7 @@ func (dac *AP235) OutputMulti(channels []int, voltages []float64) error {
 				channels[i], channels[0])
 		}
 		if dac.isWaveform[channels[i]] {
-			return ErrIncompatibleWaveforn
+			return ErrIncompatibleWaveform
 		}
 	}
 
@@ -471,7 +486,7 @@ func (dac *AP235) OutputMultiDN16(channels []int, uint16s []uint16) error {
 				channels[i], channels[0])
 		}
 		if dac.isWaveform[channels[i]] {
-			return ErrIncompatibleWaveforn
+			return ErrIncompatibleWaveform
 		}
 	}
 
@@ -587,6 +602,7 @@ func (dac *AP235) PopulateWaveform(channel int, data []float64) error {
 	dac.sampleCount[channel] = l
 	dac.cursor[channel] = 0
 	dac.buffer[channel] = buf
+	dac.cfg.head_ptr[channel] = (*C.short)(unsafe.Pointer(&dac.buffer[channel][0]))
 	C.set_DAC_sample_addresses(dac.cfg, C.int(channel))
 	dac.doTransfer(channel)
 	return nil
@@ -679,16 +695,17 @@ func (dac *AP235) doTransfer(channel int) {
 	if tailOffset > MaxXferSize {
 		tailOffset = MaxXferSize
 	}
+	tailOffset-- // 2048 => 2047, etc.
 	tail := head + tailOffset
 	p1 := (*C.short)(unsafe.Pointer(&dac.buffer[channel][head]))
 	p2 := (*C.short)(unsafe.Pointer(&dac.buffer[channel][tail]))
-	dac.cfg.SampleCount[channel] = C.uint(tailOffset)
+	log.Printf("%d => %d, %p => %p\n", head, tail, p1, p2)
 	// no need for bytes to transfer, since that only applies in simple DMA mode
-	dac.cfg.head_ptr[channel] = p1
+	dac.cfg.SampleCount[channel] = C.uint(tailOffset + 1)
 	dac.cfg.current_ptr[channel] = p1
 	dac.cfg.tail_ptr[channel] = p2
 	C.fifowro235(dac.cfg, C.int(channel))
-	dac.cursor[channel] += tailOffset // todo: wrap around
+	dac.cursor[channel] += tailOffset + 1 // todo: wrap around
 }
 
 // CMkarrayU16 allocates a []uint16 in C and returns a Go slice without copying

@@ -3,7 +3,6 @@
 #include "../apcommon/apcommon.h"
 #include "AP235.h"
 #include <sys/mman.h>
-#include <stdio.h>
 
 APSTATUS GetAPAddress2(int nHandle, struct mapap235** pAddress)
 {
@@ -88,9 +87,7 @@ void enable_interrupts(struct cblk235 *cfg)
 void start_waveform(struct cblk235 *cfg)
 {
 	long temp = input_long(cfg->nHandle, (long *)&cfg->brd_ptr->CommonControl);
-	printf("CC before %d\n", temp);
 	temp |= 1;	/* Start All Waveforms */
-    printf("CC after %d\n", temp);
 	output_long(cfg->nHandle, (long *)&cfg->brd_ptr->CommonControl, (long)temp);
 }
 
