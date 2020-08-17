@@ -11,10 +11,7 @@ import "C"
 import (
 	"errors"
 	"fmt"
-	"log"
 	"reflect"
-	"strconv"
-	"strings"
 	"sync"
 	"unsafe"
 )
@@ -25,319 +22,6 @@ func init() {
 		panicS := fmt.Sprintf("initializing Acromag library failed with code %d", errCode)
 		panic(panicS)
 	}
-}
-
-// TODO: scatter_list might fuck me.  FGPA is holding some data about host memory
-// and something about only 26 bits.
-/// need to copy data into pcor_buf..?????????????
-
-// OutputScale is the output scale of the DAC at power up or clear
-type OutputScale int
-
-// OutputRange is the output range of the DAC
-type OutputRange int
-
-// TriggerMode is a triggering mode
-type TriggerMode int
-
-// OperatingMode is a mode of operating the DAC for a given channel
-type OperatingMode int
-
-const (
-	// ZeroScale represents a power up zero scale signal.
-	// if the DAC is configured to -10 to 10V,
-	// this powers up at -10V
-	// likewise, if it is 0 to 10V, it powers up at 0V
-	ZeroScale OutputScale = iota
-
-	// MidScale boots the DAC at half of its output range
-	MidScale
-
-	// FullScale boots the DAC at its maximum output value
-	FullScale
-)
-const (
-	// TenVSymm is a -10 to +10V output range
-	TenVSymm OutputRange = iota
-	// TenVPos is a 0 to 10V output range
-	TenVPos
-	// FiveVSymm is a -5 to 5V output range
-	FiveVSymm
-	//FiveVPos is a 0 to 5V output range
-	FiveVPos
-	// N2_5To7_5V is a -2.5 to 7.5V output range
-	N2_5To7_5V
-	// ThreeVSymm is a -3 to +3V output range
-	ThreeVSymm
-	// SixteenVPos is an output range of 0-16V, this requires an external voltage source
-	SixteenVPos
-	// TwentyVPos is an output range of 0-20V, this requires an external voltage source
-	TwentyVPos
-
-	// from ap235.h
-	idealZeroSB  = 0
-	idealZeroBTC = 1
-	idealSlope   = 2
-	endpointLo   = 3
-	endpointHi   = 4
-	clipLo       = 5
-	clipHi       = 6
-	offset       = 0
-	gain         = 1
-)
-const (
-	// TriggerSoftware represents a software triggering mode
-	TriggerSoftware TriggerMode = iota
-
-	// TriggerTimer represents a timer (internally clocked waveform) trigger mode
-	TriggerTimer
-
-	// TriggerExternal represents a triggering mode which is externally clocked
-	TriggerExternal
-
-	// OperatingSingle is an operating mode corresponding to a single sample at a time
-	// it is compatible with software triggering only.  It is compatible with simultaneous output.
-	OperatingSingle OperatingMode = 0 // from ap235.h
-
-	// OperatingWaveform is an operating mode corresponding to waveform output.
-	// it is incompatible with the software triggering mode.
-	OperatingWaveform OperatingMode = 2 // from ap235.h
-
-	// MAXSAMPLES is the maximum number of samples in the buffer of a single
-	// channel.  It is repeated from AP235.h to avoid an unnecessary CFFI call
-	MAXSAMPLES = 4096
-
-	// MaxXferSize is the (max) number of samples to send in one DMA transfer
-	MaxXferSize = MAXSAMPLES / 2
-)
-
-var (
-	// ErrSimultaneousOutput is generated when a device in simultaneous output mode is issued
-	// an Output command that is accepted for next flush but not executed.
-	ErrSimultaneousOutput = errors.New("device is in simultaneous output mode: accepted but not written")
-
-	// ErrVoltageTooLow is generated when a too low voltage is commanded
-	ErrVoltageTooLow = errors.New("commanded voltage below lower limit")
-
-	// ErrVoltageTooHigh is generated when a too high voltage is commanded
-	ErrVoltageTooHigh = errors.New("commanded voltage above upper limit")
-
-	// ErrTimerTooFast is generated when a timer is running too fast
-	ErrTimerTooFast = errors.New("timer too fast: DAC cannot settle to < 1LSB before next value given.  Value accepted")
-
-	// ErrIncompatibleOperatingTrigger is generated when the triggering and operating modes are incompatible
-	ErrIncompatibleOperatingTrigger = errors.New("operating mode and trigger source are incompatible, software+single or (external|timer)+waveform are the only valid combinations.  Change accepted, state inconsistent")
-
-	// IdealCode is the array from drvr236.c L60-L85
-	// its inner elements, by index:
-	// 0 - zero value DN, straight binary
-	// 1 - zero value DN, two's complement
-	// 2 - slope, DN/V
-	// 3 - low voltage
-	// 4 - high voltage
-	// 5 - low DN
-	// 6 - high DN
-	// outer elements, by index
-	// 0 - -10 to 10V
-	// 1 - 0 to 10V
-	// 2 - -5 to 5V
-	// 3 - 0 to 5V
-	// 4 - 0 to 5V
-	// 5 - -2.5 to 7.5V
-	// 6 - -3 to 3V
-	// 7 - 0 to 16V
-	// 8 - 0 to 20V
-	// the range channel option is an index into the outer element
-	idealCode = [8][7]float64{
-		/* IdealZeroSB, IdealZeroBTC, IdealSlope, -10 to 10V, cliplo, cliphi */
-		{32768.0, 0.0, 3276.8, -10.0, 10.0, -32768.0, 32767.0},
-
-		/* IdealZeroSB, IdealZeroBTC, IdealSlope,   0 to 10V, cliplo, cliphi */
-		{0.0, -32768.0, 6553.6, 0.0, 10.0, -32768.0, 32767.0},
-
-		/* IdealZeroSB, IdealZeroBTC, IdealSlope,  -5 to  5V, cliplo, cliphi */
-		{32768.0, 0.0, 6553.6, -5.0, 5.0, -32768.0, 32767.0},
-
-		/* IdealZeroSB, IdealZeroBTC, IdealSlope,   0 to  5V, cliplo, cliphi */
-		{0.0, -32768.0, 13107.2, 0.0, 5.0, -32768.0, 32767.0},
-
-		/* IdealZeroSB, IdealZeroBTC, IdealSlope, -2.5 to 7.5V, cliplo, cliphi */
-		{16384.0, -16384.0, 6553.6, -2.5, 7.5, -32768.0, 32767.0},
-
-		/* IdealZeroSB, IdealZeroBTC, IdealSlope,  -3 to  3V, cliplo, cliphi */
-		{32768.0, 0.0, 10922.67, -3.0, 3.0, -32768.0, 32767.0},
-
-		/* IdealZeroSB, IdealZeroBTC, IdealSlope, 0V to +16V, cliplo, cliphi */
-		{0.0, -32768.0, 4095.9, 0.0, 16.0, -32768.0, 32767.0},
-
-		/* IdealZeroSB, IdealZeroBTC, IdealSlope, 0V to +20V, cliplo, cliphi */
-		{0.0, -32768.0, 3276.8, 0.0, 20.0, -32768.0, 32767.0},
-	}
-
-	// StatusCodes is the status codes defined by AP235.h
-	// copied here to avoid C types as keys
-	StatusCodes = map[int]string{
-		0x8000: "ERROR",           // general
-		0x8001: "OUT OF MEMORY",   // out of memory status value
-		0x8002: "OUT OF APs",      // all AP spots have been taken
-		0x8003: "INVALID HANDLE",  // no AP exists for this handle
-		0x8006: "NOT INITIALIZED", // Pmc not initialized
-		0x8007: "NOT IMPLEMENTED", // func is not implemented
-		0x8008: "NO INTERRUPTS",   // unable to handle interrupts
-		0x0000: "OK",              // no true error
-	}
-)
-
-// ValidateOutputRange ensures that an output range is valid
-// s is formatted as "<low>,<high>"
-func ValidateOutputRange(s string) (OutputRange, error) {
-	switch s {
-	case "-10,10":
-		return TenVSymm, nil
-	case "0,10":
-		return TenVPos, nil
-	case "-5,5":
-		return FiveVSymm, nil
-	case "0,5":
-		return FiveVPos, nil
-	case "-2.5,7.5":
-		return N2_5To7_5V, nil
-	case "-3,3":
-		return ThreeVSymm, nil
-	case "0,16":
-		return SixteenVPos, nil
-	case "0,20":
-		return TwentyVPos, nil
-	default:
-		return -1, errors.New("invalid output range")
-	}
-}
-
-// FormatOutputRange converts an output range to a CSV of low,high
-func FormatOutputRange(o OutputRange) string {
-	switch o {
-	case TenVSymm:
-		return "-10,10"
-	case TenVPos:
-		return "0,10"
-	case FiveVSymm:
-		return "-5,5"
-	case FiveVPos:
-		return "0,5"
-	case N2_5To7_5V:
-		return "-2.5,7.5"
-	case ThreeVSymm:
-		return "-3,3"
-	case SixteenVPos:
-		return "0,16"
-	case TwentyVPos:
-		return "0,20"
-	default:
-		return ""
-	}
-}
-
-// RangeToMinMax converts a range string, <min,max> to floats.
-// the input is assumed to be well formed; 0,0 is returned for badly formed inputs,
-// or a panic occurs for inputs not containing a 0
-func RangeToMinMax(rangeS string) (float64, float64) {
-	// assume well-formed input,
-	pieces := strings.Split(rangeS, ",")
-	f1, _ := strconv.ParseFloat(pieces[0], 64)
-	f2, _ := strconv.ParseFloat(pieces[1], 64)
-	return f1, f2
-}
-
-// ValidateTriggerMode ensures that a triggering mode is valid
-// s is a member of {software, timer, external}
-func ValidateTriggerMode(s string) (TriggerMode, error) {
-	switch s {
-	case "software":
-		return TriggerSoftware, nil
-	case "timer":
-		return TriggerTimer, nil
-	case "external":
-		return TriggerExternal, nil
-	default:
-		return -1, errors.New("triggering mode must be a member of {software, timer, external}")
-	}
-}
-
-// FormatTriggerMode converts a trigger mode to a string representation,
-// which is a member of {software, timer, external}
-func FormatTriggerMode(t TriggerMode) string {
-	switch t {
-	case TriggerSoftware:
-		return "software"
-	case TriggerTimer:
-		return "timer"
-	case TriggerExternal:
-		return "external"
-	default:
-		return ""
-	}
-}
-
-// ValidateOperatingMode checks that an operating mode is valid
-// s is a member of {'single', 'waveform'}
-func ValidateOperatingMode(s string) (OperatingMode, error) {
-	switch s {
-	case "single":
-		return OperatingSingle, nil
-	case "waveform":
-		return OperatingWaveform, nil
-	default:
-		return -1, errors.New("operating mode must be a member of {single, waveform}")
-	}
-}
-
-// FormatOperatingMode formats the operating mode to either single or waveform.
-func FormatOperatingMode(o OperatingMode) string {
-	switch o {
-	case OperatingSingle:
-		return "single"
-	case OperatingWaveform:
-		return "waveform"
-	default:
-		return ""
-	}
-}
-
-// enrich returns a new error and decorates with the procedure called
-// if the status is OK, nil is returned
-func enrich(errC C.APSTATUS, procedure string) error {
-	i := int(errC)
-	v, ok := StatusCodes[i]
-	if !ok {
-		return fmt.Errorf("unknown error code")
-	}
-	if v == "OK" {
-		return nil
-	}
-	return fmt.Errorf("%b: %s encountered at call to %s", i, v, procedure)
-}
-
-// ChannelStatus contains the status of a given DAC channel
-type ChannelStatus struct {
-	// Channel is the associated channel
-	Channel int
-
-	// FIFOEmpty - if true, the FIFO queue is empty
-	FIFOEmpty bool
-
-	// FIFOHalfFull - if true, the FIFO queue is half full
-	FIFOHalfFull bool
-	// FIFOFull - if true, the FIFO queue is full
-	FIFOFull bool
-
-	// FIFOUnderflow - if true, the FIFO queue was emptied while draining
-	FIFOUnderflow bool
-
-	// BurstSingleComplete - if true, the FIFO queue was emptied while draining for a single burst playback
-	BurstSingleComplete bool
-
-	// Busy - if true, the channel's DAC is busy
-	Busy bool
 }
 
 // AP235 is an acromag 16-bit DAC of the same type
@@ -362,7 +46,13 @@ type AP235 struct {
 
 	cScatterInfo *C.ulong
 
+	// playingBack is a global indicator of whether playback
+	// is happening
 	playingBack bool
+
+	// isWaveform is a fast check for whether each channel is used
+	// for waveform playback
+	isWaveform [16]bool
 }
 
 // New creates a new instance and opens the connection to the DAC
@@ -568,7 +258,6 @@ func (dac *AP235) GetTriggerDirection() (bool, error) {
 // err should be checked on the later of the two calls to
 // SetOperatingMode and SetTriggerMode
 func (dac *AP235) SetOperatingMode(channel int, mode string) error {
-	log.Println("set operating mode")
 	o, err := ValidateOperatingMode(mode)
 	if err != nil {
 		return err
@@ -577,10 +266,12 @@ func (dac *AP235) SetOperatingMode(channel int, mode string) error {
 	trigger, _ := dac.GetTriggerMode(channel)
 	dac.sendCfgToBoard(channel)
 	if mode == "waveform" {
+		dac.isWaveform[channel] = true
 		if (trigger != "external") && (trigger != "timer") {
 			return ErrIncompatibleOperatingTrigger
 		}
 	}
+	dac.isWaveform[channel] = false
 	return nil
 }
 
@@ -636,10 +327,11 @@ func (dac *AP235) GetOutputSimultaneous(channel int) (bool, error) {
 // SetTimerPeriod sets the timer period,
 // the time between repetitions of the timer clock
 //
-// if the period is too short, it is still used but an error is generated.
-// the accuracy of the output may be compromised operating in this regime.
-//
-// no other errors can be generated.
+// there are two threshholds: 9920 ns, below which
+// the DAC cannot settle to better than 1LSB
+// before the next command and 19840 ns, below which
+// the DAC cannot be fed data for all sixteen channels
+// in parallel.
 func (dac *AP235) SetTimerPeriod(nanoseconds uint32) error {
 	tdiv := nanoseconds / 32
 	dac.cfg.TimerDivider = C.uint32_t(tdiv)
@@ -678,8 +370,12 @@ func (dac *AP235) Output(channel int, voltage float64) error {
 
 // OutputDN16 writes a value to the board in DN.
 //
-// the error is always nil
+// if the channel is set up for waveform mode, an error is generated.
+// otherwise, it is nil.
 func (dac *AP235) OutputDN16(channel int, value uint16) error {
+	if dac.isWaveform[channel] {
+		return ErrIncompatibleWaveform
+	}
 	// going to round trip, since we want to use the DAC in calibrated mode
 	// convert value to a f64
 	rng, _ := dac.GetRange(channel)
@@ -695,10 +391,8 @@ func (dac *AP235) OutputDN16(channel int, value uint16) error {
 	dac.cfg.current_ptr[cCh] = ptr
 	dac.cfg.head_ptr[cCh] = ptr
 	dac.cfg.tail_ptr[cCh] = ptr2
-	// dac.cfg.ideal_buf[cCh][0] = C.short(int16(value - 32768)) // OR with 0x8000 converts u16 to i16
 	C.cd235(dac.cfg, C.int(channel), (*C.double)(&fV[0]))
 	C.fifowro235(dac.cfg, cCh)
-	// fmt.Println(value, dac.cfg.ideal_buf[cCh][0])
 	return nil
 }
 
@@ -706,6 +400,7 @@ func (dac *AP235) OutputDN16(channel int, value uint16) error {
 // the error is non-nil if any of these conditions occur:
 //	1.  A blend of output modes (some simultaneous, some immediate)
 //  2.  A command is out of range
+//  3.  A channel is set up for waveform playback
 //
 // if an error is encountered in case 2, the output buffer of the DAC may be
 // partially updated from proceeding valid commands.  No invalid values escape
@@ -723,21 +418,23 @@ func (dac *AP235) OutputMulti(channels []int, voltages []float64) error {
 	// 2.  timer
 	// 3.  exterinal input
 	// ensure channels are homogeneous
+	sim, _ := dac.GetOutputSimultaneous(channels[0])
 	for i := 0; i < len(channels); i++ { // old for is faster than range, this code may be hot
 		tm, _ := dac.GetTriggerMode(channels[i])
 		if tm != "software" {
 			return fmt.Errorf("trigger mode must be software.  Channel %d was %s",
 				channels[i], tm)
 		}
-	}
-	sim, _ := dac.GetOutputSimultaneous(channels[0])
-	for i := 0; i < len(channels); i++ { // old for is faster than range, this code may be hot
 		sim2, _ := dac.GetOutputSimultaneous(channels[i])
 		if sim2 != sim {
 			return fmt.Errorf("mixture of output modes used, must be homogeneous.  Channel %d != channel %d",
 				channels[i], channels[0])
 		}
+		if dac.isWaveform[channels[i]] {
+			return ErrIncompatibleWaveforn
+		}
 	}
+
 	for i := 0; i < len(channels); i++ {
 		err := dac.Output(channels[i], voltages[i])
 		if err != nil {
@@ -761,21 +458,23 @@ func (dac *AP235) OutputMultiDN16(channels []int, uint16s []uint16) error {
 	// 2.  timer
 	// 3.  exterinal input
 	// ensure channels are homogeneous
+	sim, _ := dac.GetOutputSimultaneous(channels[0])
 	for i := 0; i < len(channels); i++ { // old for is faster than range, this code may be hot
 		tm, _ := dac.GetTriggerMode(channels[i])
 		if tm != "software" {
 			return fmt.Errorf("trigger mode must be software.  Channel %d was %s",
 				channels[i], tm)
 		}
-	}
-	sim, _ := dac.GetOutputSimultaneous(channels[0])
-	for i := 0; i < len(channels); i++ { // old for is faster than range, this code may be hot
 		sim2, _ := dac.GetOutputSimultaneous(channels[i])
 		if sim2 != sim {
 			return fmt.Errorf("mixture of output modes used, must be homogeneous.  Channel %d != channel %d",
 				channels[i], channels[0])
 		}
+		if dac.isWaveform[channels[i]] {
+			return ErrIncompatibleWaveforn
+		}
 	}
+
 	for i := 0; i < len(channels); i++ {
 		err := dac.OutputDN16(channels[i], uint16s[i])
 		if err != nil {
@@ -800,21 +499,7 @@ func (dac *AP235) StartWaveform() error {
 		return errors.New("AP235 is already playing back a waveform")
 	}
 	go dac.serviceInterrupts()
-	// first step is to prep DMA for each channel
-	// and start the interrupt servicing thread
-	// prepping DMA means
-	// fmt.Println("operating mode = ", dac.cfg.opts._chan[0].OpMode)
-	// fmt.Println("output update mode = ", dac.cfg.opts._chan[0].UpdateMode)
-	// fmt.Println("range mode = ", dac.cfg.opts._chan[0].Range)
-	// fmt.Println("power up voltage = ", dac.cfg.opts._chan[0].PowerUpVoltage)
-	// fmt.Println("data reset = ", dac.cfg.opts._chan[0].DataReset)
-	// fmt.Println("full reset = ", dac.cfg.opts._chan[0].FullReset)
-	// fmt.Println("trigger source = ", dac.cfg.opts._chan[0].TriggerSource)
-	// fmt.Println("timer divider = ", dac.cfg.TimerDivider)
-	// fmt.Println("interrupt source = ", dac.cfg.opts._chan[0].InterruptSource)
-	// fmt.Printf("%+v\n", dac.cfg.opts._chan[0])
 	dac.playingBack = true
-
 	C.start_waveform(dac.cfg)
 	return nil
 }
@@ -872,8 +557,6 @@ func (dac *AP235) PopulateWaveform(channel int, data []float64) error {
 	// since we only want to start the one thread, not one per channel.
 
 	// create a buffer long enough to hold the waveform in uint16s
-	log.Println("populate waveform")
-	log.Println("populate waveform locking")
 	dac.Lock()
 	defer dac.Unlock()
 	if dac.playingBack {
@@ -932,8 +615,6 @@ func (dac *AP235) serviceInterrupts() {
 	C.enable_interrupts(dac.cfg)
 	for {
 		Cstatus := C.fetch_status(dac.cfg)
-
-		log.Println("Cstatus =", Cstatus)
 		status := uint(Cstatus)
 
 		if status == 0 {
@@ -943,14 +624,11 @@ func (dac *AP235) serviceInterrupts() {
 		for i := 0; i < 16; i++ { // i = channel index
 			var mask uint = 1 << i
 			if (mask & status) != 0 {
-				log.Println("servicing interrupt for channel", i)
-				log.Println("service int locking")
 				dac.Lock()
 				dac.doTransfer(i)
 				dac.Unlock()
 			}
 		}
-		log.Println("refreshing interrupts")
 		C.refresh_interrupt(dac.cfg, Cstatus)
 	}
 }
@@ -1002,7 +680,6 @@ func (dac *AP235) doTransfer(channel int) {
 		tailOffset = MaxXferSize
 	}
 	tail := head + tailOffset
-	log.Println("do transfer: buf len = ", len(dac.buffer[channel]))
 	p1 := (*C.short)(unsafe.Pointer(&dac.buffer[channel][head]))
 	p2 := (*C.short)(unsafe.Pointer(&dac.buffer[channel][tail]))
 	dac.cfg.SampleCount[channel] = C.uint(tailOffset)
@@ -1010,7 +687,6 @@ func (dac *AP235) doTransfer(channel int) {
 	dac.cfg.head_ptr[channel] = p1
 	dac.cfg.current_ptr[channel] = p1
 	dac.cfg.tail_ptr[channel] = p2
-	fmt.Printf("doing transfer %d %d %p %d %p %d\n", channel, tailOffset, p1, dac.buffer[channel][head], p2, dac.buffer[channel][tail])
 	C.fifowro235(dac.cfg, C.int(channel))
 	dac.cursor[channel] += tailOffset // todo: wrap around
 }
