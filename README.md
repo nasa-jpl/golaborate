@@ -37,7 +37,7 @@ Commands:
 
 Each is configured with a human readable [yaml](https://github.com/darvid/trine/wiki/YAML-Primer) file.
 
-Clients in Python and matlab are available in the [golab-clients](https://github.jpl.nasa.gov/bdube/golab-clients) repository.
+Clients in Python and matlab are available in the [golab-clients](https://github.jpl.nasa.gov/bdube/golab-clients) repository.  The clients are about 1/10th as much code as golab itself.  This is a tremendous labor savings when supporting a new language, maximizing engineer/scientist productivity.
 
 ## What is Here
 
