@@ -10,7 +10,7 @@ that has some gussied up in and output types.  We mostly duplicate the API from
 the C/C++ shared library, with the exception of a few grammatical cleanups.
 
 Users are encouraged to write packages that build on this driver to build more
-complex functionality.  An example of this is in the same go-hcit repository,
+complex functionality.  An example of this is in the same repository,
 cmd/andorhttp2, which wraps the camera in an HTTP server.
 
 */
@@ -1083,7 +1083,7 @@ func (c *Camera) CollectHeaderMetadata() []fitsio.Card {
 	return []fitsio.Card{
 		/* andor-http header format includes:
 		- header format tag
-		- go-hcit andor version
+		- server version
 		- sdk software version
 		- driver version
 		- camera firmware version

@@ -644,7 +644,7 @@ func (c *Camera) CollectHeaderMetadata() []fitsio.Card {
 	return []fitsio.Card{
 		/* andor-http header format includes:
 		- header format tag
-		- go-hcit andor version
+		- server version
 		- sdk software version
 		- driver version
 		- camera firmware version
