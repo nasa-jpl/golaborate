@@ -16,9 +16,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/go-chi/chi"
 	"github.jpl.nasa.gov/bdube/golab/generichttp"
 	"github.jpl.nasa.gov/bdube/golab/util"
-	"goji.io/pat"
 )
 
 var (
@@ -39,14 +39,14 @@ type Enabler interface {
 
 // HTTPEnable adds routes for the enabler to the route table
 func HTTPEnable(iface Enabler, table generichttp.RouteTable) {
-	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/axis/:axis/enabled"}] = GetEnabled(iface)
-	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/axis/:axis/enabled"}] = SetEnabled(iface)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/axis/{axis}/enabled"}] = GetEnabled(iface)
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/axis/{axis}/enabled"}] = SetEnabled(iface)
 }
 
 // SetEnabled returns an HTTP handler func from an enabler that enables or disables the axis
 func SetEnabled(e Enabler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		axis := pat.Param(r, "axis")
+		axis := chi.URLParam(r, "axis")
 		boolT := generichttp.BoolT{}
 		err := json.NewDecoder(r.Body).Decode(&boolT)
 		defer r.Body.Close()
@@ -71,7 +71,7 @@ func SetEnabled(e Enabler) http.HandlerFunc {
 // GetEnabled returns an HTTP handler func from an enabler that returns if the axis is enabled
 func GetEnabled(e Enabler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		axis := pat.Param(r, "axis")
+		axis := chi.URLParam(r, "axis")
 		enabled, err := e.GetEnabled(axis)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -99,15 +99,15 @@ type Mover interface {
 
 // HTTPMove adds routes for the mover to the route tabler
 func HTTPMove(iface Mover, table generichttp.RouteTable) {
-	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/axis/:axis/home"}] = Home(iface)
-	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/axis/:axis/pos"}] = GetPos(iface)
-	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/axis/:axis/pos"}] = SetPos(iface)
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/axis/{axis}/home"}] = Home(iface)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/axis/{axis}/pos"}] = GetPos(iface)
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/axis/{axis}/pos"}] = SetPos(iface)
 }
 
 // GetPos returns an HTTP handler func from a mover that gets the position of an axis
 func GetPos(m Mover) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		axis := pat.Param(r, "axis")
+		axis := chi.URLParam(r, "axis")
 		pos, err := m.GetPos(axis)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -119,7 +119,7 @@ func GetPos(m Mover) http.HandlerFunc {
 }
 
 func popAxisRelative(r *http.Request) (string, bool, error) {
-	axis := pat.Param(r, "axis")
+	axis := chi.URLParam(r, "axis")
 	relative := r.URL.Query().Get("relative")
 	if relative == "" {
 		relative = "false"
@@ -160,7 +160,7 @@ func SetPos(m Mover) http.HandlerFunc {
 // Home returns an HTTP handler func from a mover that homes an axis
 func Home(m Mover) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		axis := pat.Param(r, "axis")
+		axis := chi.URLParam(r, "axis")
 		err := m.Home(axis)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -180,14 +180,14 @@ type Speeder interface {
 
 // HTTPSpeed adds routes for the speeder to the route table
 func HTTPSpeed(iface Speeder, table generichttp.RouteTable) {
-	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/axis/:axis/velocity"}] = SetVelocity(iface)
-	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/axis/:axis/velocity"}] = GetVelocity(iface)
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/axis/{axis}/velocity"}] = SetVelocity(iface)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/axis/{axis}/velocity"}] = GetVelocity(iface)
 }
 
 // SetVelocity returns an HTTP handler func which sets the velocity setpoint on an axis
 func SetVelocity(s Speeder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		axis := pat.Param(r, "axis")
+		axis := chi.URLParam(r, "axis")
 		floatT := generichttp.FloatT{}
 		err := json.NewDecoder(r.Body).Decode(&floatT)
 		defer r.Body.Close()
@@ -208,7 +208,7 @@ func SetVelocity(s Speeder) http.HandlerFunc {
 // GetVelocity returns an HTTP handler func which gets the velocity setpoint on an axis
 func GetVelocity(s Speeder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		axis := pat.Param(r, "axis")
+		axis := chi.URLParam(r, "axis")
 		vel, err := s.GetVelocity(axis)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -227,13 +227,13 @@ type Initializer interface {
 
 // HTTPInitialize adds routes for initialization to the route table
 func HTTPInitialize(i Initializer, table generichttp.RouteTable) {
-	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/axis/:axis/initialize"}] = Initialize(i)
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/axis/{axis}/initialize"}] = Initialize(i)
 }
 
 // Initialize returns an HTTP handler func that calls Initialize for an axis
 func Initialize(i Initializer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		axis := pat.Param(r, "axis")
+		axis := chi.URLParam(r, "axis")
 		err := i.Initialize(axis)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -307,15 +307,15 @@ func (l *LimitMiddleware) Check(next http.Handler) http.Handler {
 	})
 }
 
-// Inject places a /axis/:axis/limits route on the table of the HTTPer
+// Inject places a /axis/{axis}/limits route on the table of the HTTPer
 func (l LimitMiddleware) Inject(h generichttp.HTTPer) {
-	h.RT()[generichttp.MethodPath{Method: http.MethodGet, Path: "/axis/:axis/limits"}] = Limits(l)
+	h.RT()[generichttp.MethodPath{Method: http.MethodGet, Path: "/axis/{axis}/limits"}] = Limits(l)
 }
 
 // Limits returns an HTTP handler func that returns the limits for an axis
 func Limits(l LimitMiddleware) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		axis := pat.Param(r, "axis")
+		axis := chi.URLParam(r, "axis")
 		lim, ok := l.Limits[axis]
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)

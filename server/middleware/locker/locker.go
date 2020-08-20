@@ -7,16 +7,16 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/go-chi/chi"
 	"github.jpl.nasa.gov/bdube/golab/generichttp"
-	"goji.io/pat"
 )
 
 // Inject adds a lock route to a generichttp.HTTPer which is used to manipulate the locker
 func Inject(other generichttp.HTTPer, l ManipulableLock) {
 	rt := other.RT()
 	if al, ok := (l).(*AxisLocker); ok {
-		rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/axis/:axis/lock"}] = al.HTTPGet
-		rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/axis/:axis/lock"}] = al.HTTPSet
+		rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/axis/{axis}/lock"}] = al.HTTPGet
+		rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/axis/{axis}/lock"}] = al.HTTPSet
 	} else {
 		rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/lock"}] = l.HTTPGet
 		rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/lock"}] = l.HTTPSet
@@ -142,7 +142,7 @@ func (al *AxisLocker) Check(next http.Handler) http.Handler {
 				return
 			}
 		}()
-		axis := pat.Param(r, "axis")
+		axis := chi.URLParam(r, "axis")
 		locked, ok := al.locked[axis]
 		if !ok {
 			al.locked[axis] = New()
@@ -175,7 +175,7 @@ func (al *AxisLocker) HTTPSet(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	axis := pat.Param(r, "axis")
+	axis := chi.URLParam(r, "axis")
 	locked, ok := al.locked[axis]
 	if !ok {
 		al.locked[axis] = New()
@@ -191,7 +191,7 @@ func (al *AxisLocker) HTTPSet(w http.ResponseWriter, r *http.Request) {
 
 // HTTPGet returns Locked() over HTTP as JSON
 func (al *AxisLocker) HTTPGet(w http.ResponseWriter, r *http.Request) {
-	axis := pat.Param(r, "axis")
+	axis := chi.URLParam(r, "axis")
 	locked, ok := al.locked[axis]
 	if !ok {
 		al.locked[axis] = New()

@@ -6,11 +6,11 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/go-chi/chi"
 	"github.jpl.nasa.gov/bdube/golab/generichttp"
 	"github.jpl.nasa.gov/bdube/golab/generichttp/camera"
 	"github.jpl.nasa.gov/bdube/golab/imgrec"
 	"github.jpl.nasa.gov/bdube/golab/util"
-	"goji.io/pat"
 )
 
 // HTTPWrapper provides an HTTP interface to a camera
@@ -32,8 +32,8 @@ func NewHTTPWrapper(c *Camera, r *imgrec.Recorder) HTTPWrapper {
 	// things not part of the generic wrapper (yet?)
 	rt[generichttp.MethodPath{http.MethodGet, "/feature"}] = w.GetFeatures
 	rt[generichttp.MethodPath{http.MethodGet, "/feature/:feature"}] = w.GetFeature
-	rt[generichttp.MethodPath{http.MethodGet, "/feature/:feature/options"}] = w.GetFeatureInfo
-	rt[generichttp.MethodPath{http.MethodPost, "/feature/:feature"}] = w.SetFeature
+	rt[generichttp.MethodPath{http.MethodGet, "/feature/{feature}/options"}] = w.GetFeatureInfo
+	rt[generichttp.MethodPath{http.MethodPost, "/feature/{feature}"}] = w.SetFeature
 	w2 := imgrec.NewHTTPWrapper(r)
 	w2.Inject(w)
 	return w
@@ -57,7 +57,7 @@ func (h *HTTPWrapper) GetFeatures(w http.ResponseWriter, r *http.Request) {
 
 // GetFeature gets a feature, the type of which is determined by the server
 func (h *HTTPWrapper) GetFeature(w http.ResponseWriter, r *http.Request) {
-	feature := pat.Param(r, "feature")
+	feature := chi.URLParam(r, "feature")
 	typ, known := Features[feature]
 	if !known {
 		err := ErrFeatureNotFound{Feature: feature}
@@ -118,7 +118,7 @@ func (h *HTTPWrapper) GetFeature(w http.ResponseWriter, r *http.Request) {
 // For numerical features, it returns the min and max values.  For enum
 // features, it returns the possible strings that can be used
 func (h *HTTPWrapper) GetFeatureInfo(w http.ResponseWriter, r *http.Request) {
-	feature := pat.Param(r, "feature")
+	feature := chi.URLParam(r, "feature")
 	typ, known := Features[feature]
 	if !known {
 		err := ErrFeatureNotFound{Feature: feature}
@@ -191,7 +191,7 @@ func (h *HTTPWrapper) GetFeatureInfo(w http.ResponseWriter, r *http.Request) {
 func (h *HTTPWrapper) SetFeature(w http.ResponseWriter, r *http.Request) {
 	// the contents of this is basically identical to GetFeature
 	// but with json unmarshalling logic injected
-	feature := pat.Param(r, "feature")
+	feature := chi.URLParam(r, "feature")
 	typ, known := Features[feature]
 	if !known {
 		err := ErrFeatureNotFound{Feature: feature}
