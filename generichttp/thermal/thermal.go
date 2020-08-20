@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	"github.jpl.nasa.gov/bdube/golab/generichttp"
-	"goji.io/pat"
 )
 
 // Controller is an interface to a thermal controller with a single channel
@@ -72,7 +71,7 @@ func GetTemperature(c Controller) http.HandlerFunc {
 
 // HTTPController binds routes to control temperature to the table
 func HTTPController(c Controller, table generichttp.RouteTable) {
-	table[pat.Get("/temperature")] = GetTemperature(c)
-	table[pat.Get("/temperature-setpoint")] = GetTemperatureSetpoint(c)
-	table[pat.Post("/temperature-setpoint")] = SetTemperatureSetpoint(c)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/temperature"}] = GetTemperature(c)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/temperature-setpoint"}] = GetTemperatureSetpoint(c)
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/temperature-setpoint"}] = SetTemperatureSetpoint(c)
 }

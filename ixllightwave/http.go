@@ -10,7 +10,6 @@ import (
 
 	"github.jpl.nasa.gov/bdube/golab/generichttp"
 	"github.jpl.nasa.gov/bdube/golab/util"
-	"goji.io/pat"
 )
 
 // HTTPWrapper provides HTTP bindings on top of the underlying Go interface
@@ -27,23 +26,23 @@ func NewHTTPWrapper(ldc LDC3916) HTTPWrapper {
 	w := HTTPWrapper{LDC3916: ldc}
 	rt := generichttp.RouteTable{
 		// channel
-		pat.Get("chan"):  w.GetChan,
-		pat.Post("chan"): w.SetChan,
+		generichttp.MethodPath{Method: http.MethodGet, Path: "chan"}:  w.GetChan,
+		generichttp.MethodPath{Method: http.MethodPost, Path: "chan"}: w.SetChan,
 
 		// tec
-		pat.Get("temperature-control"):  w.GetTempControl,
-		pat.Post("temperature-control"): w.SetTempControl,
+		generichttp.MethodPath{Method: http.MethodGet, Path: "temperature-control"}:  w.GetTempControl,
+		generichttp.MethodPath{Method: http.MethodPost, Path: "temperature-control"}: w.SetTempControl,
 
 		// laser output
-		pat.Get("laser-output"):  w.GetLaserOutput,
-		pat.Post("laser-output"): w.SetLaserOutput,
+		generichttp.MethodPath{Method: http.MethodGet, Path: "laser-output"}:  w.GetLaserOutput,
+		generichttp.MethodPath{Method: http.MethodPost, Path: "laser-output"}: w.SetLaserOutput,
 
 		// laser current
-		pat.Get("laser-current"):  w.GetLaserCurrent,
-		pat.Post("laser-current"): w.SetLaserCurrent,
+		generichttp.MethodPath{Method: http.MethodGet, Path: "laser-current"}:  w.GetLaserCurrent,
+		generichttp.MethodPath{Method: http.MethodPost, Path: "laser-current"}: w.SetLaserCurrent,
 
 		// raw
-		pat.Post("raw"): w.Raw,
+		generichttp.MethodPath{Method: http.MethodPost, Path: "raw"}: w.Raw,
 	}
 	w.RouteTable = rt
 	return w

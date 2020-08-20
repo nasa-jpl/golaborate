@@ -16,7 +16,6 @@ import (
 	"github.jpl.nasa.gov/bdube/golab/comm"
 	"github.jpl.nasa.gov/bdube/golab/generichttp"
 	"github.jpl.nasa.gov/bdube/golab/generichttp/laser"
-	"goji.io/pat"
 
 	"github.jpl.nasa.gov/bdube/golab/util"
 	"golang.org/x/time/rate"
@@ -360,7 +359,7 @@ func encodeStatus(fcn func() (map[string]bool, error)) http.HandlerFunc {
 func NewHTTPWrapper(sk *SuperK) laser.HTTPLaserController {
 	w := laser.NewHTTPLaserController(sk)
 	rt := w.RT()
-	rt[pat.Get("main-module-status")] = encodeStatus(sk.StatusMain)
-	rt[pat.Get("varia-status")] = encodeStatus(sk.StatusVaria)
+	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "main-module-status"}] = encodeStatus(sk.StatusMain)
+	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "varia-status"}] = encodeStatus(sk.StatusVaria)
 	return w
 }

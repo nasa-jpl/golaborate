@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.jpl.nasa.gov/bdube/golab/generichttp"
-	"goji.io/pat"
 )
 
 // Recorder records image sequences with incrementing filenames in yyyy-mm-dd subfolders.  It is not thread safe.
@@ -191,10 +190,10 @@ func (h HTTPWrapper) SetEnabled(w http.ResponseWriter, r *http.Request) {
 // Inject adds GET and POST routes for /autorwrite/root and /autowrite/prefix to the HTTPer which manipulate this wrapper's recorder
 func (h HTTPWrapper) Inject(other generichttp.HTTPer) {
 	rt := other.RT()
-	rt[pat.Post("/autowrite/root")] = h.SetRoot
-	rt[pat.Get("/autowrite/root")] = h.GetRoot
-	rt[pat.Post("/autowrite/prefix")] = h.SetPrefix
-	rt[pat.Get("/autowrite/prefix")] = h.GetPrefix
-	rt[pat.Post("/autowrite/enabled")] = h.SetEnabled
-	rt[pat.Get("/autowrite/enabled")] = h.GetEnabled
+	rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/autowrite/root"}] = h.SetRoot
+	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/autowrite/root"}] = h.GetRoot
+	rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/autowrite/prefix"}] = h.SetPrefix
+	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/autowrite/prefix"}] = h.GetPrefix
+	rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/autowrite/enabled"}] = h.SetEnabled
+	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/autowrite/enabled"}] = h.GetEnabled
 }

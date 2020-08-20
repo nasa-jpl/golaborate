@@ -15,7 +15,6 @@ import (
 	"github.jpl.nasa.gov/bdube/golab/generichttp/thermal"
 	"github.jpl.nasa.gov/bdube/golab/temperature"
 	"github.jpl.nasa.gov/bdube/golab/util"
-	"goji.io/pat"
 )
 
 // Direction describes the flow of data
@@ -299,7 +298,7 @@ func NewHTTPChiller(c *Chiller) HTTPChiller {
 	rt := generichttp.RouteTable{}
 	thermal.HTTPController(c, rt)
 	h := HTTPChiller{RouteTable: rt, c: c}
-	rt[pat.Get("/faults")] = h.Faults
+	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/faults"}] = h.Faults
 	return h
 }
 

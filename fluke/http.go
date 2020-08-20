@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.jpl.nasa.gov/bdube/golab/generichttp"
-	"goji.io/pat"
 )
 
 // HTTPWrapper provides HTTP bindings on top of the underlying Go interface
@@ -21,7 +20,7 @@ type HTTPWrapper struct {
 func NewHTTPWrapper(dk DewK) HTTPWrapper {
 	w := HTTPWrapper{DewK: dk}
 	rt := generichttp.RouteTable{
-		pat.Get("/read"): w.Read,
+		generichttp.MethodPath{Method: http.MethodGet, Path: "/read"}: w.Read,
 	}
 	w.RouteTable = rt
 	return w

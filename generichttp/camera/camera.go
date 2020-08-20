@@ -18,7 +18,6 @@ import (
 	"github.jpl.nasa.gov/bdube/golab/generichttp"
 	"github.jpl.nasa.gov/bdube/golab/imgrec"
 	"github.jpl.nasa.gov/bdube/golab/util"
-	"goji.io/pat"
 )
 
 // AOI describes an area of interest on the camera
@@ -44,27 +43,6 @@ func (a AOI) Right() int {
 // Bottom is shorthand for a.Top+a.Height
 func (a AOI) Bottom() int {
 	return a.Top + a.Height
-}
-
-// Rotate an AOI, mapping from the raw to rotated coordinate frame
-func RotateAOI90(aoi AOI, sensorWidth, sensorHeight int) AOI {
-	// (0,0), upper left, becomes (sensorWidth, 0) upper right
-	return AOI{
-		Width:  aoi.Height, // swap width, height because modulo 90
-		Height: aoi.Width,
-		Left:   aoi.Top,
-		Top:    sensorWidth - aoi.Left - aoi.Width, // Top needs to be transformed from left edge
-	}
-}
-
-// Rotate an AOI, mapping from the raw to rotated coordinate frame
-func RotateAOI270(aoi AOI, sensorWidth, sensorHeight int) AOI {
-	return AOI{
-		Width:  aoi.Height,
-		Height: aoi.Width,
-		Left:   sensorHeight - aoi.Top - aoi.Height, // Left needs to be transformed from top edge
-		Top:    aoi.Left,
-	}
 }
 
 // Binning encapsulates information about pixel addition on camera
@@ -126,15 +104,15 @@ type ThermalManager interface {
 
 // HTTPThermalManager binds routes for thermal management on the table
 func HTTPThermalManager(t ThermalManager, table generichttp.RouteTable) {
-	table[pat.Get("/fan")] = GetFan(t)
-	table[pat.Post("/fan")] = SetFan(t)
-	table[pat.Get("/sensor-cooling")] = GetCooling(t)
-	table[pat.Post("/sensor-cooling")] = SetCooling(t)
-	table[pat.Get("/temperature")] = GetTemperature(t)
-	table[pat.Get("/temperature-setpoint-options")] = GetTemperatureSetpoints(t)
-	table[pat.Get("/temperature-setpoint")] = GetTemperatureSetpoint(t)
-	table[pat.Post("/temperature-setpoint")] = SetTemperatureSetpoint(t)
-	table[pat.Get("/temperature-status")] = GetTemperatureStatus(t)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/fan"}] = GetFan(t)
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/fan"}] = SetFan(t)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/sensor-cooling"}] = GetCooling(t)
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/sensor-cooling"}] = SetCooling(t)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/temperature"}] = GetTemperature(t)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/temperature-setpoint-options"}] = GetTemperatureSetpoints(t)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/temperature-setpoint"}] = GetTemperatureSetpoint(t)
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/temperature-setpoint"}] = SetTemperatureSetpoint(t)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/temperature-status"}] = GetTemperatureStatus(t)
 }
 
 // GetCooling returns an HTTP handler func that returns the cooling status of the camera
@@ -309,9 +287,9 @@ func (b *BurstWrapper) ReadAllFrames(w http.ResponseWriter, r *http.Request) {
 
 // Inject puts burst management routes on a table
 func (b *BurstWrapper) Inject(table generichttp.RouteTable) {
-	table[pat.Post("/burst/setup")] = b.SetupBurst
-	table[pat.Get("/burst/frame")] = b.ReadFrame
-	table[pat.Get("/burst/all-frames")] = b.ReadAllFrames
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/burst/setup"}] = b.SetupBurst
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/burst/frame"}] = b.ReadFrame
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/burst/all-frames"}] = b.ReadAllFrames
 }
 
 // MetadataMaker can produce an array of FITS cards
@@ -322,9 +300,9 @@ type MetadataMaker interface {
 
 // HTTPPicture injects HTTP methods into a route table for a picture taker
 func HTTPPicture(p PictureTaker, table generichttp.RouteTable, rec *imgrec.Recorder) {
-	table[pat.Get("/exposure-time")] = GetExposureTime(p)
-	table[pat.Post("/exposure-time")] = SetExposureTime(p)
-	table[pat.Get("/image")] = GetFrame(p, rec)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/exposure-time"}] = GetExposureTime(p)
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/exposure-time"}] = SetExposureTime(p)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/image"}] = GetFrame(p, rec)
 }
 
 // SetExposureTime sets the exposure time on a POST request.
@@ -504,10 +482,10 @@ type AOIManipulator interface {
 // HTTPAOIManipulator injects routes to manipulate the AOI of a camera
 // into a route table
 func HTTPAOIManipulator(a AOIManipulator, table generichttp.RouteTable) {
-	table[pat.Get("/aoi")] = GetAOI(a)
-	table[pat.Post("/aoi")] = SetAOI(a)
-	table[pat.Get("/binning")] = GetBinning(a)
-	table[pat.Post("/binning")] = SetBinning(a)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/aoi"}] = GetAOI(a)
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/aoi"}] = SetAOI(a)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/binning"}] = GetBinning(a)
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/binning"}] = SetBinning(a)
 }
 
 // SetAOI returns an HTTP handler func that sets the AOI of the camera
@@ -653,11 +631,11 @@ func SetEMGain(e EMGainManager) http.HandlerFunc {
 
 // HTTPEMGainManager binds routes that control EM gain to the table
 func HTTPEMGainManager(e EMGainManager, table generichttp.RouteTable) {
-	table[pat.Get("/em-gain")] = GetEMGain(e)
-	table[pat.Post("/em-gain")] = SetEMGain(e)
-	table[pat.Get("/em-gain-mode")] = GetEMGainMode(e)
-	table[pat.Post("/em-gain-mode")] = SetEMGainMode(e)
-	table[pat.Get("/em-gain-range")] = GetEMGainRange(e)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/em-gain"}] = GetEMGain(e)
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/em-gain"}] = SetEMGain(e)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/em-gain-mode"}] = GetEMGainMode(e)
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/em-gain-mode"}] = SetEMGainMode(e)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/em-gain-range"}] = GetEMGainRange(e)
 }
 
 // ShutterController describes an interface to a camera which may manipulate its shutter
@@ -681,8 +659,8 @@ func GetShutter(s ShutterController) http.HandlerFunc {
 
 // HTTPShutterController binds routes to control the shutter to a route table
 func HTTPShutterController(s ShutterController, table generichttp.RouteTable) {
-	table[pat.Get("/shutter")] = GetShutter(s)
-	table[pat.Post("/shutter")] = SetShutter(s)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/shutter"}] = GetShutter(s)
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/shutter"}] = SetShutter(s)
 }
 
 // Camera describes the most basic camera possible

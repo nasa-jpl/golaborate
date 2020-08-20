@@ -10,9 +10,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/go-chi/chi"
 	"github.jpl.nasa.gov/bdube/golab/util"
-	"goji.io"
-	"goji.io/pat"
 )
 
 // all of the following types are followed with a capital T for homogenaeity and
@@ -291,24 +290,20 @@ type HTTPer interface {
 	RT() RouteTable
 }
 
-// RouteTable maps goji patterns to handler funcs
-type RouteTable map[*pat.Pattern]http.HandlerFunc
-
 // MethodPath is a path and method
 type MethodPath struct {
 	Method, Path string
 }
 
-// RouteTable2 is like RouteTable, but agnostic to the router backend instead
-// of tied to Goji
-type RouteTable2 map[MethodPath]http.HandlerFunc
+// RouteTable maps methods and paths to handlers
+type RouteTable map[MethodPath]http.HandlerFunc
 
 // Endpoints returns the endpoints in the route table
 func (rt RouteTable) Endpoints() []string {
 	routes := make([]string, len(rt))
 	idx := 0
 	for key := range rt {
-		routes[idx] = key.String()
+		routes[idx] = key.Path
 		idx++
 	}
 	routes = util.UniqueString(routes)
@@ -331,13 +326,20 @@ func (rt RouteTable) EndpointsHTTP() func(http.ResponseWriter, *http.Request) {
 
 // Bind calls HandleFunc for each route in the table on the given mux.
 // It also binds the endpoints route if it is not in the table already
-func (rt RouteTable) Bind(mux *goji.Mux) {
-	for ptrn, meth := range rt {
-		mux.HandleFunc(ptrn, meth)
+func (rt RouteTable) Bind(r chi.Router) {
+	for mp, fcn := range rt {
+		switch mp.Method {
+		case http.MethodGet:
+			r.Get(mp.Path, fcn)
+		case http.MethodPost:
+			r.Post(mp.Path, fcn)
+		default:
+			panic("unsupported HTTP verb, generichttp only supports get and post")
+		}
 	}
-	pg := pat.Get("/endpoints")
-	if _, exists := rt[pg]; !exists {
-		mux.HandleFunc(pg, rt.EndpointsHTTP())
+	p := MethodPath{Method: http.MethodGet, Path: "/endpoints"}
+	if _, exists := rt[p]; !exists {
+		r.Get(p.Path, rt.EndpointsHTTP())
 	}
 }
 

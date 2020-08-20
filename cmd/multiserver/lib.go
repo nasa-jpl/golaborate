@@ -18,7 +18,6 @@ import (
 
 	"github.jpl.nasa.gov/bdube/golab/aerotech"
 	"github.jpl.nasa.gov/bdube/golab/cryocon"
-	"goji.io/pat"
 
 	"github.jpl.nasa.gov/bdube/golab/nkt"
 
@@ -33,8 +32,8 @@ import (
 	"github.jpl.nasa.gov/bdube/golab/generichttp/motion"
 	"github.jpl.nasa.gov/bdube/golab/generichttp/tmc"
 
+	"github.com/go-chi/chi"
 	"github.com/go-yaml/yaml"
-	"goji.io"
 )
 
 // ObjSetup holds the typical triplet of args for a New<device> call.
@@ -88,9 +87,9 @@ func LoadYaml(path string) (Config, error) {
 // and uses them to construct a goji mux with populated handlers.
 // The mux serves a special route, route-list, which returns an
 // array of strings containing all routes as JSON.
-func BuildMux(c Config) *goji.Mux {
+func BuildMux(c Config) chi.Router {
 	// make the root handler
-	root := goji.NewMux()
+	root := chi.NewRouter()
 	supergraph := map[string][]string{}
 
 	// for every node specified, build a submux
@@ -223,16 +222,16 @@ func BuildMux(c Config) *goji.Mux {
 		locker.Inject(httper, lock)
 
 		// bind to the mux
-		mux := goji.SubMux()
-		httper.RT().Bind(mux)
+		r := chi.NewRouter()
+		httper.RT().Bind(r)
 
 		for _, ware := range middleware {
-			mux.Use(ware)
+			r.Use(ware)
 		}
-		mux.Use(lock.Check)
-		root.Handle(pat.New(hndlS), mux)
+		r.Use(lock.Check)
+		root.Mount(hndlS, r)
 	}
-	root.HandleFunc(pat.Get("/endpoints"), func(w http.ResponseWriter, r *http.Request) {
+	root.Get("/endpoints", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		err := json.NewEncoder(w).Encode(supergraph)

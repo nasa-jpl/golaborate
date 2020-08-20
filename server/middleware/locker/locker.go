@@ -15,11 +15,11 @@ import (
 func Inject(other generichttp.HTTPer, l ManipulableLock) {
 	rt := other.RT()
 	if al, ok := (l).(*AxisLocker); ok {
-		rt[pat.Get("/axis/:axis/lock")] = al.HTTPGet
-		rt[pat.Post("/axis/:axis/lock")] = al.HTTPSet
+		rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/axis/:axis/lock"}] = al.HTTPGet
+		rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/axis/:axis/lock"}] = al.HTTPSet
 	} else {
-		rt[pat.Get("/lock")] = l.HTTPGet
-		rt[pat.Post("/lock")] = l.HTTPSet
+		rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/lock"}] = l.HTTPGet
+		rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/lock"}] = l.HTTPSet
 	}
 }
 

@@ -39,8 +39,8 @@ type Enabler interface {
 
 // HTTPEnable adds routes for the enabler to the route table
 func HTTPEnable(iface Enabler, table generichttp.RouteTable) {
-	table[pat.Get("/axis/:axis/enabled")] = GetEnabled(iface)
-	table[pat.Post("/axis/:axis/enabled")] = SetEnabled(iface)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/axis/:axis/enabled"}] = GetEnabled(iface)
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/axis/:axis/enabled"}] = SetEnabled(iface)
 }
 
 // SetEnabled returns an HTTP handler func from an enabler that enables or disables the axis
@@ -99,9 +99,9 @@ type Mover interface {
 
 // HTTPMove adds routes for the mover to the route tabler
 func HTTPMove(iface Mover, table generichttp.RouteTable) {
-	table[pat.Post("/axis/:axis/home")] = Home(iface)
-	table[pat.Get("/axis/:axis/pos")] = GetPos(iface)
-	table[pat.Post("/axis/:axis/pos")] = SetPos(iface)
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/axis/:axis/home"}] = Home(iface)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/axis/:axis/pos"}] = GetPos(iface)
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/axis/:axis/pos"}] = SetPos(iface)
 }
 
 // GetPos returns an HTTP handler func from a mover that gets the position of an axis
@@ -180,8 +180,8 @@ type Speeder interface {
 
 // HTTPSpeed adds routes for the speeder to the route table
 func HTTPSpeed(iface Speeder, table generichttp.RouteTable) {
-	table[pat.Post("/axis/:axis/velocity")] = SetVelocity(iface)
-	table[pat.Get("/axis/:axis/velocity")] = GetVelocity(iface)
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/axis/:axis/velocity"}] = SetVelocity(iface)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/axis/:axis/velocity"}] = GetVelocity(iface)
 }
 
 // SetVelocity returns an HTTP handler func which sets the velocity setpoint on an axis
@@ -227,7 +227,7 @@ type Initializer interface {
 
 // HTTPInitialize adds routes for initialization to the route table
 func HTTPInitialize(i Initializer, table generichttp.RouteTable) {
-	table[pat.Post("/axis/:axis/initialize")] = Initialize(i)
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/axis/:axis/initialize"}] = Initialize(i)
 }
 
 // Initialize returns an HTTP handler func that calls Initialize for an axis
@@ -309,7 +309,7 @@ func (l *LimitMiddleware) Check(next http.Handler) http.Handler {
 
 // Inject places a /axis/:axis/limits route on the table of the HTTPer
 func (l LimitMiddleware) Inject(h generichttp.HTTPer) {
-	h.RT()[pat.Get("/axis/:axis/limits")] = Limits(l)
+	h.RT()[generichttp.MethodPath{Method: http.MethodGet, Path: "/axis/:axis/limits"}] = Limits(l)
 }
 
 // Limits returns an HTTP handler func that returns the limits for an axis

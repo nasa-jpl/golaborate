@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	"github.jpl.nasa.gov/bdube/golab/generichttp"
-	"goji.io/pat"
 )
 
 // RawCommunicator has a single Raw method
@@ -43,5 +42,5 @@ func (rw *RawWrapper) HTTPRaw(w http.ResponseWriter, r *http.Request) {
 func InjectRawComm(other generichttp.HTTPer, raw RawCommunicator) {
 	wrap := RawWrapper{Comm: raw}
 	rt := other.RT()
-	rt[pat.Post("/raw")] = wrap.HTTPRaw
+	rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/raw"}] = wrap.HTTPRaw
 }

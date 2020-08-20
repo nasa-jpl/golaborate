@@ -14,7 +14,6 @@ import (
 	"github.jpl.nasa.gov/bdube/golab/generichttp/ascii"
 
 	"github.jpl.nasa.gov/bdube/golab/oscilloscope"
-	"goji.io/pat"
 )
 
 // FunctionGenerator describes an interface to a function generator
@@ -59,27 +58,27 @@ type FunctionGenerator interface {
 // HTTPFunctionGenerator injects an HTTP interface to a function generator into a route table
 func HTTPFunctionGenerator(fg FunctionGenerator, table generichttp.RouteTable) {
 	rt := table
-	rt[pat.Get("/function")] = GetFunction(fg)
-	rt[pat.Post("/function")] = SetFunction(fg)
-	rt[pat.Get("/frequency")] = GetFrequency(fg)
-	rt[pat.Post("/frequency")] = SetFrequency(fg)
+	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/function"}] = GetFunction(fg)
+	rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/function"}] = SetFunction(fg)
+	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/frequency"}] = GetFrequency(fg)
+	rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/frequency"}] = SetFrequency(fg)
 
-	rt[pat.Get("/voltage")] = GetVoltage(fg)
-	rt[pat.Post("/voltage")] = SetVoltage(fg)
+	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/voltage"}] = GetVoltage(fg)
+	rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/voltage"}] = SetVoltage(fg)
 
-	rt[pat.Get("/offset")] = GetOffset(fg)
-	rt[pat.Post("/offset")] = SetOffset(fg)
+	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/offset"}] = GetOffset(fg)
+	rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/offset"}] = SetOffset(fg)
 
-	rt[pat.Get("/output")] = GetOutput(fg)
-	rt[pat.Post("/output")] = SetOutput(fg)
+	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/output"}] = GetOutput(fg)
+	rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/output"}] = SetOutput(fg)
 
-	rt[pat.Post("/output-load")] = SetOutputLoad(fg)
+	rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/output-load"}] = SetOutputLoad(fg)
 
-	rt[pat.Post("/waveform")] = SetWaveform(fg)
+	rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/waveform"}] = SetWaveform(fg)
 
 	if rawer, ok := interface{}(fg).(ascii.RawCommunicator); ok {
 		RW := ascii.RawWrapper{Comm: rawer}
-		rt[pat.Post("/raw")] = RW.HTTPRaw
+		rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/raw"}] = RW.HTTPRaw
 	}
 }
 
@@ -388,30 +387,30 @@ func (h HTTPOscilloscope) RT() generichttp.RouteTable {
 // NewHTTPOscilloscope wraps a function generator in an HTTP interface
 func NewHTTPOscilloscope(o Oscilloscope) HTTPOscilloscope {
 	rt := generichttp.RouteTable{}
-	rt[pat.Get("/scale")] = GetScale(o)
-	rt[pat.Post("/scale")] = SetScale(o)
+	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/scale"}] = GetScale(o)
+	rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/scale"}] = SetScale(o)
 
-	rt[pat.Get("/timebase")] = GetTimebase(o)
-	rt[pat.Post("/timebase")] = SetTimebase(o)
+	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/timebase"}] = GetTimebase(o)
+	rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/timebase"}] = SetTimebase(o)
 
-	rt[pat.Get("/bit-depth")] = GetBitDepth(o)
-	rt[pat.Post("/bit-depth")] = SetBitDepth(o)
+	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/bit-depth"}] = GetBitDepth(o)
+	rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/bit-depth"}] = SetBitDepth(o)
 
-	rt[pat.Get("/sample-rate")] = GetSampleRate(o)
-	rt[pat.Post("/sample-rate")] = SetSampleRate(o)
+	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/sample-rate"}] = GetSampleRate(o)
+	rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/sample-rate"}] = SetSampleRate(o)
 
-	rt[pat.Get("/acq-length")] = GetAcqLength(o)
-	rt[pat.Post("/acq-length")] = SetAcqLength(o)
+	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/acq-length"}] = GetAcqLength(o)
+	rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/acq-length"}] = SetAcqLength(o)
 
-	rt[pat.Get("/acq-mode")] = GetAcqMode(o)
-	rt[pat.Post("/acq-mode")] = SetAcqMode(o)
+	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/acq-mode"}] = GetAcqMode(o)
+	rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/acq-mode"}] = SetAcqMode(o)
 
-	rt[pat.Post("/acq-start")] = StartAcq(o)
-	rt[pat.Get("/acq-waveform")] = AcquireWaveform(o)
+	rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/acq-start"}] = StartAcq(o)
+	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/acq-waveform"}] = AcquireWaveform(o)
 
 	if rawer, ok := interface{}(o).(ascii.RawCommunicator); ok {
 		RW := ascii.RawWrapper{Comm: rawer}
-		rt[pat.Post("/raw")] = RW.HTTPRaw
+		rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/raw"}] = RW.HTTPRaw
 	}
 	scope := HTTPOscilloscope{O: o, RouteTable: rt}
 	return scope
@@ -538,23 +537,23 @@ func (h HTTPDAQ) RT() generichttp.RouteTable {
 // NewHTTPDAQ returns a newly HTTP wrapped DAQ
 func NewHTTPDAQ(d DAQ) HTTPDAQ {
 	rt := generichttp.RouteTable{}
-	rt[pat.Get("/channel-label")] = GetChannelLabel(d)
-	rt[pat.Post("/channel-label")] = SetChannelLabel(d)
+	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/channel-label"}] = GetChannelLabel(d)
+	rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/channel-label"}] = SetChannelLabel(d)
 
-	rt[pat.Get("/sample-rate")] = GetSampleRate(d)
-	rt[pat.Post("/sample-rate")] = SetSampleRate(d)
+	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/sample-rate"}] = GetSampleRate(d)
+	rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/sample-rate"}] = SetSampleRate(d)
 
-	rt[pat.Get("/recording-length")] = GetRecordingLength(d)
-	rt[pat.Post("/recording-length")] = SetRecordingLength(d)
+	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/recording-length"}] = GetRecordingLength(d)
+	rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/recording-length"}] = SetRecordingLength(d)
 
-	rt[pat.Get("/recording-channel")] = GetRecordingChannel(d)
-	rt[pat.Post("/recording-channel")] = SetRecordingChannel(d)
+	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/recording-channel"}] = GetRecordingChannel(d)
+	rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/recording-channel"}] = SetRecordingChannel(d)
 
-	rt[pat.Get("/record")] = Record(d)
+	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/record"}] = Record(d)
 
 	if rawer, ok := interface{}(d).(ascii.RawCommunicator); ok {
 		RW := ascii.RawWrapper{Comm: rawer}
-		rt[pat.Post("/raw")] = RW.HTTPRaw
+		rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/raw"}] = RW.HTTPRaw
 	}
 
 	return HTTPDAQ{D: d, RouteTable: rt}

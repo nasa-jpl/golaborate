@@ -7,25 +7,22 @@ import (
 	"os"
 	"strings"
 
+	"github.jpl.nasa.gov/bdube/golab/generichttp"
 	"github.jpl.nasa.gov/bdube/golab/imgrec"
 
-	"goji.io/pat"
-
-	"goji.io"
-
+	"github.com/go-chi/chi"
 	"github.com/knadh/koanf"
 	"github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/structs"
 	"github.jpl.nasa.gov/bdube/golab/andor/sdk3"
-	"github.jpl.nasa.gov/bdube/golab/server"
 
 	yml "gopkg.in/yaml.v2"
 )
 
 var (
 	// Version is the version number.  Typically injected via ldflags with git build
-	Version = "9"
+	Version = "10"
 
 	// ConfigFileName is what it sounds like
 	ConfigFileName = "andor-http.yml"
@@ -216,10 +213,10 @@ func run() {
 
 	// clean up the submux string
 	hndlrS := cfg.Root
-	hndlrS = server.SubMuxSanitize(hndlrS)
-	root := goji.NewMux()
-	mux := goji.SubMux()
-	root.Handle(pat.New(hndlrS), mux)
+	hndlrS = generichttp.SubMuxSanitize(hndlrS)
+	root := chi.NewRouter()
+	mux := chi.NewRouter()
+	root.Mount(hndlrS, mux)
 	w.RT().Bind(mux)
 	addr := cfg.Addr + cfg.Root
 	log.Println("now listening for requests at ", addr)

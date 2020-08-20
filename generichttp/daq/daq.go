@@ -25,7 +25,7 @@ type DAC interface {
 }
 
 // HTTPBasicDAC adds routes for basic DAC operation to a table
-func HTTPBasicDAC(iface DAC, table generichttp.RouteTable2) {
+func HTTPBasicDAC(iface DAC, table generichttp.RouteTable) {
 	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/output"}] = Output(iface)
 	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/output-dn-16"}] = OutputDN16(iface)
 }
@@ -91,7 +91,7 @@ type MultiChannelDAC interface {
 }
 
 // HTTPMultiChannel adds routes for multi channel output to the table
-func HTTPMultiChannel(iface MultiChannelDAC, table generichttp.RouteTable2) {
+func HTTPMultiChannel(iface MultiChannelDAC, table generichttp.RouteTable) {
 	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/output-multi"}] = OutputMulti(iface)
 	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/output-multi-dn-16"}] = OutputMultiDN16(iface)
 }
@@ -162,7 +162,7 @@ type ExtendedDAC interface {
 }
 
 // HTTPExtended adds routes for multi channel output to the table
-func HTTPExtended(iface ExtendedDAC, table generichttp.RouteTable2) {
+func HTTPExtended(iface ExtendedDAC, table generichttp.RouteTable) {
 	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/range"}] = SetRange(iface)
 	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/range"}] = GetRange(iface)
 
@@ -276,7 +276,7 @@ type WaveformDAC interface {
 }
 
 // HTTPWaveform adds routes for multi channel output to the table
-func HTTPWaveform(iface WaveformDAC, table generichttp.RouteTable2) {
+func HTTPWaveform(iface WaveformDAC, table generichttp.RouteTable) {
 	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/operating-mode"}] = SetOperatingMode(iface)
 	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/operating-mode"}] = GetOperatingMode(iface)
 
@@ -431,7 +431,7 @@ type Timer interface {
 }
 
 // HTTPTimer adds routes for basic Timer operation to a table
-func HTTPTimer(iface Timer, table generichttp.RouteTable2) {
+func HTTPTimer(iface Timer, table generichttp.RouteTable) {
 	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/timer-period"}] = SetTimerPeriod(iface)
 	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/timer-period"}] = GetTimerPeriod(iface)
 }
@@ -604,13 +604,13 @@ func csvToWaveformDN(r io.Reader) ([]channelWaveformDN, error) {
 type HTTPDAC struct {
 	d DAC
 
-	RouteTable generichttp.RouteTable2
+	RouteTable generichttp.RouteTable
 }
 
 // NewHTTPDAC sets up an HTTP interface to a DAC
 func NewHTTPDAC(d DAC) HTTPDAC {
 	w := HTTPDAC{d: d}
-	rt := generichttp.RouteTable2{}
+	rt := generichttp.RouteTable{}
 	HTTPBasicDAC(d, rt)
 	if md, ok := (d).(MultiChannelDAC); ok {
 		HTTPMultiChannel(md, rt)

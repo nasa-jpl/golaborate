@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	"github.jpl.nasa.gov/bdube/golab/generichttp"
-	"goji.io/pat"
 )
 
 // CenterBandwidth is a struct holding the center wavelength (nm) and full bandwidth (nm) of a VARIA
@@ -201,30 +200,30 @@ type HTTPLaserController struct {
 func NewHTTPLaserController(ctl Controller) HTTPLaserController {
 	h := HTTPLaserController{Ctl: ctl}
 	rt := generichttp.RouteTable{
-		pat.Get("/emission"):  GetEmission(ctl),
-		pat.Post("/emission"): SetEmission(ctl),
+		generichttp.MethodPath{Method: http.MethodGet, Path: "/emission"}:  GetEmission(ctl),
+		generichttp.MethodPath{Method: http.MethodPost, Path: "/emission"}: SetEmission(ctl),
 	}
 	if currentctl, ok := interface{}(ctl).(CurrentController); ok {
-		rt[pat.Get("/current")] = GetCurrent(currentctl)
-		rt[pat.Post("/current")] = SetCurrent(currentctl)
+		rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/current"}] = GetCurrent(currentctl)
+		rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/current"}] = SetCurrent(currentctl)
 	}
 	if powerctl, ok := interface{}(ctl).(PowerController); ok {
-		rt[pat.Get("/power")] = GetPower(powerctl)
-		rt[pat.Post("/power")] = SetPower(powerctl)
+		rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/power"}] = GetPower(powerctl)
+		rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/power"}] = SetPower(powerctl)
 	}
 	if ndctl, ok := interface{}(ctl).(NDController); ok {
-		rt[pat.Get("/nd")] = GetND(ndctl)
-		rt[pat.Post("/nd")] = SetND(ndctl)
+		rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/nd"}] = GetND(ndctl)
+		rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/nd"}] = SetND(ndctl)
 	}
 	if bwctl, ok := interface{}(ctl).(BandwidthController); ok {
-		rt[pat.Get("/wvl/short")] = GetShortWave(bwctl)
-		rt[pat.Post("/wvl/short")] = SetShortWave(bwctl)
+		rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/wvl/short"}] = GetShortWave(bwctl)
+		rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/wvl/short"}] = SetShortWave(bwctl)
 
-		rt[pat.Get("/wvl/long")] = GetLongWave(bwctl)
-		rt[pat.Post("/wvl/long")] = SetLongWave(bwctl)
+		rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/wvl/long"}] = GetLongWave(bwctl)
+		rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/wvl/long"}] = SetLongWave(bwctl)
 
-		rt[pat.Get("/wvl/center-bandwidth")] = GetCenterBandwidth(bwctl)
-		rt[pat.Post("/wvl/center-bandwidth")] = SetCenterBandwidth(bwctl)
+		rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/wvl/center-bandwidth"}] = GetCenterBandwidth(bwctl)
+		rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/wvl/center-bandwidth"}] = SetCenterBandwidth(bwctl)
 	}
 	h.RouteTable = rt
 	return h
