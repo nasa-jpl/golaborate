@@ -12,6 +12,7 @@ package sdk3
 */
 import "C"
 import (
+	"errors"
 	"fmt"
 	"image"
 	"reflect"
@@ -408,6 +409,14 @@ func (c *Camera) GetFrame() (image.Image, error) {
 // The images are streamed to ch, and are image.Gray16.
 // the channel is always closed after
 func (c *Camera) Burst(frames int, fps float64, ch chan<- image.Image) error {
+	imgS, err := c.ImageSizeBytes()
+	if err != nil {
+		return err
+	}
+	dataRate := int(float64(imgS) * fps) // bytes per second
+	if dataRate > 255e6 {                // speed of basic camera link is 255MB/s
+		return errors.New("data rate will cause on-camera buffer to overflow and likely deadlock: aborted without configuration change")
+	}
 
 	// get the previous framerate so we can reset to this like a good neighbor
 	prevFps, err := GetFloat(c.Handle, "FrameRate")
@@ -432,22 +441,16 @@ func (c *Camera) Burst(frames int, fps float64, ch chan<- image.Image) error {
 		return err
 	}
 
-	err = SetEnumString(c.Handle, "CycleMode", "Continuous")
-	if err != nil {
-		return err
-	}
 	// now start acq and begin handling buffers
 	err = SetFloat(c.Handle, "FrameRate", fps)
 	if err != nil {
 		return err
 	}
 
-	defer func() {
-		IssueCommand(c.Handle, "AcquisitionStop")
-		SetFloat(c.Handle, "FrameRate", prevFps)
-		SetEnumString(c.Handle, "CycleMode", prevCycle)
-		close(ch)
-	}()
+	err = SetEnumString(c.Handle, "CycleMode", "Continuous")
+	if err != nil {
+		return err
+	}
 
 	// get the exposure time so we know how long to wait for a buffer
 	expT, err := c.GetExposureTime()
@@ -455,6 +458,15 @@ func (c *Camera) Burst(frames int, fps float64, ch chan<- image.Image) error {
 		return err
 	}
 	waitT := expT + time.Second
+
+	// ensure buffer size is correct before bursting
+	c.Allocate()
+	defer func() {
+		IssueCommand(c.Handle, "AcquisitionStop")
+		SetFloat(c.Handle, "FrameRate", prevFps)
+		SetEnumString(c.Handle, "CycleMode", prevCycle)
+		close(ch)
+	}()
 
 	err = IssueCommand(c.Handle, "AcquisitionStart")
 
@@ -471,9 +483,7 @@ func (c *Camera) Burst(frames int, fps float64, ch chan<- image.Image) error {
 		if err != nil {
 			return err
 		}
-		// H, W swapped in unpadbuffer, rotation built into SDK3 but needs to
-		// be subverted here
-		buf = UnpadBuffer(buf, stride, aoi.Height, aoi.Width)
+		buf = UnpadBuffer(buf, stride, aoi.Width, aoi.Height)
 		ch <- &image.Gray16{Pix: buf, Stride: aoi.Width * 2, Rect: image.Rect(0, 0, aoi.Width, aoi.Height)}
 	}
 	return err
@@ -605,7 +615,7 @@ func (c *Camera) GetFrameSize() (int, int, error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	return aoi.Height, aoi.Width, nil
+	return aoi.Width, aoi.Height, nil
 }
 
 // CollectHeaderMetadata satisfies generichttp/camera and makes a stack of FITS cards
@@ -730,7 +740,7 @@ func UnpadBuffer(buf []byte, aoistride, aoiwidth, aoiheight int) []byte {
 	bidx := 0                       // byte index
 	bpp := 2                        // bytes per pixel
 	rowWidthBytes := bpp * aoiwidth // width (stride) or a row in bytes
-	// implicitly row major order, but seems to be from the SDK
+	// implicitly row major order, but that is C convention
 	for row := 0; row < aoiheight; row++ {
 		bytes := buf[bidx : bidx+rowWidthBytes]
 		out = append(out, bytes...)

@@ -89,3 +89,45 @@ In this case, 10,000 frames over 3 and a half minutes is very close to the nomin
 ## exact frame times
 
 There is not presently a way to know exactly what time each frame was taken, so doing things like temporal spectral analysis is compromised by timing uncertainty.  This can be added in the future if desired.
+
+
+### debugging
+
+There has been some flakiness getting video working with the andor cameras.  An experimental test program was written in pure Go to remove the HTTP layer and was used as a debugging testbed.
+
+It was observed that:
+
+a) within the first few frames, the latency is poor.  It seems the clock on the camera has not stabilized, or there is a similar issue.  A 20us exposure time at 98fps (10.2ms/frame) produced some inter-frame times in the > 30 ms range.  Thus, a 'large' timeout must be used.  A 100ms timeout produced 0 errors over 10,000 frames.
+
+b) the 'fixed' cycle mode is not reliable.  Continuous should be used with a manual call to AcquisitionStop.  There is a "ragged edge" there with the potential for stale buffers visible to the SDK.
+
+c) when using a camera at a speed that would oversaturate the cameralink interface, after the on-camera buffer fills the code deadlocks on `WaitBuffer`.
+
+d) the clock (and Go code) becomes timing stable quickly.  Running at 20us exposure, 10fps, the following log was produced when timing every 100 frames:
+
+```
+2020/08/24 13:13:36 0 0s
+2020/08/24 13:13:46 100 9.995488426s
+2020/08/24 13:13:56 200 10.000492088s
+2020/08/24 13:14:06 300 10.000490149s
+2020/08/24 13:14:16 400 10.000506736s
+2020/08/24 13:14:26 500 10.000536451s
+2020/08/24 13:14:36 600 10.000470033s
+2020/08/24 13:14:46 700 10.000526485s
+2020/08/24 13:14:56 800 10.000485806s
+2020/08/24 13:15:06 900 10.00049154s
+...
+```
+The differential rep rates, i-(i-1), look like the following in microseconds:
+```
+5003.662
+-1.938999999
+16.587
+29.715
+-66.418
+56.452
+-40.679
+5.734
+```
+
+So we can say the clock stabilizes to an average accuracy of below 1 microsecond per frame within relatively short order.
