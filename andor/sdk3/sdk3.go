@@ -19,6 +19,8 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/theckman/yacspin"
+
 	"github.com/astrogo/fitsio"
 	"github.jpl.nasa.gov/bdube/golab/generichttp/camera"
 	"github.jpl.nasa.gov/bdube/golab/util"
@@ -37,7 +39,7 @@ const (
 	// NeoBufferSize is the size of the buffer on the Andor Neo camera itself
 	NeoBufferSize = 4e9
 
-	// CLBaseSped is the transfer rate in MB/s of base speed camera link,
+	// CLBaseSpeed is the transfer rate in MB/s of base speed camera link,
 	// used by the Andor Neo camera.
 	CLBaseSpeed = 255e6
 )
@@ -477,10 +479,23 @@ func (c *Camera) Burst(frames int, fps float64, ch chan<- image.Image) error {
 		SetEnumString(c.Handle, "CycleMode", prevCycle)
 	}()
 
+	cfg := yacspin.Config{
+		Frequency:       100 * time.Millisecond,
+		CharSet:         yacspin.CharSets[36],
+		Suffix:          "capturing burst",
+		SuffixAutoColon: true,
+		StopColors:      []string{"fgGreen"}}
+
+	spinner, err := yacspin.New(cfg)
+	if err != nil {
+		return err
+	}
+	defer spinner.Stop()
 	err = IssueCommand(c.Handle, "AcquisitionStart")
 	if err != nil {
 		return err
 	}
+	spinner.Start()
 
 	for idx := 0; idx < frames; idx++ {
 		err = c.QueueBuffer()
@@ -497,6 +512,7 @@ func (c *Camera) Burst(frames int, fps float64, ch chan<- image.Image) error {
 		}
 		buf = UnpadBuffer(buf, stride, aoi.Width, aoi.Height)
 		ch <- &image.Gray16{Pix: buf, Stride: aoi.Width * 2, Rect: image.Rect(0, 0, aoi.Width, aoi.Height)}
+		spinner.Message(fmt.Sprintf("frame %d/%d", idx, frames))
 	}
 	return err
 }
