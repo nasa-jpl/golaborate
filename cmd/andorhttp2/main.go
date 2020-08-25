@@ -12,10 +12,7 @@ import (
 	"github.jpl.nasa.gov/bdube/golab/generichttp/camera"
 	"github.jpl.nasa.gov/bdube/golab/imgrec"
 
-	"goji.io/pat"
-
-	"goji.io"
-
+	"github.com/go-chi/chi"
 	"github.com/knadh/koanf"
 	"github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/file"
@@ -192,9 +189,9 @@ func run() {
 	// clean up the submux string
 	hndlrS := cfg.Root
 	hndlrS = generichttp.SubMuxSanitize(hndlrS)
-	root := goji.NewMux()
-	mux := goji.SubMux()
-	root.Handle(pat.New(hndlrS), mux)
+	root := chi.NewRouter()
+	mux := chi.NewRouter()
+	root.Mount(hndlrS, mux)
 	w.RT().Bind(mux)
 	addr := cfg.Addr + cfg.Root
 	log.Println("now listening for requests at ", addr)
