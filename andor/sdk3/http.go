@@ -31,7 +31,7 @@ func NewHTTPWrapper(c *Camera, r *imgrec.Recorder) HTTPWrapper {
 	rt := g.RT()
 	// things not part of the generic wrapper (yet?)
 	rt[generichttp.MethodPath{http.MethodGet, "/feature"}] = w.GetFeatures
-	rt[generichttp.MethodPath{http.MethodGet, "/feature/:feature"}] = w.GetFeature
+	rt[generichttp.MethodPath{http.MethodGet, "/feature/{feature}"}] = w.GetFeature
 	rt[generichttp.MethodPath{http.MethodGet, "/feature/{feature}/options"}] = w.GetFeatureInfo
 	rt[generichttp.MethodPath{http.MethodPost, "/feature/{feature}"}] = w.SetFeature
 	w2 := imgrec.NewHTTPWrapper(r)
