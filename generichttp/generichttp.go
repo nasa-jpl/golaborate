@@ -351,8 +351,5 @@ func SubMuxSanitize(str string) string {
 	if !strings.HasSuffix(str, "/") {
 		str += "/"
 	}
-	if !strings.HasSuffix(str, "*") {
-		str += "*"
-	}
 	return str
 }
