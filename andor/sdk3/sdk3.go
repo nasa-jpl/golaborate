@@ -15,7 +15,6 @@ import (
 	"errors"
 	"fmt"
 	"image"
-	"log"
 	"reflect"
 	"time"
 	"unsafe"
@@ -424,8 +423,7 @@ func (c *Camera) Burst(frames int, fps float64, ch chan<- image.Image) error {
 	}
 	T := float64(frames) / fps
 	dataRate := float64(imgS) * fps
-	fillRate := CLBaseSpeed - dataRate
-	log.Println("data rate is", dataRate, "fill rate", fillRate)
+	fillRate := dataRate - CLBaseSpeed
 	if T*fillRate > NeoBufferSize {
 		return errors.New("data rate will cause on-camera buffer to overflow and likely deadlock: aborted without configuration change")
 	}
