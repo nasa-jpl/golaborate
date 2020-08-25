@@ -7,6 +7,7 @@ require (
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/go-yaml/yaml v2.1.0+incompatible
+	github.com/google/gousb v2.1.0+incompatible
 	github.com/knadh/koanf v0.12.0
 	github.com/lordadamson/cgo.wchar v0.0.0-20190616194712-657c275f6e18
 	github.com/snksoft/crc v1.1.0
