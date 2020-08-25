@@ -32,7 +32,14 @@ const (
 
 	// WRAPVER is the andor wrapper code version.
 	// Increment this when pkg sdk3 is updated.
-	WRAPVER = 8
+	WRAPVER = 9
+
+	// NeoBufferSize is the size of the buffer on the Andor Neo camera itself
+	NeoBufferSize = 4e9
+
+	// CLBaseSped is the transfer rate in MB/s of base speed camera link,
+	// used by the Andor Neo camera.
+	CLBaseSpeed = 255e6
 )
 
 // ErrFeatureNotFound is generated when a feature is looked up in the Features
@@ -409,12 +416,15 @@ func (c *Camera) GetFrame() (image.Image, error) {
 // The images are streamed to ch, and are image.Gray16.
 // the channel is always closed after
 func (c *Camera) Burst(frames int, fps float64, ch chan<- image.Image) error {
+	defer close(ch)
 	imgS, err := c.ImageSizeBytes()
 	if err != nil {
 		return err
 	}
-	dataRate := int(float64(imgS) * fps) // bytes per second
-	if dataRate > 255e6 {                // speed of basic camera link is 255MB/s
+	T := float64(frames) / fps
+	dataRate := float64(imgS) * fps
+	fillRate := CLBaseSpeed - dataRate
+	if T*fillRate > NeoBufferSize {
 		return errors.New("data rate will cause on-camera buffer to overflow and likely deadlock: aborted without configuration change")
 	}
 
@@ -465,10 +475,12 @@ func (c *Camera) Burst(frames int, fps float64, ch chan<- image.Image) error {
 		IssueCommand(c.Handle, "AcquisitionStop")
 		SetFloat(c.Handle, "FrameRate", prevFps)
 		SetEnumString(c.Handle, "CycleMode", prevCycle)
-		close(ch)
 	}()
 
 	err = IssueCommand(c.Handle, "AcquisitionStart")
+	if err != nil {
+		return err
+	}
 
 	for idx := 0; idx < frames; idx++ {
 		err = c.QueueBuffer()

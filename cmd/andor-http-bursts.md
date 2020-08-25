@@ -131,3 +131,11 @@ The differential rep rates, i-(i-1), look like the following in microseconds:
 ```
 
 So we can say the clock stabilizes to an average accuracy of below 1 microsecond per frame within relatively short order.
+
+Performing long bursts is also stable,
+```
+2020/08/24 16:27:36 took 16m40.366043998s to take 10000 frames
+2020/08/24 16:27:36 that is 0.1000366043998 sec per frame
+```
+
+using the Burst method on the `sdk3.Camera` type.
