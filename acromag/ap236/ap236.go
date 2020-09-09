@@ -56,7 +56,8 @@ import "C"
 import (
 	"errors"
 	"fmt"
-	"math"
+	"strconv"
+	"strings"
 	"unsafe"
 )
 
@@ -86,7 +87,8 @@ const (
 
 	// FullScale boots the DAC at its maximum output value
 	FullScale
-
+)
+const (
 	// TenVSymm is a -10 to +10V output range
 	TenVSymm OutputRange = iota
 	// TenVPos is a 0 to 10V output range
@@ -104,12 +106,16 @@ const (
 	// TwentyVPos is an output range of 0-20V, this requires an external voltage source
 	TwentyVPos
 
-	slope = C.IDEALSLOPE
-	zero  = C.IDEALZEROBTC
-	maxV  = C.ENDPOINTHI
-	minV  = C.ENDPOINTLO
-	maxDN = C.CLIPHI
-	minDN = C.CLIPLO
+	// from ap236.h
+	idealZeroSB  = 0
+	idealZeroBTC = 1
+	idealSlope   = 2
+	endpointLo   = 3
+	endpointHi   = 4
+	clipLo       = 5
+	clipHi       = 6
+	offset       = 0
+	gain         = 1
 )
 
 var (
@@ -183,6 +189,17 @@ var (
 	}
 )
 
+// RangeToMinMax converts a range string, <min,max> to floats.
+// the input is assumed to be well formed; 0,0 is returned for badly formed inputs,
+// or a panic occurs for inputs not containing a 0
+func RangeToMinMax(rangeS string) (float64, float64) {
+	// assume well-formed input,
+	pieces := strings.Split(rangeS, ",")
+	f1, _ := strconv.ParseFloat(pieces[0], 64)
+	f2, _ := strconv.ParseFloat(pieces[1], 64)
+	return f1, f2
+}
+
 // ValidateOutputRange ensures that an output range is valid
 // s is formatted as "<low>,<high>"
 func ValidateOutputRange(s string) (OutputRange, error) {
@@ -248,7 +265,7 @@ func enrich(errC C.APSTATUS, procedure string) error {
 
 // AP236 is an acromag 16-bit DAC of the same type
 type AP236 struct {
-	cfg C.struct_cblk236
+	cfg *C.struct_cblk236
 }
 
 // New creates a new instance and opens the connection to the DAC
@@ -260,12 +277,8 @@ func New(deviceIndex int) (*AP236, error) {
 		cs   = C.CString(C.DEVICE_NAME) // untyped constant in C needs enforcement in Go
 	)
 	defer C.free(unsafe.Pointer(cs))
-	// confirmed by Kate Blanketship on Gophers slack that this
-	// is a valid way to generate the pointer that C wants
-	// see also: several ways to get the same address of the
-	// data: https://play.golang.org/p/fpkOIT9B3BB
-	cptr := (*[8][7]C.double)(unsafe.Pointer(&idealCode))
-	o.cfg.pIdealCode = cptr
+	o.cfg = (*C.struct_cblk236)(C.malloc(C.sizeof_struct_cblk236))
+	o.cfg.pIdealCode = cMkCopyOfIdealData(idealCode)
 	errC := C.APOpen(C.int(deviceIndex), &o.cfg.nHandle, cs)
 	err := enrich(errC, "APOpen")
 	if err != nil {
@@ -284,6 +297,10 @@ func New(deviceIndex int) (*AP236, error) {
 	o.cfg.brd_ptr = addr
 	o.cfg.bInitialized = C.TRUE
 	o.cfg.bAP = C.TRUE
+	errC = C.Setup_board_cal(o.cfg)
+	if errC != 0 {
+		return out, errors.New("error getting offset and gain coefs from AP236")
+	}
 	return out, nil
 }
 
@@ -407,7 +424,7 @@ func (dac *AP236) GetOutputSimultaneous(channel int) (bool, error) {
 
 // sendCfgToBoard updates the configuration on the board
 func (dac *AP236) sendCfgToBoard(channel int) {
-	C.cnfg236(&dac.cfg, C.int(channel))
+	C.cnfg236(dac.cfg, C.int(channel))
 	return
 }
 
@@ -415,28 +432,21 @@ func (dac *AP236) sendCfgToBoard(channel int) {
 // the error is only non-nil if the value is out of range
 func (dac *AP236) Output(channel int, voltage float64) error {
 	// TODO: look into cd236 C function
-	rngS, _ := dac.GetRange(channel) // output range
-	rng, _ := ValidateOutputRange(rngS)
-	slp := idealCode[rng][slope]   // slope
-	zro := idealCode[rng][zero]    // zero DN
-	mindn := idealCode[rng][minDN] // min value allowed
-	maxdn := idealCode[rng][maxDN] // max value allowed
-	minvolt := idealCode[rng][minV]
-	maxvolt := idealCode[rng][maxV]
-	dn := math.Round(voltage*slp + zro)
-	if voltage < minvolt || dn < mindn {
-		return ErrVoltageTooLow
-	} else if voltage > maxvolt || dn > maxdn {
-		return ErrVoltageTooHigh
-	}
-	dnU := uint16(dn)
-	return dac.OutputDN16(channel, dnU)
+	C.cd236(dac.cfg, C.int(channel), C.double(voltage))
+	C.wro236(dac.cfg, C.int(channel), (C.word)(dac.cfg.cor_buf[channel]))
+	return nil
+	// return dac.OutputDN16(channel, dac.calibrateData(channel, voltage))
 }
 
 // OutputDN16 writes a value to the board in DN.
 // the error is always nil
 func (dac *AP236) OutputDN16(channel int, value uint16) error {
-	C.wro236(&dac.cfg, C.int(channel), C.word(value))
+	rng, _ := dac.GetRange(channel)
+	min, max := RangeToMinMax(rng)
+	step := (max - min) / 65535
+	fV := min + step*float64(value)
+	C.cd236(dac.cfg, C.int(channel), C.double(fV))
+	C.wro236(dac.cfg, C.int(channel), (C.word)(dac.cfg.cor_buf[channel]))
 	return nil
 }
 
@@ -500,7 +510,7 @@ func (dac *AP236) OutputMultiDN16(channels []int, uint16s []uint16) error {
 
 // Flush writes any pending output values to the device
 func (dac *AP236) Flush() {
-	C.simtrig236(&dac.cfg)
+	C.simtrig236(dac.cfg)
 }
 
 // Clear soft resets the DAC, clearing the output but not configuration
@@ -525,4 +535,17 @@ func (dac *AP236) Reset(channel int) error {
 func (dac *AP236) Close() error {
 	errC := C.APClose(dac.cfg.nHandle)
 	return enrich(errC, "APClose")
+}
+
+// cMkCopyOfIdealData copies all values from idealCodes to a C owned
+// array.  C.free must be called on it at a later date.
+func cMkCopyOfIdealData(idealCodes [8][7]float64) *[8][7]C.double {
+	cPtr := C.malloc(C.sizeof_double * 8 * 7)
+	cArr := (*[8][7]C.double)(cPtr)
+	for i := 0; i < 8; i++ {
+		for j := 0; j < 7; j++ {
+			cArr[i][j] = C.double(idealCodes[i][j])
+		}
+	}
+	return cArr
 }
