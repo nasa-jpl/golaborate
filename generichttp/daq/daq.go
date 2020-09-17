@@ -382,7 +382,7 @@ func GetTriggerMode(d WaveformDAC) http.HandlerFunc {
 // PopulateWaveform calls from one CSV file
 func UploadWaveformFloatCSV(d WaveformDAC) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		data, err := csvToWaveformFloat(r.Body)
+		data, err := CSVToWaveformFloat(r.Body)
 		defer r.Body.Close()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -514,20 +514,29 @@ func GetTriggerDirection(t TriggerExport) http.HandlerFunc {
 	}
 }
 
-type channelWaveformVolt struct {
+// ChannelWaveformVolt is a combination of a channel index and waveform data
+type ChannelWaveformVolt struct {
 	channel int
 
 	waveform []float64
 }
 
-type channelWaveformDN struct {
+// ChannelWaveformDN is a combination of a channel index and waveform data
+type ChannelWaveformDN struct {
 	channel int
 
 	waveform []uint16
 }
 
-func csvToWaveformFloat(r io.Reader) ([]channelWaveformVolt, error) {
-	var out []channelWaveformVolt
+// CSVToWaveformFloat reads a csv file in r to a list of channel-waveform combinations
+// the columns of r are to be floating point voltages.  The header row is to specify
+// channel numbers.  A sample file has head:
+// 0,1,2
+// -10,0,10
+//
+// where 0,1,2 are channel #s on the DAC
+func CSVToWaveformFloat(r io.Reader) ([]ChannelWaveformVolt, error) {
+	var out []ChannelWaveformVolt
 	reader := csv.NewReader(r)
 	skip := true
 	for {
@@ -541,7 +550,7 @@ func csvToWaveformFloat(r io.Reader) ([]channelWaveformVolt, error) {
 		if skip {
 			skip = false
 			// allocate; one column per channel.  Leak to outer scope
-			out = make([]channelWaveformVolt, len(record))
+			out = make([]ChannelWaveformVolt, len(record))
 			for i := 0; i < len(record); i++ {
 				c, err := strconv.Atoi(record[i])
 				if err != nil {
@@ -562,9 +571,16 @@ func csvToWaveformFloat(r io.Reader) ([]channelWaveformVolt, error) {
 	return out, nil
 }
 
-func csvToWaveformDN(r io.Reader) ([]channelWaveformDN, error) {
+// CSVToWaveformDN reads a csv file in r to a list of channel-waveform combinations
+// the columns of r are to be 16 bit DNs, 0 to 2^16.  The header row is to specify
+// channel numbers.  A sample file has head:
+// 0,1,2
+// 0,32768,65535
+//
+// where 0,1,2 are channel #s on the DAC
+func CSVToWaveformDN(r io.Reader) ([]ChannelWaveformDN, error) {
 	// good old copy paste from f64 version, with one line (strconv.ParseFloat) changed
-	var out []channelWaveformDN
+	var out []ChannelWaveformDN
 	reader := csv.NewReader(r)
 	skip := true
 	for {
@@ -578,7 +594,7 @@ func csvToWaveformDN(r io.Reader) ([]channelWaveformDN, error) {
 		if skip {
 			skip = false
 			// allocate; one column per channel.  Leak to outer scope
-			out = make([]channelWaveformDN, len(record))
+			out = make([]ChannelWaveformDN, len(record))
 			for i := 0; i < len(record); i++ {
 				c, err := strconv.Atoi(record[i])
 				if err != nil {
@@ -597,6 +613,33 @@ func csvToWaveformDN(r io.Reader) ([]channelWaveformDN, error) {
 		}
 	}
 	return out, nil
+}
+
+// TimerDAC is the union of WaveformDAC and Timer
+type TimerDAC interface {
+	WaveformDAC
+	Timer
+}
+
+// LoadCSVFloats populates the waveform table of a DAC and sets the sampling
+// period in nanoseconds.  r is not closed and must be managed by the caller.
+// Playback is not started.
+func LoadCSVFloats(d TimerDAC, r io.Reader, periodNano uint32) error {
+	err := d.SetTimerPeriod(periodNano)
+	if err != nil {
+		return err
+	}
+	data, err := CSVToWaveformFloat(r)
+	if err != nil {
+		return err
+	}
+	for i := 0; i < len(data); i++ {
+		err = d.PopulateWaveform(data[i].channel, data[i].waveform)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // HTTPDAC is a type that allows setting up a DAC satisfying any combination
