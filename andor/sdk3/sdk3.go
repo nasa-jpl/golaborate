@@ -506,10 +506,7 @@ func (c *Camera) Burst(frames int, fps float64, ch chan<- image.Image) error {
 		if err != nil {
 			return err
 		}
-		buf, err := c.Buffer()
-		if err != nil {
-			return err
-		}
+		buf := c.Buffer()
 		buf = UnpadBuffer(buf, stride, aoi.Width, aoi.Height)
 		ch <- &image.Gray16{Pix: buf, Stride: aoi.Width * 2, Rect: image.Rect(0, 0, aoi.Width, aoi.Height)}
 		spinner.Message(fmt.Sprintf("frame %d/%d", idx, frames))
@@ -518,10 +515,7 @@ func (c *Camera) Burst(frames int, fps float64, ch chan<- image.Image) error {
 }
 
 func (c *Camera) unpadBuffer() ([]byte, error) {
-	buf, err := c.Buffer()
-	if err != nil {
-		return []byte{}, err
-	}
+	buf := c.Buffer()
 	stride, err := c.GetAOIStride()
 	if err != nil {
 		return []byte{}, err
@@ -617,19 +611,16 @@ func (c *Camera) SetFan(b bool) error {
 // minimal performance impact.
 //
 // may have undefined behavior if camera is writing while you read
-func (c *Camera) Buffer() ([]byte, error) {
+func (c *Camera) Buffer() []byte {
 	// this function is needed because we use a buffer of uint64 to
 	// guarantee 8-byte alignment.  We want the underlying data
 	var buf []byte
-	nbytes, err := GetInt(c.Handle, "ImageSizeBytes")
-	if err != nil {
-		return buf, err
-	}
+	l := len(c.buffer) * 8
 	hdr := (*reflect.SliceHeader)(unsafe.Pointer(&buf))
 	hdr.Data = uintptr(unsafe.Pointer(&c.buffer[0]))
-	hdr.Len = nbytes
-	hdr.Cap = nbytes
-	return buf, nil
+	hdr.Len = l
+	hdr.Cap = l
+	return buf
 }
 
 // Command issues a command to this camera's handle
