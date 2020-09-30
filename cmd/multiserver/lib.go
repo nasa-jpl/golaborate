@@ -225,9 +225,7 @@ func BuildMux(c Config) chi.Router {
 		r := chi.NewRouter()
 		httper.RT().Bind(r)
 
-		for _, ware := range middleware {
-			r.Use(ware)
-		}
+		r.Use(middleware...)
 		r.Use(lock.Check)
 		root.Mount(hndlS, r)
 	}
