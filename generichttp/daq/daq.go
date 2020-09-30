@@ -670,3 +670,8 @@ func NewHTTPDAC(d DAC) HTTPDAC {
 	w.RouteTable = rt
 	return w
 }
+
+// RT satisfies generichttp.HTTPer
+func (h HTTPDAC) RT() generichttp.RouteTable {
+	return h.RouteTable
+}
