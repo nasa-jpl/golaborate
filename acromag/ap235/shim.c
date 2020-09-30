@@ -4,7 +4,7 @@
 #include "AP235.h"
 #include <sys/mman.h>
 
-APSTATUS GetAPAddress2(int nHandle, struct mapap235** pAddress)
+APSTATUS GetAPAddress235(int nHandle, struct mapap235** pAddress)
 {
 	return (APSTATUS)GetAPAddress(nHandle, (long*)pAddress);
 }

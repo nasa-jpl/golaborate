@@ -3,7 +3,7 @@
 #include "../apcommon/apcommon.h"
 #include "AP236.h"
 
-APSTATUS GetAPAddress2(int nHandle, struct map236** pAddress)
+APSTATUS GetAPAddress236(int nHandle, struct map236** pAddress)
 {
 	return (APSTATUS)GetAPAddress(nHandle, (long*)pAddress);
 }

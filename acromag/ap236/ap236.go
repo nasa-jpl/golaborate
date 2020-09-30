@@ -289,7 +289,7 @@ func New(deviceIndex int) (*AP236, error) {
 	if err != nil {
 		return out, err
 	}
-	errC = C.GetAPAddress2(o.cfg.nHandle, &addr)
+	errC = C.GetAPAddress236(o.cfg.nHandle, &addr)
 	err = enrich(errC, "GetAPAddress")
 	if err != nil {
 		return out, err
