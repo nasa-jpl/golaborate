@@ -2,6 +2,9 @@ dmitri.shuralyov.com/gpu/mtl v0.0.0-20190408044501-666a987793e9/go.mod h1:H6x//7
 github.com/BurntSushi/toml v0.3.1 h1:WXkYYl6Yr3qBf1K79EBnL4mak0OimBfB0XUf9Vl28OQ=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
+github.com/astrogo/fitsio v0.1.0/go.mod h1:AMazbBDPn8fcAglKAWIR5+5iDBnBv78pf6UHmTKSCbE=
+github.com/astrogo/fitsio v0.2.0 h1:VJLLfj+i/QkoCa6PbxhTGslgonacRXvKCsbwzKGXmBc=
+github.com/astrogo/fitsio v0.2.0/go.mod h1:AMazbBDPn8fcAglKAWIR5+5iDBnBv78pf6UHmTKSCbE=
 github.com/brandondube/fitsio v0.1.1-0.20200827214511-f5db492df5df h1:0eOYsM6sCRerov/ruBevDdEXj1MRmO03V3BpISYlY1c=
 github.com/brandondube/fitsio v0.1.1-0.20200827214511-f5db492df5df/go.mod h1:AMazbBDPn8fcAglKAWIR5+5iDBnBv78pf6UHmTKSCbE=
 github.com/cenkalti/backoff v2.2.1+incompatible h1:tNowT99t7UNflLxfYYSlKYsBpXdEet03Pg2g16Swow4=
@@ -26,8 +29,11 @@ github.com/google/gousb v2.1.0+incompatible h1:ApzMDjF3FeO219QwWybJxYfFhXQzPLOEy
 github.com/google/gousb v2.1.0+incompatible/go.mod h1:Tl4HdAs1ThE3gECkNwz+1MWicX6FXddhJEw7L8jRDiI=
 github.com/hashicorp/hcl v1.0.0 h1:0Anlzjpi4vEasTeNFn2mLJgTSwt0+6sfsiTG8qcWGx4=
 github.com/hashicorp/hcl v1.0.0/go.mod h1:E5yfLk+7swimpb2L/Alb/PJmXilQ/rhwaUYs4T20WEQ=
+github.com/joho/godotenv v1.3.0/go.mod h1:7hK45KPybAkOC6peb+G5yklZfMxEjkZhHbwpqxOKXbg=
 github.com/knadh/koanf v0.12.0 h1:xQo0Y43CbzOix0tTeE+plIcfs1pTuaUI1/SsvDl2ROI=
 github.com/knadh/koanf v0.12.0/go.mod h1:31bzRSM7vS5Vm9LNLo7B2Re1zhLOZT6EQKeodixBikE=
+github.com/knadh/koanf v0.13.0 h1:OEjNdmrP/5oAhJkNwTtarioqOC4xe6WxRK8Q5ffW8WU=
+github.com/knadh/koanf v0.13.0/go.mod h1:7XDF7OJIqSQLUZnaXkjb1HB3CgMEYHyrzmgT8A6xAaE=
 github.com/lordadamson/cgo.wchar v0.0.0-20190616194712-657c275f6e18 h1:B0C9BI+FqZ6bRoDhZv/uxGdesjdHSjF0wYvxshLDork=
 github.com/lordadamson/cgo.wchar v0.0.0-20190616194712-657c275f6e18/go.mod h1:Bya4tHUIYh8OEP6pnEODkFiq1BVXwtMgSUXhQLU1Tl0=
 github.com/mattn/go-colorable v0.1.4 h1:snbPLB8fVfU9iwbbo30TPtbLRzwWu6aJS6Xh4eaaviA=
