@@ -53,7 +53,7 @@ func NewAP235(deviceIndex int) (*AP235, error) {
 		o    AP235
 		out  = &o
 		addr *C.struct_mapap235
-		cs   = C.CString(C.DEVICE_NAME) // untyped constant in C needs enforcement in Go
+		cs   = C.CString("ap235_") // untyped constant in C needs enforcement in Go
 	)
 	defer C.free(unsafe.Pointer(cs))
 

@@ -50,7 +50,7 @@ unsigned long *Setup_board_corrected_buffer(struct cblk235 *cfg)
 	memset(&cfg->IDbuf[0],0,sizeof(cfg->IDbuf));	/* empty the buffer */
     ReadFlashID235(cfg, &cfg->IDbuf[0]);
 
-    if( (strstr( (const char *)&cfg->IDbuf[0], (const char *)FlashIDString ) == NULL) )	{/* AP2X5 ID */
+    if( (strstr( (const char *)&cfg->IDbuf[0], (const char *)"AP235" ) == NULL) )	{/* AP2X5 ID */
 		  return NULL;
 	}
     else

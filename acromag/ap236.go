@@ -25,7 +25,7 @@ func NewAP236(deviceIndex int) (*AP236, error) {
 		o    AP236
 		out  = &o
 		addr *C.struct_map236
-		cs   = C.CString(C.DEVICE_NAME) // untyped constant in C needs enforcement in Go
+		cs   = C.CString("ap236_") // copied from AP236.h
 	)
 	defer C.free(unsafe.Pointer(cs))
 	o.cfg = (*C.struct_cblk236)(C.malloc(C.sizeof_struct_cblk236))
@@ -253,7 +253,7 @@ func (dac *AP236) OutputMultiDN16(channels []int, uint16s []uint16) error {
 	for i := 0; i < len(channels); i++ {
 		err := dac.OutputDN16(channels[i], uint16s[i])
 		if err != nil {
-			return fmt.Errorf("channel %d DN %f: %w", channels[i], uint16s[i], err)
+			return fmt.Errorf("channel %d DN %d: %w", channels[i], uint16s[i], err)
 		}
 	}
 	if sim {
