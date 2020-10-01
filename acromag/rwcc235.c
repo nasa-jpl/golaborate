@@ -1,6 +1,6 @@
 
-#include "../apcommon/apcommon.h"
-#include "AP236.h"
+#include "apcommon.h"
+#include "AP235.h"
 
 
 /*///////////////////////////// M25P10 definitions /////////////////////////////////////////*/
@@ -17,20 +17,80 @@
 
 
 
-static int I0_M25P10(struct cblk236 *c_blk, unsigned char *command_buf, unsigned char *response_buf, unsigned int size);
-static int ReadStatus_M25P10(struct cblk236 *c_blk );
-static int SectorErase_M25P10(struct cblk236 *c_blk );
-static int WriteFlashBlock(struct cblk236 *c_blk, uint32_t address, void *pdata, uint32_t length );
-static int ReadByte_M25P10(struct cblk236 *c_blk, unsigned long address, unsigned char *p );
-static int BlankCheckFlash( struct cblk236 *c_blk );
+static int I0_M25P10(struct cblk235 *c_blk, unsigned char *command_buf, unsigned char *response_buf, unsigned int size);
+static int ReadStatus_M25P10(struct cblk235 *c_blk );
+static int SectorErase_M25P10(struct cblk235 *c_blk );
+static int Write_FLASH(struct cblk235 *c_blk, unsigned char *command_buf, unsigned char *response_buf, unsigned int size);
+static int WriteFlashBlock(struct cblk235 *c_blk, uint32_t address, void *pdata, uint32_t length );
+static int ReadByte_M25P10(struct cblk235 *c_blk, unsigned long address, unsigned char *p );
+static int BlankCheckFlash( struct cblk235 *c_blk );
+static int InitHardware(struct cblk235 *c_blk );
 
 
+/*
+{+D}
+        SYSTEM:         Library Software - AP235 Board
+
+        MODULE NAME:    InitHardware() - routine to Initialize the SPI Hardware.
+
+        VERSION:        A
+
+        CREATION DATE:  12/01/15
+
+        DESIGNED BY:    FM
+
+        CODED BY:       FM
+
+        ABSTRACT:       This module is used to Initialize the SPI Hardware
+
+        CALLING
+            SEQUENCE:   status = static int InitHardware( struct cblk235 *c_blk);
+                        Where:
+                          c_blk (pointer to structure)
+                                Pointer to configuration block structure
+
+        MODULE TYPE:    integer
+
+        I/O
+          RESOURCES:
+
+        SYSTEM
+          RESOURCES:
+
+        REVISIONS:
+
+  DATE      BY     PURPOSE
+---------  ----   -------------------------------------------------------
+
+
+{-D}
+*/
+
+
+/*
+        MODULES FUNCTIONAL DETAILS:
+*/
+
+
+
+
+static int InitHardware(struct cblk235 *c_blk )
+{
+    /* reset interface */
+    output_long(c_blk->nHandle, (long*)&c_blk->brd_ptr->QSPI_SR, (long)0xA );
+
+    usleep(20);		/* allow interface reset to complete */
+
+    /* configure as master, set the Clock Phase and Polarity, and select manual slave select */
+    output_long(c_blk->nHandle, (long*)&c_blk->brd_ptr->QSPI_SPICR, (long)0xE6 );
+    return(0);/* success */
+}
 
 
 
 /*
 {+D}
-    SYSTEM:	    Library Software - AP236 Board
+    SYSTEM:	    Library Software - AP235 Board
 
     MODULE NAME:    ReadStatus_M25P10() - routine to read status from the M25P10 device.
 
@@ -45,19 +105,19 @@ static int BlankCheckFlash( struct cblk236 *c_blk );
     ABSTRACT:       This module will issue a command to read the status of the M25P10 device.
 
     CALLING
-	SEQUENCE:   static int ReadStatus_M25P10(struct cblk236 *c_blk)
+	SEQUENCE:   static int ReadStatus_M25P10(struct cblk235 *c_blk)
 
     MODULE TYPE:    int
 
-    I/O RESOURCES:  
+    I/O RESOURCES:
 
     SYSTEM
-	RESOURCES:  
+	RESOURCES:
 
     MODULES
-	CALLED:     
+	CALLED:
 
-    REVISIONS:      
+    REVISIONS:
 
   DATE    BY        PURPOSE
 -------  ----   ------------------------------------------------
@@ -71,7 +131,7 @@ static int BlankCheckFlash( struct cblk236 *c_blk );
 */
 
 
-static int ReadStatus_M25P10(struct cblk236 *c_blk )
+static int ReadStatus_M25P10(struct cblk235 *c_blk )
 {
     unsigned char cmd_buf[2];
     unsigned char rsp_buf[2];
@@ -90,7 +150,7 @@ static int ReadStatus_M25P10(struct cblk236 *c_blk )
 
 /*
 {+D}
-    SYSTEM:	    Library Software - AP236 Board
+    SYSTEM:	    Library Software - AP235 Board
 
     MODULE NAME:    SectorErase_M25P10() - routine to erase a sector from the M25P10 device.
 
@@ -105,19 +165,19 @@ static int ReadStatus_M25P10(struct cblk236 *c_blk )
     ABSTRACT:       This module will issue a command to erase a sector of the M25P10 device.
 
     CALLING
-	SEQUENCE:   static int SectorErase_M25P10(struct cblk236 *c_blk, unsigned long address)
+	SEQUENCE:   static int SectorErase_M25P10(struct cblk235 *c_blk, unsigned long address)
 
     MODULE TYPE:    int
 
-    I/O RESOURCES:  
+    I/O RESOURCES:
 
     SYSTEM
-	RESOURCES:  
+	RESOURCES:
 
     MODULES
-	CALLED:     
+	CALLED:
 
-    REVISIONS:      
+    REVISIONS:
 
   DATE    BY        PURPOSE
 -------  ----   ------------------------------------------------
@@ -128,13 +188,13 @@ static int ReadStatus_M25P10(struct cblk236 *c_blk )
 
 /*
     MODULES FUNCTIONAL DETAILS:
-    
+
     This module will issue a command to erase a sector of the M25P10 device.
     Requires a valid Sector address for the Sector Erase (SE) instruction
 */
 
 
-static int SectorErase_M25P10(struct cblk236 *c_blk )
+static int SectorErase_M25P10(struct cblk235 *c_blk )
 {
 	unsigned char cmd_buf[4];
 	unsigned char rsp_buf[4];
@@ -153,7 +213,7 @@ static int SectorErase_M25P10(struct cblk236 *c_blk )
 	cmd_buf[3] = (unsigned char)(address);		/* form lower address byte */
 
 	I0_M25P10(c_blk, &cmd_buf[0], &rsp_buf[0], sizeof(cmd_buf));/* Issue command */
-	
+
 	/* Poll write in progress bit until it reads as a logic low */
 	for(i = 0; i < FMAX_TRIES; i++ )
 	{
@@ -173,7 +233,7 @@ static int SectorErase_M25P10(struct cblk236 *c_blk )
 /*
 {+D}
 
-    SYSTEM:	    Library Software - AP236 Board
+    SYSTEM:	    Library Software - AP235 Board
 
     VERSION:        A
 
@@ -187,7 +247,7 @@ static int SectorErase_M25P10(struct cblk236 *c_blk )
                     data over the bus.
 
     CALLING
-        SEQUENCE:   status = static int BlankCheckFlash( struct cblk236 *c_blk);
+        SEQUENCE:   status = static int BlankCheckFlash( struct cblk235 *c_blk);
                         Where:
                           c_blk (pointer to structure)
                                 Pointer to configuration block structure
@@ -214,7 +274,7 @@ static int SectorErase_M25P10(struct cblk236 *c_blk )
         MODULES FUNCTIONAL DETAILS:
 */
 
-static int BlankCheckFlash( struct cblk236 *c_blk )
+static int BlankCheckFlash( struct cblk235 *c_blk )
 {
 
 /*
@@ -233,7 +293,7 @@ uint32_t j,k,length;
  for(k = 0, j = 0; j < length; j++ )
  {
    ReadByte_M25P10(c_blk, FlashCoefficientMemoryAddress + j, &read_data );
- 
+
    verify_data = 0xFF;
    if( verify_data != read_data )
    {
@@ -249,7 +309,7 @@ return((int)k);		/* return error count */
 
 /*
 {+D}
-    SYSTEM:	    Library Software - AP236 Board
+    SYSTEM:	    Library Software - AP235 Board
 
     MODULE NAME:    Write_FLASH() - routine to write/read a FLASH port.
 
@@ -265,19 +325,19 @@ return((int)k);		/* return error count */
                     Will also receive response bytes.
 
     CALLING
-	SEQUENCE:   int Write_FLASH(struct cblk236 *c_blk, unsigned char *c_buf, unsigned char *r_buf, unsigned int size)
+	SEQUENCE:   int Write_FLASH(struct cblk235 *c_blk, unsigned char *c_buf, unsigned char *r_buf, unsigned int size)
 
     MODULE TYPE:    int
 
-    I/O RESOURCES:  
+    I/O RESOURCES:
 
     SYSTEM
-	RESOURCES:  
+	RESOURCES:
 
     MODULES
-	CALLED:     
+	CALLED:
 
-    REVISIONS:      
+    REVISIONS:
 
   DATE    BY        PURPOSE
 -------  ----   ------------------------------------------------
@@ -293,30 +353,44 @@ return((int)k);		/* return error count */
 	Will also receive response bytes.
 */
 
-static int Write_FLASH(struct cblk236 *c_blk, unsigned char *command_buf, unsigned char *response_buf, unsigned int size)
+static int Write_FLASH(struct cblk235 *c_blk, unsigned char *command_buf, unsigned char *response_buf, unsigned int size)
 {
 #ifdef DBG_SPI
 unsigned char *cmd_buf = command_buf;
 unsigned char *rsp_buf = response_buf;
 #endif /* DBG_SPI */
 
-	unsigned int sz;
+   unsigned int sz;
+   uint32_t lValue, i;
 
 	/* transfer data over the FLASH port */
 	for( sz = 1; sz <= size; sz++)
 	{
-	  output_byte(c_blk->nHandle, (byte*)&c_blk->brd_ptr->FLASHData, (byte)*command_buf++ );   /* LSByte */
-	  *response_buf++ = (unsigned char) input_byte(c_blk->nHandle, (byte*)&c_blk->brd_ptr->FLASHData);
-	}
+	  output_long(c_blk->nHandle, (long*)&c_blk->brd_ptr->QSPI_SPIDTR, (long)*command_buf++ );   /* send LSByte */
 
+	  for(i = 0; i < (uint32_t)FMAX_TRIES; i++ )
+	  {
+		lValue = input_long(c_blk->nHandle, (long*)&c_blk->brd_ptr->QSPI_SPISR );
+
+		if( lValue & (uint32_t)0x2 )/* Verify Transfer Complete */
+			break;
+
+		usleep(10);		/* Linux */
+
+	  }
+	  if( i >= (uint32_t)FMAX_TRIES )
+		return((int) -1);	/* not ready error */
+
+	  *response_buf++ = (unsigned char) input_long(c_blk->nHandle, (long*)&c_blk->brd_ptr->QSPI_SPIDRR); /* read byte */
+	}
 #ifdef DBG_SPI
-int i;
+int j;
 printf("\n");
-for(i = 0; i < size; i++)
-printf("%02X ",cmd_buf[i]);
+for(j = 0; j < size; j++)
+printf("%02X ",cmd_buf[j]);
 printf("\n");
-for(i = 0; i < size; i++)
-printf("%02X ",rsp_buf[i]);
+for(j = 0; j < size; j++)
+printf("%02X ",rsp_buf[j]);
 #endif /* DBG_SPI */
 
 	return(0);
@@ -326,7 +400,7 @@ printf("%02X ",rsp_buf[i]);
 
 /*
 {+D}
-    SYSTEM:	    Library Software - AP236 Board
+    SYSTEM:	    Library Software - AP235 Board
 
     MODULE NAME:    I0_M25P10() - routine to do I/O with the M25P10 device.
 
@@ -341,19 +415,19 @@ printf("%02X ",rsp_buf[i]);
     ABSTRACT:       This module will do I/O with the M25P10 device.
 
     CALLING
-	SEQUENCE:   static int IO_M25P10(struct cblk236 *c_blk, unsigned char *command_buf, unsigned char *response, unsigned int size)
+	SEQUENCE:   static int IO_M25P10(struct cblk235 *c_blk, unsigned char *command_buf, unsigned char *response, unsigned int size)
 
     MODULE TYPE:    int	0=success, negative=error
 
-    I/O RESOURCES:  
+    I/O RESOURCES:
 
     SYSTEM
-	RESOURCES:  
+	RESOURCES:
 
     MODULES
-	CALLED:     
+	CALLED:
 
-    REVISIONS:      
+    REVISIONS:
 
   DATE    BY        PURPOSE
 -------  ----   ------------------------------------------------
@@ -370,15 +444,15 @@ printf("%02X ",rsp_buf[i]);
 
 
 
-static int I0_M25P10(struct cblk236 *c_blk, unsigned char *command_buf, unsigned char *response_buf, unsigned int size)
+static int I0_M25P10(struct cblk235 *c_blk, unsigned char *command_buf, unsigned char *response_buf, unsigned int size)
 {
     /* drive the chip select active for the M25P10 device */
-    output_byte(c_blk->nHandle, (byte*)&c_blk->brd_ptr->FlashChipSelect, 0 );
-    
+    output_long(c_blk->nHandle, (long*)&c_blk->brd_ptr->QSPI_SPISSR, (long)0 );
+
     Write_FLASH( c_blk, command_buf, response_buf, size);
 
     /* drive the chip select inactive for the M25P10 device */
-    output_byte(c_blk->nHandle, (byte*)&c_blk->brd_ptr->FlashChipSelect, 1 );
+    output_long(c_blk->nHandle, (long*)&c_blk->brd_ptr->QSPI_SPISSR, (long)1 );
     return(0);
 }
 
@@ -387,7 +461,7 @@ static int I0_M25P10(struct cblk236 *c_blk, unsigned char *command_buf, unsigned
 
 /*
 {+D}
-    SYSTEM:	    Library Software - AP236 Board
+    SYSTEM:	    Library Software - AP235 Board
 
     MODULE NAME:    ReadByte_M25P10() - routine to read 8 bit data from the M25P10 device.
 
@@ -402,19 +476,19 @@ static int I0_M25P10(struct cblk236 *c_blk, unsigned char *command_buf, unsigned
     ABSTRACT:       This module will issue a command to read the M25P10 device.
 
     CALLING
-	SEQUENCE:   static int ReadByte_M25P10(struct cblk236 *c_blk, unsigned long address, unsigned char *p)
+	SEQUENCE:   static int ReadByte_M25P10(struct cblk235 *c_blk, unsigned long address, unsigned char *p)
 
     MODULE TYPE:    int
 
-    I/O RESOURCES:  
+    I/O RESOURCES:
 
     SYSTEM
-	RESOURCES:  
+	RESOURCES:
 
     MODULES
-	CALLED:     
+	CALLED:
 
-    REVISIONS:      
+    REVISIONS:
 
   DATE    BY        PURPOSE
 -------  ----   ------------------------------------------------
@@ -432,7 +506,7 @@ static int I0_M25P10(struct cblk236 *c_blk, unsigned char *command_buf, unsigned
 
 
 
-static int ReadByte_M25P10(struct cblk236 *c_blk, unsigned long address, unsigned char *p )
+static int ReadByte_M25P10(struct cblk235 *c_blk, unsigned long address, unsigned char *p )
 {
     unsigned char cmd_buf[5];
     unsigned char rsp_buf[5];
@@ -460,7 +534,7 @@ static int ReadByte_M25P10(struct cblk236 *c_blk, unsigned long address, unsigne
 
 /*
 {+D}
-    SYSTEM:	    Library Software - AP236 Board
+    SYSTEM:	    Library Software - AP235 Board
 
     VERSION:        A
 
@@ -473,20 +547,20 @@ static int ReadByte_M25P10(struct cblk236 *c_blk, unsigned long address, unsigne
     ABSTRACT:       This module will write to the M25P10 device.
 
     CALLING
-	SEQUENCE:   static int WriteFlashBlock(struct cblk236 *c_blk, uint32_t address, (void*)pdata, uint32_t length )
+	SEQUENCE:   static int WriteFlashBlock(struct cblk235 *c_blk, uint32_t address, (void*)pdata, uint32_t length )
 
     MODULE TYPE:
 
-    I/O RESOURCES:  
+    I/O RESOURCES:
 
     SYSTEM
-	RESOURCES:  
+	RESOURCES:
 
     MODULES
 
-	CALLED:     
+	CALLED:
 
-    REVISIONS:      
+    REVISIONS:
 
   DATE    BY        PURPOSE
 -------  ----   ------------------------------------------------
@@ -499,7 +573,7 @@ static int ReadByte_M25P10(struct cblk236 *c_blk, unsigned long address, unsigne
 */
 
 
-static int WriteFlashBlock(struct cblk236 *c_blk, uint32_t address, void *pdata, uint32_t length )
+static int WriteFlashBlock(struct cblk235 *c_blk, uint32_t address, void *pdata, uint32_t length )
 {
 	unsigned char cmd_buf[264];
 	unsigned char rsp_buf[264];			/* worst case length */
@@ -512,9 +586,9 @@ static int WriteFlashBlock(struct cblk236 *c_blk, uint32_t address, void *pdata,
 	/* Send the WREN command (write enable) */
 	cmd_buf[0] = WrenM25P10;			/* write enable command */
 	I0_M25P10(c_blk, &cmd_buf[0], &rsp_buf[0], 1);	/* Issue command */
-	
+
 	/* Build up the write command */
-	cmd_buf[0] = PageProgramM25P10;			/* Page Program command */	
+	cmd_buf[0] = PageProgramM25P10;			/* Page Program command */
 	cmd_buf[1] = (unsigned char)(address >> 16);	/* form A23-A16 address byte */
 	cmd_buf[2] = (unsigned char)(address >> 8);	/* form A15-A8 address byte */
 	cmd_buf[3] = (unsigned char)(address);		/* form lower address byte */
@@ -529,7 +603,7 @@ static int WriteFlashBlock(struct cblk236 *c_blk, uint32_t address, void *pdata,
 	  usleep(10000);
 	  status = ReadStatus_M25P10(c_blk );
 	  if( (status & WIP) == 0 )  /* zero upon write complete */
-	    break;	
+	    break;
 	}
 
 	if( i >= FMAX_TRIES )
@@ -538,12 +612,14 @@ static int WriteFlashBlock(struct cblk236 *c_blk, uint32_t address, void *pdata,
 	return((int)0);
 }
 
+/* //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// */
+
 
 /*
 {+D}
-    SYSTEM:	    Library Software - AP236 Board
+    SYSTEM:	    Library Software - AP235 Board
 
-    MODULE NAME:    ReadFlashID236() - routine to read ID data from the device.
+    MODULE NAME:    ReadFlashID235() - routine to read ID data from the device.
 
     VERSION:	    A
 
@@ -556,19 +632,19 @@ static int WriteFlashBlock(struct cblk236 *c_blk, uint32_t address, void *pdata,
     ABSTRACT:       This module will issue a command to read the ID bytes of the device.
 
     CALLING
-	SEQUENCE:	int ReadFlashID236(struct cblk236 *c_blk, unsigned char *p)
+	SEQUENCE:	int ReadFlashID235(struct cblk235 *c_blk, unsigned char *p)
 				unsigned char *p pointer to place to put data read
     MODULE TYPE:    int
 
-    I/O RESOURCES:  
+    I/O RESOURCES:
 
     SYSTEM
-	RESOURCES:  
+	RESOURCES:
 
     MODULES
-	CALLED:     
+	CALLED:
 
-    REVISIONS:      
+    REVISIONS:
 
   DATE    BY        PURPOSE
 -------  ----   ------------------------------------------------
@@ -583,12 +659,17 @@ static int WriteFlashBlock(struct cblk236 *c_blk, uint32_t address, void *pdata,
 */
 
 
-int ReadFlashID236(struct cblk236 *c_blk, unsigned char *p )
+int ReadFlashID235(struct cblk235 *c_blk, unsigned char *p )
 {
     unsigned char cmd_buf[10];
     unsigned char rsp_buf[10];
     unsigned long address;
     int status = 0;
+
+    if( InitHardware(c_blk) )		/* returns 0 on success */
+    {
+      return((int) -2);			/* not ready to configure error */
+    }
 
     memset(&cmd_buf[0],0,sizeof(cmd_buf));	/* empty the command buffer */
     memset(&rsp_buf[0],0,sizeof(rsp_buf));	/* empty response buffer */
@@ -615,11 +696,11 @@ int ReadFlashID236(struct cblk236 *c_blk, unsigned char *p )
 
 /*
 {+D}
-    SYSTEM:	    Library Software - AP236 Board
+    SYSTEM:	    Library Software - AP235 Board
 
-    FILENAME:       rcc236.c
+    FILENAME:       rcc235.c
 
-    MODULE NAME:    rcc236 - read calibration coefficients.
+    MODULE NAME:    rcc235 - read calibration coefficients.
 
     VERSION:	    A
 
@@ -628,27 +709,27 @@ int ReadFlashID236(struct cblk236 *c_blk, unsigned char *p )
     DESIGNED BY:    F.M.
 
     CODED BY:	    F.M.
-    
+
     ABSTRACT:       This module is used to read calibration
-                    coefficients AP236 board.
+                    coefficients AP235 board.
 
     CALLING
-        SEQUENCE:   rcc236(ptr);
+        SEQUENCE:   rcc235(ptr);
                     where:
                         ptr (pointer to structure)
                             Pointer to the configuration block structure.
 
     MODULE TYPE:    void
 
-    I/O RESOURCES:  
+    I/O RESOURCES:
 
     SYSTEM
-        RESOURCES:  
+        RESOURCES:
 
     MODULES
-        CALLED:     
+        CALLED:
 
-    REVISIONS:      
+    REVISIONS:
 
   DATE    BY        PURPOSE
 -------  ----   ------------------------------------------------
@@ -670,7 +751,7 @@ int ReadFlashID236(struct cblk236 *c_blk, unsigned char *p )
 
 
 
-int rcc236( struct cblk236 *c_blk )
+int rcc235( struct cblk235 *c_blk )
 {
 
 /*
@@ -683,10 +764,16 @@ int status;
 
 /*
         Entry point of routine
-	Storage configuration for offset & gain correction pairs[2] for each range[8] for each channel[8]
+	Storage configuration for offset & gain correction pairs[2] for each range[8] for each channel[16]
 */
 
- for( channel = 0; channel < 8; channel++ ) 
+ if( InitHardware(c_blk) )		/* returns 0 on success */
+ {
+   return((int) -2);			/* not ready to configure error */
+ }
+
+
+ for( channel = 0; channel < 16; channel++ )
  {
     j = (FlashCoefficientMemoryAddress + (channel * 256));		/* Flash memory addressing */
     for( range = 0; range < 8; range++, j+= 2 )
@@ -696,14 +783,14 @@ int status;
 	if( status )
 	   return(status);
 
-        c_blk->ogc236[channel][range][OFFSET] = (word)read_data << 8;	/* position offset MSB */
+        c_blk->ogc235[channel][range][OFFSET] = (word)read_data << 8;	/* position offset MSB */
 
 	/* read LSB offset... pair[0] */
 	status = ReadByte_M25P10(c_blk, j, &read_data );
 	if( status )
 	   return(status);
 
-        c_blk->ogc236[channel][range][OFFSET] |= (word)read_data;	/* position offset LSB */
+        c_blk->ogc235[channel][range][OFFSET] |= (word)read_data;	/* position offset LSB */
 
 	j+= 2;	/* advance address/index to gain data */
 
@@ -712,7 +799,7 @@ int status;
 	if( status )
 	   return(status);
 
-        c_blk->ogc236[channel][range][GAIN] = (word)read_data << 8;	/* position gain MSB */
+        c_blk->ogc235[channel][range][GAIN] = (word)read_data << 8;	/* position gain MSB */
 
 	/* read LSB gain... pair[1] */
 	status = ReadByte_M25P10(c_blk, j, &read_data );
@@ -720,9 +807,9 @@ int status;
 	if( status )
 	   return(status);
 
-        c_blk->ogc236[channel][range][GAIN] |= (word)read_data;		/* position gain LSB */
+        c_blk->ogc235[channel][range][GAIN] |= (word)read_data;		/* position gain LSB */
 /*
-printf("Ch %X Rng %X Offset %04X Gain %04X\n",channel,range,(word)c_blk->ogc236[channel][range][OFFSET],(word)c_blk->ogc236[channel][range][GAIN]);
+printf("Ch %X Rng %X Offset %04X Gain %04X\n",channel,range,(word)c_blk->ogc235[channel][range][OFFSET],(word)c_blk->ogc235[channel][range][GAIN]);
 */
     }
  }
@@ -734,11 +821,11 @@ printf("Ch %X Rng %X Offset %04X Gain %04X\n",channel,range,(word)c_blk->ogc236[
 
 /*
 {+D}
-    SYSTEM:	    Library Software - AP236 Board
+    SYSTEM:	    Library Software - AP235 Board
 
-    FILENAME:       rwcc236.c
+    FILENAME:       rwcc235.c
 
-    MODULE NAME:    WriteOGCoefs236 - write AP236 calibration coefficients and I.D.
+    MODULE NAME:    WriteOGCoefs235 - write AP235 calibration coefficients and I.D.
 
     VERSION:	    A
 
@@ -747,27 +834,27 @@ printf("Ch %X Rng %X Offset %04X Gain %04X\n",channel,range,(word)c_blk->ogc236[
     DESIGNED BY:    F.M.
 
     CODED BY:	    F.M.
-    
+
     ABSTRACT:       This module is used to write calibration coefficients and
-		    I.D. AP236 board.
+		    I.D. AP235 board.
 
     CALLING
-        SEQUENCE:   WriteOGCoefs236(ptr);
+        SEQUENCE:   WriteOGCoefs235(ptr);
                     where:
                         ptr (pointer to structure)
                             Pointer to the configuration block structure.
 
     MODULE TYPE:    void
 
-    I/O RESOURCES:  
+    I/O RESOURCES:
 
     SYSTEM
-        RESOURCES:  
+        RESOURCES:
 
     MODULES
         CALLED:
 
-    REVISIONS:      
+    REVISIONS:
 
   DATE	     BY	    PURPOSE
   --------  ----    ------------------------------------------------
@@ -780,7 +867,7 @@ printf("Ch %X Rng %X Offset %04X Gain %04X\n",channel,range,(word)c_blk->ogc236[
     MODULES FUNCTIONAL DETAILS:
 
     This module is used to write the flash I.D. and calibration
-    coefficients for the AP236 board.  A pointer to the Configuration
+    coefficients for the AP235 board.  A pointer to the Configuration
     Block will be passed to this routine.  The routine will use a pointer
     within the Configuration Block together with offsets to reference the
     registers on the Board.
@@ -788,11 +875,16 @@ printf("Ch %X Rng %X Offset %04X Gain %04X\n",channel,range,(word)c_blk->ogc236[
 
 
 
-int WriteOGCoefs236(struct cblk236 *c_blk)
+int WriteOGCoefs235(struct cblk235 *c_blk)
 {
    unsigned char ogc_buf[256];
    uint32_t channel, range, length, i, j;
    int status;
+
+   if( InitHardware(c_blk) )		/* returns 0 on success */
+   {
+     return((int) -2);			/* not ready to configure error */
+   }
 
    status = SectorErase_M25P10( c_blk );
    if(status )		/* errors */
@@ -803,17 +895,23 @@ int WriteOGCoefs236(struct cblk236 *c_blk)
       return( status );	/* flash error */
 
    length = 32;	/* length of bytes to save for all but the last channel block */
-   for( channel = 0; channel < 8; channel++ ) 
+   for( channel = 0; channel < 16; channel++ )
    {
      memset(&ogc_buf[0],0xFF,sizeof(ogc_buf));	/* set response buffer to 0xFF */
      for( i = 0, range = 0; range < 8; range++ )
      {
 	/* order buffer in little endian format */
-	ogc_buf[i++] = (unsigned char)c_blk->ogc236[channel][range][OFFSET];	/* offset LSB */
-	ogc_buf[i++] = (unsigned char)(c_blk->ogc236[channel][range][OFFSET] >> 8); /* offset MSB */
+	ogc_buf[i++] = (unsigned char)c_blk->ogc235[channel][range][OFFSET];	/* offset LSB */
+	ogc_buf[i++] = (unsigned char)(c_blk->ogc235[channel][range][OFFSET] >> 8); /* offset MSB */
 
-	ogc_buf[i++] = (unsigned char)c_blk->ogc236[channel][range][GAIN];	/* gain LSB */
-	ogc_buf[i++] = (unsigned char)(c_blk->ogc236[channel][range][GAIN] >> 8); /* gain MSB */
+	ogc_buf[i++] = (unsigned char)c_blk->ogc235[channel][range][GAIN];	/* gain LSB */
+	ogc_buf[i++] = (unsigned char)(c_blk->ogc235[channel][range][GAIN] >> 8); /* gain MSB */
+     }
+
+     if( channel == 15 ) /* last channel, add in the model ID string and adjust the length to 256 */
+     {
+	strcpy((char*)&ogc_buf[0xF0], (const char *)FlashIDString);
+        length = 256;	/* length of bytes to save for the last channel block */
      }
 
      j = (FlashCoefficientMemoryAddress + (channel * 256));	/* Flash memory addressing */
@@ -821,13 +919,6 @@ int WriteOGCoefs236(struct cblk236 *c_blk)
      if(status )		/* errors */
 	return( status );	/* flash error */
    }
-
-   /* insert the model ID string */
-   memset(&ogc_buf[0],0xFF,sizeof(ogc_buf));	/* set buffer to 0xFF */
-   strcpy((char*)&ogc_buf[0xF0], (const char *)FlashIDString);
-   length = 256;	/* length of bytes to save for the last channel block */
-   j = (FlashCoefficientMemoryAddress + (15 * 256));	/* Flash memory addressing */
-   status = WriteFlashBlock(c_blk, j, &ogc_buf[0], length );	/* write to Flash */
    return( status );
 }
 

@@ -1,5 +1,5 @@
 
-#include "../apcommon/apcommon.h"
+#include "apcommon.h"
 #include "AP235.h"
 
 /*

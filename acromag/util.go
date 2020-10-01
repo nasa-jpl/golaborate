@@ -1,7 +1,12 @@
-package ap235
+package acromag
 
+/*
+#include "apcommon.h"
+*/
+import "C"
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -304,4 +309,31 @@ type ChannelStatus struct {
 
 	// Busy - if true, the channel's DAC is busy
 	Busy bool
+}
+
+// enrich returns a new error and decorates with the procedure called
+// if the status is OK, nil is returned
+func enrich(errC C.APSTATUS, procedure string) error {
+	i := int(errC)
+	v, ok := StatusCodes[i]
+	if !ok {
+		return fmt.Errorf("unknown error code")
+	}
+	if v == "OK" {
+		return nil
+	}
+	return fmt.Errorf("%b: %s encountered at call to %s", i, v, procedure)
+}
+
+// cMkCopyOfIdealData copies all values from idealCodes to a C owned
+// array.  C.free must be called on it at a later date.
+func cMkCopyOfIdealData(idealCodes [8][7]float64) *[8][7]C.double {
+	cPtr := C.malloc(C.sizeof_double * 8 * 7)
+	cArr := (*[8][7]C.double)(cPtr)
+	for i := 0; i < 8; i++ {
+		for j := 0; j < 7; j++ {
+			cArr[i][j] = C.double(idealCodes[i][j])
+		}
+	}
+	return cArr
 }

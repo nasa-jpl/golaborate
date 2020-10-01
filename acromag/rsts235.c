@@ -1,5 +1,5 @@
 
-#include "../apcommon/apcommon.h"
+#include "apcommon.h"
 #include "AP235.h"
 
 /*
@@ -15,7 +15,7 @@
     DESIGNED BY:    FM
 
     CODED BY:       FM
-    
+
     ABSTRACT:       This module is used to read status of the AP235 board.
 
     CALLING
@@ -26,15 +26,15 @@
 
     MODULE TYPE:    void
 
-    I/O RESOURCES:  
+    I/O RESOURCES:
 
     SYSTEM
-        RESOURCES:  
+        RESOURCES:
 
     MODULES
-        CALLED:     
+        CALLED:
 
-    REVISIONS:      
+    REVISIONS:
 
   DATE    BY        PURPOSE
 -------  ----   ------------------------------------------------
@@ -50,7 +50,7 @@
     for the AP235 board.  A pointer to the Configuration Block will
     be passed to this routine.  The routine will use a pointer
     within the Configuration Block together with offsets
-    to reference the registers on the Board and will transfer the 
+    to reference the registers on the Board and will transfer the
     status information from the Board to the Configuration Block.
 */
 
@@ -72,7 +72,7 @@ int i;
    c_blk->revision = input_long(c_blk->nHandle, (long*)&c_blk->brd_ptr->FirmwareRevision);	/* AP Revision */
 
    for(i = 0; i < 16; i++)
-     c_blk->ChStatus[i] = input_long(c_blk->nHandle, (long*)&c_blk->brd_ptr->DAC[i].Status);	/* DAC channel status */ 
+     c_blk->ChStatus[i] = input_long(c_blk->nHandle, (long*)&c_blk->brd_ptr->DAC[i].Status);	/* DAC channel status */
 
    /* read temp & VCC info from FPGA into status structure */
    /* temperature Data Register | (MS 16 bits addr 200) */

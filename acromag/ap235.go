@@ -1,11 +1,9 @@
-package ap235
+package acromag
 
 /*
-#cgo LDFLAGS: -lm
-#include <stdlib.h>
-#include "../apcommon/apcommon.h"
+#include "apcommon.h"
 #include "AP235.h"
-#include "shim.h"
+#include "shim235.h"
 */
 import "C"
 import (
@@ -15,28 +13,6 @@ import (
 	"sync"
 	"unsafe"
 )
-
-func init() {
-	errCode := C.InitAPLib()
-	if errCode != C.S_OK {
-		panicS := fmt.Sprintf("initializing Acromag library failed with code %d", errCode)
-		panic(panicS)
-	}
-}
-
-// enrich returns a new error and decorates with the procedure called
-// if the status is OK, nil is returned
-func enrich(errC C.APSTATUS, procedure string) error {
-	i := int(errC)
-	v, ok := StatusCodes[i]
-	if !ok {
-		return fmt.Errorf("unknown error code")
-	}
-	if v == "OK" {
-		return nil
-	}
-	return fmt.Errorf("%b: %s encountered at call to %s", i, v, procedure)
-}
 
 // AP235 is an acromag 16-bit DAC of the same type
 type AP235 struct {
@@ -69,8 +45,8 @@ type AP235 struct {
 	isWaveform [16]bool
 }
 
-// New creates a new instance and opens the connection to the DAC
-func New(deviceIndex int) (*AP235, error) {
+// NewAP235 creates a new instance and opens the connection to the DAC
+func NewAP235(deviceIndex int) (*AP235, error) {
 	var (
 		o    AP235
 		out  = &o
@@ -723,17 +699,4 @@ func cMkarrayU16(size int) ([]uint16, *C.short, error) {
 	hdr.Len = size
 	hdr.Data = uintptr(unsafe.Pointer(cptr))
 	return slc, cptr, nil
-}
-
-// cMkCopyOfIdealData copies all values from idealCodes to a C owned
-// array.  C.free must be called on it at a later date.
-func cMkCopyOfIdealData(idealCodes [8][7]float64) *[8][7]C.double {
-	cPtr := C.malloc(C.sizeof_double * 8 * 7)
-	cArr := (*[8][7]C.double)(cPtr)
-	for i := 0; i < 8; i++ {
-		for j := 0; j < 7; j++ {
-			cArr[i][j] = C.double(idealCodes[i][j])
-		}
-	}
-	return cArr
 }

@@ -74,7 +74,7 @@ APDATA_STRUCT *gpAP[MAX_APS];	/* pointer to the boards */
 /*#define NO_AP_IOFUNCTIONS */
 
 #ifndef NO_AP_IOFUNCTIONS
-word SwapBytes( word v )             
+word SwapBytes( word v )
 {
 #ifdef SWAP_ENDIAN		/* endian correction if needed */
   word  Swapped;
@@ -89,25 +89,25 @@ word SwapBytes( word v )
 }
 
 
-long SwapLong( long v )             
+long SwapLong( long v )
 {
 #ifdef SWAP_ENDIAN		/* endian correction if needed */
  word Swap1, Swap2;
- long Swapped; 
+ long Swapped;
 
   Swap1 = (word)(v >> 16);
-  Swap1 = SwapBytes( Swap1 );             
+  Swap1 = SwapBytes( Swap1 );
 
   Swap2 = (word)v & 0xffff;
   Swap2 = SwapBytes( Swap2 );
 
-  Swapped = (long)(Swap2 << 16); 
+  Swapped = (long)(Swap2 << 16);
   Swapped |= (long)(Swap1 & 0xffff);
   return( Swapped );
 #else				/* no endian correction needed */
   return( v );
 #endif /* SWAP_ENDIAN */
- 
+
 }
 
 
@@ -289,7 +289,7 @@ uint32_t APBlockingStartConvert(int nHandle, long *p, long v, long parameter)
 
  	/* place board instance index in data[3] */
  	data[3] = (unsigned long) pAP->nDevInstance;	/* Device Instance */
- 
+
  	write( pAP->nAPDeviceHandle, &data[0], 8 );		/* function: 8=blocking_start_convert */
 
 	return( (uint32_t)SwapLong( (long)data[1] ) );	/* return Interrupt Pending value */
@@ -336,7 +336,7 @@ APSTATUS EnableAPInterrupts(int nHandle)
 
 	if(pAP->bInitialized == FALSE)
 		return E_NOT_INITIALIZED;
-		
+
 	/* Enable interrupts */
 	pAPCard = (AP_BOARD_MEMORY_MAP*)pAP->lBaseAddress;
 	nValue = (word)input_long( nHandle,(long*)&pAPCard->InterruptRegister);

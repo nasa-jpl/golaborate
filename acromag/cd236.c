@@ -1,13 +1,12 @@
-
 #include <math.h>
-#include "../apcommon/apcommon.h"
-#include "AP235.h"
+#include "apcommon.h"
+#include "AP236.h"
 
 /*
 {+D}
     SYSTEM:	    Library Software
 
-    FILENAME:	    cd235.c
+    FILENAME:	    cd236.c
 
     VERSION:	    A
 
@@ -20,7 +19,7 @@
     ABSTRACT:	    This module is used to correct output conversions for the board.
 
     CALLING
-    SEQUENCE:       void cd235(struct cblk235 *c_blk, int channel, double Volts);
+    SEQUENCE:       void cd236(struct cblk236 *c_blk, int channel, double Volts);
 			where:
 			        ptr (pointer to structure)
 			            Pointer to the configuration block structure.
@@ -58,7 +57,7 @@
 */
 
 
-void cd235(struct cblk235 *c_blk, int channel, double *fb)
+void cd236(struct cblk236 *c_blk, int channel, double Volts)
 {
 
 /*
@@ -66,7 +65,7 @@ void cd235(struct cblk235 *c_blk, int channel, double *fb)
 */
 
     double f_cor;
-    int range, i;
+    int range;
 
 /*
         Entry point of routine
@@ -75,21 +74,16 @@ void cd235(struct cblk235 *c_blk, int channel, double *fb)
 
     range = (int)(c_blk->opts.chan[channel].Range & 0x7);	/* get channels range setting */
 
-    for( i = 0; i < c_blk->SampleCount[channel]; i++)
-    {
-      f_cor = ((1.0 + (double)c_blk->ogc235[channel][range][GAIN] / 1048576.0) * (*c_blk->pIdealCode)[range][IDEALSLOPE]) *
-		fb[i] + (*c_blk->pIdealCode)[range][IDEALZEROBTC] + ((double)c_blk->ogc235[channel][range][OFFSET] / 16.0);
+    f_cor = ((1.0 + (double)c_blk->ogc236[channel][range][GAIN] / 1048576.0) * (*c_blk->pIdealCode)[range][IDEALSLOPE]) *
+		Volts + (*c_blk->pIdealCode)[range][IDEALZEROBTC] + ((double)c_blk->ogc236[channel][range][OFFSET] / 16.0);
 
-      f_cor += (f_cor < 0.0) ? -0.5 : 0.5; /* round */
+    f_cor += (f_cor < 0.0) ? -0.5 : 0.5; /* round */
 
-      f_cor = fmin(f_cor, (*c_blk->pIdealCode)[range][CLIPHI]);
-      f_cor = fmax(f_cor, (*c_blk->pIdealCode)[range][CLIPLO]);
+    f_cor = fmin(f_cor, (*c_blk->pIdealCode)[range][CLIPHI]);
+    f_cor = fmax(f_cor, (*c_blk->pIdealCode)[range][CLIPLO]);
 /*
 printf("Ch %X R = %X IZ %lf IS %lf Oc = %lf Gc = %lf fc = %lf\n", channel, range, (*c_blk->pIdealCode)[range][IDEALZEROBTC],
-(*c_blk->pIdealCode)[range][IDEALSLOPE], (double)c_blk->ogc235[channel][range][OFFSET], (double)c_blk->ogc235[channel][range][GAIN], f_cor);
+(*c_blk->pIdealCode)[range][IDEALSLOPE], (double)c_blk->ogc236[channel][range][OFFSET], (double)c_blk->ogc236[channel][range][GAIN], f_cor);
 */
-      (*c_blk->pcor_buf)[channel][i] = (short)f_cor;
-      (*c_blk->pcor_buf)[channel][i] ^= 0x8000; /* Convert BTC data to straight binary data */
-    }
+    c_blk->cor_buf[channel] = (short)f_cor;
 }
-

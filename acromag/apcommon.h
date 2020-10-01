@@ -45,6 +45,8 @@
 
 	This file contains the definitions, structures and prototypes.
 */
+#ifndef APCOMMON_H
+#define APCOMMON_H
 
 #define VENDOR_ID (word)0x16D5		/* Acromag's vendor ID for all PCI bus products */
 #define MAX_APS 4			/* maximum number of boards */
@@ -156,3 +158,4 @@ uint32_t APBlockingStartConvert(int nHandle, long *p, long v, long parameter);
 void APTerminateBlockedStart(int nHandle);
 long get_param(void);		/* input a parameter */
 
+#endif

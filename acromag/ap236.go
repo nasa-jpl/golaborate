@@ -1,275 +1,24 @@
-/*Package ap236 provides an interface to Acromag AP236 16-bit DAC modules
-
-Some performance-limiting design changes are made from the C SDK provided
-by acromag.  Namely: there are Go functions for each channel configuration,
-and a call to any of them issues a transfer of the configuration to the board.
-This will prevent the last word in performance under obscure conditions (e.g.
-updating the config 10,000s of times per second) but is not generally harmful
-and simplifies interfacing to the device, as there can be no "I updated the
-config but forgot to write to the device" errors.
-
-Basic usage is as followed:
- dac, err := ap236.New(0) // 0 is the 0th card in the system, in range 0~4
- if err != nil {
- 	log.fatal(err)
- }
- defer dac.Close()
- // single channel, immediate mode (output immediately on write)
- // see method docs on error values, this example ignores them
- // there is a get for each set
- ch := 1
- dac.SetRange(ch, TenVSymm)
- dac.SetPowerUpVoltage(ch, ap236.MidScale)
- dac.SetClearVoltage(ch, ap236.MidScale)
- dac.SetOverTempBehavior(ch, true) // shut down if over temp
- dac.SetOverRange(ch, false) // over range not allowed
- dac.SetOutputSimultaneous(ch, false) // this is what puts it in immediate mode
- dac.Output(ch, 1.) // 1 volt as close as can be quantized.  Calibrated.
- dac.OutputDN(ch, 2000) // 2000 DN, uncalibrated
-
- // multi-channel, synchronized
- chs := []int{1,2,3}
- // setup
- for _, ch := range chs {
- 	dac.SetRange(ch, TenVSymm)
-	dac.SetPowerUpVoltage(ch, ap236.MidScale)
-	dac.SetClearVoltage(ch, ap236.MidScale)
-	dac.SetOverTempBehavior(ch, true)
-	dac.SetOverRange(ch, false)
- 	dac.SetOutputSimultaneous(ch, true)
- }
- // in your code
- dac.OutputMulit(chs, []float64{1, 2, 3} // calibrated
- dac.OutputMultiDN(chs, []uint16{1000, 2000, 3000}) // uncalibrated
-
-*/
-package ap236
+package acromag
 
 /*
-#cgo LDFLAGS: -lm
-#include <stdlib.h>
-#include "../apcommon/apcommon.h"
+#include "apcommon.h"
 #include "AP236.h"
-#include "shim.h"
+#include "shim236.h"
 */
 import "C"
 import (
 	"errors"
 	"fmt"
-	"strconv"
-	"strings"
 	"unsafe"
 )
-
-func init() {
-	errCode := C.InitAPLib()
-	if errCode != C.S_OK {
-		panicS := fmt.Sprintf("initializing Acromag library failed with code %d", errCode)
-		panic(panicS)
-	}
-}
-
-// OutputScale is the output scale of the DAC at power up or clear
-type OutputScale int
-
-// OutputRange is the output range of the DAC
-type OutputRange int
-
-const (
-	// ZeroScale represents a power up zero scale signal.
-	// if the DAC is configured to -10 to 10V,
-	// this powers up at -10V
-	// likewise, if it is 0 to 10V, it powers up at 0V
-	ZeroScale OutputScale = iota
-
-	// MidScale boots the DAC at half of its output range
-	MidScale
-
-	// FullScale boots the DAC at its maximum output value
-	FullScale
-)
-const (
-	// TenVSymm is a -10 to +10V output range
-	TenVSymm OutputRange = iota
-	// TenVPos is a 0 to 10V output range
-	TenVPos
-	// FiveVSymm is a -5 to 5V output range
-	FiveVSymm
-	//FiveVPos is a 0 to 5V output range
-	FiveVPos
-	// N2_5To7_5V is a -2.5 to 7.5V output range
-	N2_5To7_5V
-	// ThreeVSymm is a -3 to +3V output range
-	ThreeVSymm
-	// SixteenVPos is an output range of 0-16V, this requires an external voltage source
-	SixteenVPos
-	// TwentyVPos is an output range of 0-20V, this requires an external voltage source
-	TwentyVPos
-
-	// from ap236.h
-	idealZeroSB  = 0
-	idealZeroBTC = 1
-	idealSlope   = 2
-	endpointLo   = 3
-	endpointHi   = 4
-	clipLo       = 5
-	clipHi       = 6
-	offset       = 0
-	gain         = 1
-)
-
-var (
-	// ErrSimultaneousOutput is generated when a device in simultaneous output mode is issued
-	// an Output command that is accepted for next flush but not executed.
-	ErrSimultaneousOutput = errors.New("device is in simultaneous output mode: accepted but not written")
-
-	// ErrVoltageTooLow is generated when a too low voltage is commanded
-	ErrVoltageTooLow = errors.New("commanded voltage below lower limit")
-
-	// ErrVoltageTooHigh is generated when a too high voltage is commanded
-	ErrVoltageTooHigh = errors.New("commanded voltage above upper limit")
-
-	// IdealCode is the array from drvr236.c L60-L85
-	// its inner elements, by index:
-	// 0 - zero value DN, straight binary
-	// 1 - zero value DN, two's complement
-	// 2 - slope, DN/V
-	// 3 - low voltage
-	// 4 - high voltage
-	// 5 - low DN
-	// 6 - high DN
-	// outer elements, by index
-	// 0 - -10 to 10V
-	// 1 - 0 to 10V
-	// 2 - -5 to 5V
-	// 3 - 0 to 5V
-	// 4 - 0 to 5V
-	// 5 - -2.5 to 7.5V
-	// 6 - -3 to 3V
-	// 7 - 0 to 16V
-	// 8 - 0 to 20V
-	// the range channel option is an index into the outer element
-	idealCode = [8][7]float64{
-		/* IdealZeroSB, IdealZeroBTC, IdealSlope, -10 to 10V, cliplo, cliphi */
-		{32768.0, 0.0, 3276.8, -10.0, 10.0, -32768.0, 32767.0},
-
-		/* IdealZeroSB, IdealZeroBTC, IdealSlope,   0 to 10V, cliplo, cliphi */
-		{0.0, -32768.0, 6553.6, 0.0, 10.0, -32768.0, 32767.0},
-
-		/* IdealZeroSB, IdealZeroBTC, IdealSlope,  -5 to  5V, cliplo, cliphi */
-		{32768.0, 0.0, 6553.6, -5.0, 5.0, -32768.0, 32767.0},
-
-		/* IdealZeroSB, IdealZeroBTC, IdealSlope,   0 to  5V, cliplo, cliphi */
-		{0.0, -32768.0, 13107.2, 0.0, 5.0, -32768.0, 32767.0},
-
-		/* IdealZeroSB, IdealZeroBTC, IdealSlope, -2.5 to 7.5V, cliplo, cliphi */
-		{16384.0, -16384.0, 6553.6, -2.5, 7.5, -32768.0, 32767.0},
-
-		/* IdealZeroSB, IdealZeroBTC, IdealSlope,  -3 to  3V, cliplo, cliphi */
-		{32768.0, 0.0, 10922.67, -3.0, 3.0, -32768.0, 32767.0},
-
-		/* IdealZeroSB, IdealZeroBTC, IdealSlope, 0V to +16V, cliplo, cliphi */
-		{0.0, -32768.0, 4095.9, 0.0, 16.0, -32768.0, 32767.0},
-
-		/* IdealZeroSB, IdealZeroBTC, IdealSlope, 0V to +20V, cliplo, cliphi */
-		{0.0, -32768.0, 3276.8, 0.0, 20.0, -32768.0, 32767.0},
-	}
-
-	// StatusCodes is the status codes defined by AP236.h
-	// copied here to avoid C types as keys
-	StatusCodes = map[int]string{
-		0x8000: "ERROR",           // general
-		0x8001: "OUT OF MEMORY",   // out of memory status value
-		0x8002: "OUT OF APs",      // all AP spots have been taken
-		0x8003: "INVALID HANDLE",  // no AP exists for this handle
-		0x8006: "NOT INITIALIZED", // Pmc not initialized
-		0x8007: "NOT IMPLEMENTED", // func is not implemented
-		0x8008: "NO INTERRUPTS",   // unable to handle interrupts
-		0x0000: "OK",              // no true error
-	}
-)
-
-// RangeToMinMax converts a range string, <min,max> to floats.
-// the input is assumed to be well formed; 0,0 is returned for badly formed inputs,
-// or a panic occurs for inputs not containing a 0
-func RangeToMinMax(rangeS string) (float64, float64) {
-	// assume well-formed input,
-	pieces := strings.Split(rangeS, ",")
-	f1, _ := strconv.ParseFloat(pieces[0], 64)
-	f2, _ := strconv.ParseFloat(pieces[1], 64)
-	return f1, f2
-}
-
-// ValidateOutputRange ensures that an output range is valid
-// s is formatted as "<low>,<high>"
-func ValidateOutputRange(s string) (OutputRange, error) {
-	switch s {
-	case "-10,10":
-		return TenVSymm, nil
-	case "0,10":
-		return TenVPos, nil
-	case "-5,5":
-		return FiveVSymm, nil
-	case "0,5":
-		return FiveVPos, nil
-	case "-2.5,7.5":
-		return N2_5To7_5V, nil
-	case "-3,3":
-		return ThreeVSymm, nil
-	case "0,16":
-		return SixteenVPos, nil
-	case "0,20":
-		return TwentyVPos, nil
-	default:
-		return 0, errors.New("invalid output range")
-	}
-}
-
-// FormatOutputRange converts an output range to a CSV of low,high
-func FormatOutputRange(o OutputRange) string {
-	switch o {
-	case TenVSymm:
-		return "-10,10"
-	case TenVPos:
-		return "0,10"
-	case FiveVSymm:
-		return "-5,5"
-	case FiveVPos:
-		return "0,5"
-	case N2_5To7_5V:
-		return "-2.5,7.5"
-	case ThreeVSymm:
-		return "-3,3"
-	case SixteenVPos:
-		return "0,16"
-	case TwentyVPos:
-		return "0,20"
-	default:
-		return ""
-	}
-}
-
-// enrich returns a new error and decorates with the procedure called
-// if the status is OK, nil is returned
-func enrich(errC C.APSTATUS, procedure string) error {
-	i := int(errC)
-	v, ok := StatusCodes[i]
-	if !ok {
-		return fmt.Errorf("unknown error code")
-	}
-	if v == "OK" {
-		return nil
-	}
-	return fmt.Errorf("%b: %s encountered at call to %s", i, v, procedure)
-}
 
 // AP236 is an acromag 16-bit DAC of the same type
 type AP236 struct {
 	cfg *C.struct_cblk236
 }
 
-// New creates a new instance and opens the connection to the DAC
-func New(deviceIndex int) (*AP236, error) {
+// NewAP236 creates a new instance and opens the connection to the DAC
+func NewAP236(deviceIndex int) (*AP236, error) {
 	var (
 		o    AP236
 		out  = &o
@@ -535,17 +284,4 @@ func (dac *AP236) Reset(channel int) error {
 func (dac *AP236) Close() error {
 	errC := C.APClose(dac.cfg.nHandle)
 	return enrich(errC, "APClose")
-}
-
-// cMkCopyOfIdealData copies all values from idealCodes to a C owned
-// array.  C.free must be called on it at a later date.
-func cMkCopyOfIdealData(idealCodes [8][7]float64) *[8][7]C.double {
-	cPtr := C.malloc(C.sizeof_double * 8 * 7)
-	cArr := (*[8][7]C.double)(cPtr)
-	for i := 0; i < 8; i++ {
-		for j := 0; j < 7; j++ {
-			cArr[i][j] = C.double(idealCodes[i][j])
-		}
-	}
-	return cArr
 }

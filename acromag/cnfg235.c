@@ -1,6 +1,6 @@
 
 #include <unistd.h>
-#include "../apcommon/apcommon.h"
+#include "apcommon.h"
 #include "AP235.h"
 
 /*
@@ -101,7 +101,7 @@ void cnfg235(struct cblk235 *c_blk, int channel)
 
     output_long( c_blk->nHandle, (long*)&c_blk->brd_ptr->DAC[channel].DirectAccess, control );
 
-    /* Underflow Clear in DAC channel status */ 
+    /* Underflow Clear in DAC channel status */
     output_long( c_blk->nHandle, (long*)&c_blk->brd_ptr->DAC[channel].Status, c_blk->opts.chan[channel].UnderflowClear << 3 );
 
     /* timer divider value */
