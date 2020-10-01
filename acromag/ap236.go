@@ -10,6 +10,7 @@ import "C"
 import (
 	"errors"
 	"fmt"
+	"log"
 	"unsafe"
 )
 
@@ -30,10 +31,13 @@ func NewAP236(deviceIndex int) (*AP236, error) {
 	o.cfg = (*C.struct_cblk236)(C.malloc(C.sizeof_struct_cblk236))
 	o.cfg.pIdealCode = cMkCopyOfIdealData(idealCode)
 	errC := C.APOpen(C.int(deviceIndex), &o.cfg.nHandle, cs)
+	log.Println("AP236: APOpen:", errC)
+	log.Printf("%+v\n", o.cfg)
 	err := enrich(errC, "APOpen")
 	if err != nil {
 		return out, err
 	}
+
 	errC = C.APInitialize(o.cfg.nHandle)
 	err = enrich(errC, "APInitialize")
 	if err != nil {
