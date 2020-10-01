@@ -1,6 +1,7 @@
 package acromag
 
 /*
+#cgo LDFLAGS: -lm
 #include "apcommon.h"
 #include "AP236.h"
 #include "shim236.h"
