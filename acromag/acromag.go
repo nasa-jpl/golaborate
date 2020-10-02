@@ -1,4 +1,4 @@
-/* Package acromag provides a standardized interface to Acromag AcroPack DAC modules.
+/*Package acromag provides a standardized interface to Acromag AcroPack DAC modules.
 
 Currently, only the AP236 isolated 16-bit module and AP235 16-bit waveform module
 are supported.  The AP236 is not recommended for future projects, as it is noisier

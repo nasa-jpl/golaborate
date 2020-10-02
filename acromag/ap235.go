@@ -1,7 +1,6 @@
 package acromag
 
 /*
-#cgo LDFLAGS: -lm
 #include "apcommon.h"
 #include "AP235.h"
 #include "shim235.h"
@@ -10,7 +9,6 @@ import "C"
 import (
 	"errors"
 	"fmt"
-	"log"
 	"reflect"
 	"sync"
 	"unsafe"
@@ -62,8 +60,6 @@ func NewAP235(deviceIndex int) (*AP235, error) {
 
 	// open the board, initialize it, get its address, and populate its config
 	errC := C.APOpen(C.int(deviceIndex), &o.cfg.nHandle, cs)
-	log.Println("AP235: APOpen:", errC)
-	log.Printf("%+v\n", o.cfg)
 	err := enrich(errC, "APOpen")
 	if err != nil {
 		return out, err
