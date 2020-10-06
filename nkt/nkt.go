@@ -359,7 +359,7 @@ func encodeStatus(fcn func() (map[string]bool, error)) http.HandlerFunc {
 func NewHTTPWrapper(sk *SuperK) laser.HTTPLaserController {
 	w := laser.NewHTTPLaserController(sk)
 	rt := w.RT()
-	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "main-module-status"}] = encodeStatus(sk.StatusMain)
-	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "varia-status"}] = encodeStatus(sk.StatusVaria)
+	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/main-module-status"}] = encodeStatus(sk.StatusMain)
+	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/varia-status"}] = encodeStatus(sk.StatusVaria)
 	return w
 }
