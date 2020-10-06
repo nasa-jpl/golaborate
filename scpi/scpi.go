@@ -13,9 +13,11 @@ import (
 	"github.jpl.nasa.gov/bdube/golab/comm"
 )
 
-const timeout = 5 * time.Second
+const (
+	timeout = 5 * time.Second
 
-var tcpFrameSize = 1500
+	tcpFrameSize = 1500
+)
 
 // SCPI is a type for encapsulating SCPI communication
 type SCPI struct {
