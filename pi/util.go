@@ -174,5 +174,5 @@ func makeSerConf(addr string) *serial.Config {
 }
 
 func stripAxis(axis string, message []byte) []byte {
-	return bytes.TrimLeft(message, axis+"=")
+	return bytes.TrimPrefix(message, []byte(axis+"="))
 }
