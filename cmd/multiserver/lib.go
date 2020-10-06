@@ -33,6 +33,7 @@ import (
 	"github.jpl.nasa.gov/bdube/golab/generichttp/tmc"
 
 	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/middleware"
 	"github.com/go-yaml/yaml"
 )
 
@@ -90,6 +91,7 @@ func LoadYaml(path string) (Config, error) {
 func BuildMux(c Config) chi.Router {
 	// make the root handler
 	root := chi.NewRouter()
+	root.Use(middleware.Logger)
 	supergraph := map[string][]string{}
 
 	// for every node specified, build a submux
@@ -153,7 +155,11 @@ func BuildMux(c Config) chi.Router {
 				middleware = append(middleware, limiter.Check)
 				limiter.Inject(httper)
 			case "pi":
-				ctl := pi.NewController(node.Addr, node.Serial)
+				daisyChainID := node.Args["DaisyChainID"].(int)
+				if daisyChainID == 0 {
+					daisyChainID = 1
+				}
+				ctl := pi.NewController(node.Addr, daisyChainID, true, node.Serial)
 				limiter := motion.LimitMiddleware{Limits: limiters, Mov: ctl}
 				httper = motion.NewHTTPMotionController(ctl)
 				middleware = append(middleware, limiter.Check)
@@ -223,10 +229,9 @@ func BuildMux(c Config) chi.Router {
 
 		// bind to the mux
 		r := chi.NewRouter()
-		httper.RT().Bind(r)
-
 		r.Use(middleware...)
 		r.Use(lock.Check)
+		httper.RT().Bind(r)
 		root.Mount(hndlS, r)
 	}
 	root.Get("/endpoints", func(w http.ResponseWriter, r *http.Request) {
