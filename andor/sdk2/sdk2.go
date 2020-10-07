@@ -746,6 +746,40 @@ func (c *Camera) GetShutter() (bool, error) {
 	return *c.shutter, nil
 }
 
+// SetShutterAuto puts the camera into or out of automatic shutering mode,
+// in which the camera itself controls the signaling and timing of the shutter.
+//
+// b=false will put the shutter into a manual configuration mode and close it.
+func (c *Camera) SetShutterAuto(b bool) error {
+	var (
+		inp string
+		err error
+	)
+	if b {
+		inp = "Auto"
+	} else {
+		inp = "Close"
+	}
+	if b {
+		err = c.setShutter(true, inp, 0, 0)
+	} else {
+		err = c.setShutter(true, inp, time.Millisecond, time.Millisecond)
+	}
+	if err == nil {
+		c.shutterAuto = &b
+	}
+	return err
+}
+
+// GetShutterAuto retrieves if the shutter is in automatic (camera managed) or
+// manual (user managed) mode.
+func (c *Camera) GetShutterAuto() (bool, error) {
+	if c.shutterAuto == nil {
+		return false, ErrParameterNotSet
+	}
+	return *c.shutterAuto, nil
+}
+
 // CollectHeaderMetadata satisfies generichttp/camera and makes a stack of FITS cards
 func (c *Camera) CollectHeaderMetadata() []fitsio.Card {
 	// grab all the shit we care about from the camera so we can fill out the header

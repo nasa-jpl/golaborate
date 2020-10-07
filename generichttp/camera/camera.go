@@ -645,6 +645,14 @@ type ShutterController interface {
 
 	// GetShutter returns if the shutter is open or closed
 	GetShutter() (bool, error)
+
+	// SetShutterAuto puts the shutter into automatic (camera controlled) or
+	// manual (user controlled) mode
+	SetShutterAuto(bool) error
+
+	// GetShutterAuto returns if the shutter is automatically (camera) controlled
+	// or user controlled
+	GetShutterAuto() (bool, error)
 }
 
 // SetShutter opens or closes the shutter over HTTP as JSON
@@ -657,10 +665,22 @@ func GetShutter(s ShutterController) http.HandlerFunc {
 	return generichttp.GetBool(s.GetShutter)
 }
 
+// SetShutterAuto opens or closes the shutter over HTTP as JSON
+func SetShutterAuto(s ShutterController) http.HandlerFunc {
+	return generichttp.SetBool(s.SetShutterAuto)
+}
+
+// GetShutterAuto returns if the shutter is currently open over HTTP as JSON
+func GetShutterAuto(s ShutterController) http.HandlerFunc {
+	return generichttp.GetBool(s.GetShutterAuto)
+}
+
 // HTTPShutterController binds routes to control the shutter to a route table
 func HTTPShutterController(s ShutterController, table generichttp.RouteTable) {
 	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/shutter"}] = GetShutter(s)
 	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/shutter"}] = SetShutter(s)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/shutter-auto"}] = GetShutterAuto(s)
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/shutter-auto"}] = SetShutterAuto(s)
 }
 
 // Camera describes the most basic camera possible
