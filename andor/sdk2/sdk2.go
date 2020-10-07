@@ -410,14 +410,14 @@ func (c *Camera) GetSoftwareVersion() (SoftwareVersion, error) {
 }
 
 // GetNumberVSSpeeds gets the number of vertical shift register speeds available
-func (c *Camera) GetNumberVSSpeeds() (int, error) { // need another return type
+func (c *Camera) GetNumberVSSpeeds() (int, error) {
 	var speeds C.int
 	errCode := uint(C.GetNumberVSSpeeds(&speeds))
 	return int(speeds), Error(errCode)
 }
 
 // GetVSSpeed gets the vertical shift register speed
-func (c *Camera) GetVSSpeed(idx int) (float64, error) { // need another return type
+func (c *Camera) GetVSSpeed(idx int) (float64, error) {
 	var f C.float
 	errCode := uint(C.GetVSSpeed(C.int(idx), &f))
 	return float64(f), Error(errCode)
@@ -434,7 +434,7 @@ func (c *Camera) GetFastestRecommendedVSSpeed() (int, float64, error) {
 }
 
 // SetVSSpeed sets the vertical shift register speed
-func (c *Camera) SetVSSpeed(idx int) error { // need another argument type
+func (c *Camera) SetVSSpeed(idx int) error {
 	errCode := uint(C.SetVSSpeed(C.int(idx)))
 	return Error(errCode)
 }
@@ -451,7 +451,7 @@ func (c *Camera) SetVSAmplitude(vcv string) error {
 }
 
 // GetNumberHSSpeeds gets the number of horizontal shift register speeds available
-func (c *Camera) GetNumberHSSpeeds(ch int) (int, error) { // need another return type
+func (c *Camera) GetNumberHSSpeeds(ch int) (int, error) {
 	// var emint int
 	// if emMode {
 	// 	emint = 0
@@ -468,7 +468,7 @@ func (c *Camera) GetNumberHSSpeeds(ch int) (int, error) { // need another return
 }
 
 // GetHSSpeed gets the horizontal shift speed
-func (c *Camera) GetHSSpeed(ch int, idx int) (float64, error) { // need another return type
+func (c *Camera) GetHSSpeed(ch int, idx int) (float64, error) {
 	// var emint int
 	// if emMode {
 	// 	emint = 0
@@ -486,7 +486,7 @@ func (c *Camera) GetHSSpeed(ch int, idx int) (float64, error) { // need another 
 }
 
 // SetHSSpeed sets the horizontal shift speed
-func (c *Camera) SetHSSpeed(idx int) error { // need another argument type
+func (c *Camera) SetHSSpeed(idx int) error {
 	// var emint int
 	// if emMode {
 	// 	emint = 0
@@ -534,7 +534,7 @@ func (c *Camera) GetCooling() (bool, error) {
 // GetTemperatureRange gets the valid range of temperatures
 // in which the detector can be cooled
 // returns (min, max, error)
-func (c *Camera) GetTemperatureRange() (int, int, error) { // need another return type
+func (c *Camera) GetTemperatureRange() (int, int, error) {
 	var min, max C.int
 	errCode := uint(C.GetTemperatureRange(&min, &max))
 	return int(min), int(max), Error(errCode)
@@ -581,8 +581,8 @@ func (c *Camera) GetTemperatureSetpoints() ([]string, error) {
 	if err != nil {
 		return []string{}, err
 	}
-	minS := strconv.Itoa(min) // if one errors, assume the other would too,
-	maxS := strconv.Itoa(max) // skip one error check
+	minS := strconv.Itoa(min)
+	maxS := strconv.Itoa(max)
 	return []string{minS, maxS}, nil
 }
 
@@ -590,7 +590,7 @@ func (c *Camera) GetTemperatureSetpoints() ([]string, error) {
 func (c *Camera) GetTemperatureStatus() (string, error) {
 	// this is pasted from the GetTemperature function with minor modification
 	var temp C.int
-	errCode := uint(C.GetTemperature(&temp))
+	errCode := uint(C.GetTemperatureStatus(&temp))
 	err := Error(errCode)
 	if BeneignThermal(err) {
 		return ErrCodes[DRVError(errCode)], nil
