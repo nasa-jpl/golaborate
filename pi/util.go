@@ -18,7 +18,7 @@ var (
 		2:    "Unknown command",
 		3:    "Command length out of limits or command buffer overrun",
 		4:    "Error while scanning",
-		5:    "Unallowable move attemtped on unreferenced axis, or move attempted with servo off",
+		5:    "Unallowable move attempted on unreferenced axis, or move attempted with servo off",
 		6:    "Parameter for SGA not valid",
 		7:    "Position out of limits",
 		8:    "Velocity out of limits",
