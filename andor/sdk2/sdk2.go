@@ -126,7 +126,7 @@ func (c *Camera) GetNumberVSSpeeds() (int, error) {
 	return int(speeds), Error(errCode)
 }
 
-// GetVSSpeed gets the vertical shift register speed
+// GetVSSpeed gets the vertical shift register speed in microseconds
 func (c *Camera) GetVSSpeed(idx int) (float64, error) {
 	var f C.float
 	errCode := uint(C.GetVSSpeed(C.int(idx), &f))
@@ -562,8 +562,8 @@ func (c *Camera) GetMaximumBinning(rm string, horizontal bool) (int, error) {
 
  */
 
-// FilterSetMode sets the filtering mode of the camera
-func (c *Camera) FilterSetMode(fm string) error {
+// SetFilterMode sets the filtering mode of the camera
+func (c *Camera) SetFilterMode(fm string) error {
 	i, ok := FilterMode[fm]
 	if !ok {
 		return ErrBadEnumIndex
@@ -859,23 +859,49 @@ func (c *Camera) CollectHeaderMetadata() []fitsio.Card {
 // Configure sets many values for the camera at once
 func (c *Camera) Configure(settings map[string]interface{}) error {
 	type fStrErr func(string) error
-	funcs := map[string]fStrErr{
+	type fBoolErr func(bool) error
+	type fIntErr func(int) error
+	strFuncs := map[string]fStrErr{
 		"VSAmplitude":         c.SetVSAmplitude,
 		"AcquisitionMode":     c.SetAcquisitionMode,
 		"ReadoutMode":         c.SetReadoutMode,
-		"TemperatureSetpoint": c.SetTemperatureSetpoint}
+		"TemperatureSetpoint": c.SetTemperatureSetpoint,
+		"FilterMode":          c.SetFilterMode,
+		"TriggerMode":         c.SetTriggerMode,
+		"EMGainMode":          c.SetEMGainMode}
+	boolFuncs := map[string]fBoolErr{
+		"ShutterOpen":    c.SetShutter,
+		"ShutterAuto":    c.SetShutterAuto,
+		"FanOn":          c.SetFan,
+		"EMGainAdvanced": c.SetEMAdvanced,
+		"SensorCooling":  c.SetCooling,
+		"BaselineClamp":  c.SetBaselineClamp,
+	}
+	intFuncs := map[string]fIntErr{
+		"ADChannel": c.SetADChannel,
+		"EMGain":    c.SetEMGain,
+		"HSSpeed":   c.SetHSSpeed,
+		"VSSpeed":   c.SetVSSpeed}
 	var errs []error
 	for k, v := range settings {
 		switch k {
-		case "VSAmplitude", "VSSpeed", "HSSpeed", "AcquisitionMode", "ReadoutMode", "TemperatureSetpoint":
+		case "VSAmplitude", "AcquisitionMode", "ReadoutMode", "TemperatureSetpoint", "FilterMode", "TriggerMode", "EMGainMode":
 			str := v.(string)
-			f := funcs[k]
+			f := strFuncs[k]
 			err := f(str)
 			errs = append(errs, err)
-		case "SensorCooling":
+		case "ShutterOpen", "ShutterAuto", "FanOn", "EMGainAdvanced", "SensorCooling", "BaselineClamp":
 			b := v.(bool)
-			err := c.SetCooling(b)
+			f := boolFuncs[k]
+			err := f(b)
 			errs = append(errs, err)
+		case "ADChannel", "EMGain", "HSSpeed", "VSSpeed":
+			i := v.(int)
+			f := intFuncs[k]
+			err := f(i)
+			errs = append(errs, err)
+		default:
+			return fmt.Errorf("Configuration parameter %s with value %v not understood or unavailble", k, v)
 		}
 	}
 	return util.MergeErrors(errs)

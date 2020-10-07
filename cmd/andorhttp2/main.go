@@ -23,7 +23,7 @@ import (
 
 var (
 	// Version is the version number.  Typically injected via ldflags with git build
-	Version = "8"
+	Version = "9"
 
 	// ConfigFileName is what it sounds like
 	ConfigFileName = "andor-http.yml"
@@ -52,7 +52,7 @@ func setupconfig() {
 		SerialNumber: "auto",
 		Recorder:     recorder{},
 		BootupArgs: map[string]interface{}{
-			// "VSAmplitude": "Normal",
+			"VSAmplitude": "Normal",
 			// "VSSpeed":             "1Hz",
 			// "HSSpeed":             "TBD",
 			"AcquisitionMode":     "SingleScan",
