@@ -1045,7 +1045,6 @@ func (c *Camera) CollectHeaderMetadata() []fitsio.Card {
 	camsn, err := c.GetSerialNumber()
 	fan, err := c.GetFan()
 	tsetpt, err := c.GetTemperatureSetpoint()
-	tstat, err := c.GetTemperatureStatus()
 	temp, err := c.GetTemperature()
 	bin, err := c.GetBinning()
 	if err != nil {
@@ -1104,7 +1103,6 @@ func (c *Camera) CollectHeaderMetadata() []fitsio.Card {
 		// thermal parameters
 		{Name: "FAN", Value: fan, Comment: "on (true) or off"},
 		{Name: "TEMPSETP", Value: tsetpt, Comment: "Temperature setpoint"},
-		{Name: "TEMPSTAT", Value: tstat, Comment: "TEC status"},
 		{Name: "TEMPER", Value: temp, Comment: "FPA temperature (Celcius)"},
 		// aoi parameters
 		{Name: "AOIL", Value: aoi.Left, Comment: "1-based left pixel of the AOI"},
