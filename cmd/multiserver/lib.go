@@ -37,6 +37,19 @@ import (
 	"github.com/go-yaml/yaml"
 )
 
+// Minmax holds a min and max value
+type Minmax struct {
+	Min float64 `yaml:"Min"`
+	Max float64 `yaml:"Max"`
+}
+
+// Daisy holds a controller ID, endpoint, and limit
+type Daisy struct {
+	ControllerID int               `yaml:"ControllerID"`
+	Endpoint     string            `yaml:"Endpoint"`
+	Limits       map[string]Minmax `yaml:"Limits"`
+}
+
 // ObjSetup holds the typical triplet of args for a New<device> call.
 // Serial is not always used, and need not be populated in the config file
 // if not used.
@@ -60,6 +73,8 @@ type ObjSetup struct {
 
 	// Args holds any arguments to pass into the constructor for the object
 	Args map[string]interface{} `yaml:"Args"`
+
+	DaisyChain []Daisy `yaml:"DaisyChain"`
 }
 
 // Config is a struct that holds the initialization parameters for various
@@ -94,6 +109,7 @@ func BuildMux(c Config) chi.Router {
 	root.Use(middleware.Logger)
 	supergraph := map[string][]string{}
 
+OuterLoop:
 	// for every node specified, build a submux
 	for _, node := range c.Nodes {
 		var (
@@ -104,7 +120,7 @@ func BuildMux(c Config) chi.Router {
 		typ := strings.ToLower(node.Type)
 		switch typ {
 
-		case "aerotech", "ensemble", "esp", "esp300", "esp301", "xps", "pi":
+		case "aerotech", "ensemble", "esp", "esp300", "esp301", "xps", "pi", "pi-daisy-chain":
 			axislocker = true
 			/* the limits are encoded as:
 			Args:
@@ -122,19 +138,20 @@ func BuildMux(c Config) chi.Router {
 			*/
 			limiters := map[string]util.Limiter{}
 			if node.Args != nil {
-				rawlimits := node.Args["Limits"].(map[string]interface{})
-				for k, v := range rawlimits {
-					limiter := util.Limiter{}
-					if min, ok := v.(map[string]interface{})["Min"]; ok {
-						limiter.Min = min.(float64)
+				if node.Args["Limits"] != nil {
+					rawlimits := node.Args["Limits"].(map[string]interface{})
+					for k, v := range rawlimits {
+						limiter := util.Limiter{}
+						if min, ok := v.(map[string]interface{})["Min"]; ok {
+							limiter.Min = min.(float64)
+						}
+						if max, ok := v.(map[string]interface{})["Max"]; ok {
+							limiter.Max = max.(float64)
+						}
+						limiters[k] = limiter
 					}
-					if max, ok := v.(map[string]interface{})["Max"]; ok {
-						limiter.Max = max.(float64)
-					}
-					limiters[k] = limiter
 				}
 			}
-
 			switch typ {
 			case "aerotech", "ensemble":
 				ensemble := aerotech.NewEnsemble(node.Addr, node.Serial)
@@ -154,16 +171,45 @@ func BuildMux(c Config) chi.Router {
 				httper = motion.NewHTTPMotionController(xps)
 				middleware = append(middleware, limiter.Check)
 				limiter.Inject(httper)
-			case "pi":
-				daisyChainID := node.Args["DaisyChainID"].(int)
-				if daisyChainID == 0 {
-					daisyChainID = 1
+			case "pi-daisy-chain":
+				// daisy chain is special in that a single pool is used for multiple controllers
+				network := pi.NewNetwork(node.Addr, node.Serial)
+				for i := range node.DaisyChain {
+					daisy := node.DaisyChain[i]
+					ctl := network.Add(daisy.ControllerID, true) // true => handshaking//error checking
+					limiter := motion.LimitMiddleware{Limits: limiters, Mov: ctl}
+					httper = motion.NewHTTPMotionController(ctl)
+					ascii.InjectRawComm(httper, ctl)
+					limiter.Inject(httper)
+					middleware = append(middleware, limiter.Check)
+					// prepare the URL, "omc/nkt" => "/omc/nkt/*"
+					hndlS := generichttp.SubMuxSanitize(daisy.Endpoint)
+
+					// add a lock interface for this node
+					var lock locker.ManipulableLock
+					if !axislocker {
+						lock = locker.New()
+					} else {
+						lock = locker.NewAL()
+					}
+					// add the lock middleware
+					locker.Inject(httper, lock)
+					r := chi.NewRouter()
+					r.Use(middleware...)
+					r.Use(lock.Check)
+					httper.RT().Bind(r)
+					root.Mount(hndlS, r)
 				}
-				ctl := pi.NewController(node.Addr, daisyChainID, true, node.Serial)
+				continue OuterLoop
+			case "pi":
+				network := pi.NewNetwork(node.Addr, node.Serial)
+				ctl := network.Add(1, true)
 				limiter := motion.LimitMiddleware{Limits: limiters, Mov: ctl}
 				httper = motion.NewHTTPMotionController(ctl)
-				middleware = append(middleware, limiter.Check)
+				ascii.InjectRawComm(httper, ctl)
 				limiter.Inject(httper)
+				middleware = append(middleware, limiter.Check)
+
 			}
 
 		case "cryocon":

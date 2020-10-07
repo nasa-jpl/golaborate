@@ -49,6 +49,26 @@ The reply changes to
 
 // file gsc2 contains a generichttp/motion compliant implementation around GCS2
 
+// ControllerNetwork is a network of daisy chained controllers
+type ControllerNetwork struct {
+	pool        *comm.Pool
+	Controllers map[int]*Controller
+}
+
+// NewNetwork creates a controller network with a shared pool
+func NewNetwork(addr string, serial bool) *ControllerNetwork {
+	maker := comm.BackingOffTCPConnMaker(addr, 3*time.Second)
+	pool := comm.NewPool(1, 30*time.Second, maker)
+	return &ControllerNetwork{pool: pool, Controllers: map[int]*Controller{}}
+}
+
+// Add adds a controller to the network and returns it
+func (n *ControllerNetwork) Add(index int, handshaking bool) *Controller {
+	c := NewController(n.pool, index, handshaking)
+	n.Controllers[index] = c
+	return c
+}
+
 // Controller maps to any PI controller, e.g. E-509, E-727, C-884
 type Controller struct {
 	index int
@@ -66,7 +86,7 @@ type Controller struct {
 	DV *float64
 }
 
-// NewController returns a fully configured new controller
+// NewController returns a new motion controller
 // addr is the location to send to, e.g. 192.168.100.2106.
 //
 // index is the controller index in the daisy chain.  In a single controller
@@ -74,12 +94,7 @@ type Controller struct {
 //
 // handshaking=true will check for errors after all commnads.  False does no error
 // checking.
-//
-// serial indicates if a serial (RS-232) connection should be made instead
-// of TCP/IP.
-func NewController(addr string, index int, handshaking, serial bool) *Controller {
-	maker := comm.BackingOffTCPConnMaker(addr, 3*time.Second)
-	pool := comm.NewPool(1, 30*time.Second, maker)
+func NewController(pool *comm.Pool, index int, handshaking bool) *Controller {
 	return &Controller{
 		index:       index,
 		pool:        pool,
@@ -94,7 +109,7 @@ func NewController(addr string, index int, handshaking, serial bool) *Controller
 func (c *Controller) write(msgs ...string) error {
 	for i := range msgs {
 		msg := msgs[i]
-		if strings.Contains(msg, "?") {
+		if strings.Contains(msg, "?") && !strings.Contains(msg, "WAC") {
 			return errors.New("pi/gcs2: command contains a query in write-only operation")
 		}
 	}
@@ -104,11 +119,12 @@ func (c *Controller) write(msgs ...string) error {
 	}
 	defer func() { c.pool.ReturnWithError(conn, err) }()
 	var wrap io.ReadWriter
-	wrap = comm.NewTerminator(conn, '\n', '\n')
-	wrap, err = comm.NewTimeout(wrap, c.Timeout)
+	wrap, err = comm.NewTimeout(conn, c.Timeout)
 	if err != nil {
 		return err
 	}
+	wrap = comm.NewTerminator(wrap, '\n', '\n')
+
 	for i := range msgs {
 		msg := msgs[i]
 		msg = strconv.Itoa(c.index) + " " + msg
@@ -118,7 +134,8 @@ func (c *Controller) write(msgs ...string) error {
 		}
 	}
 	if c.Handshaking {
-		_, err = io.WriteString(wrap, strconv.Itoa(c.index)+" ERR?")
+		msg := strconv.Itoa(c.index) + " ERR?"
+		_, err = io.WriteString(wrap, msg)
 		// error response will look like 0 1 nnnn which is six bytes, ten is enough
 		buf := make([]byte, 10)
 		n, err := wrap.Read(buf)
@@ -151,11 +168,11 @@ func (c *Controller) query(msg string) ([]byte, error) {
 	}
 	defer func() { c.pool.ReturnWithError(conn, err) }()
 	var wrap io.ReadWriter
-	wrap = comm.NewTerminator(conn, '\n', '\n')
-	wrap, err = comm.NewTimeout(wrap, c.Timeout)
+	wrap, err = comm.NewTimeout(conn, c.Timeout)
 	if err != nil {
 		return nil, err
 	}
+	wrap = comm.NewTerminator(wrap, '\n', '\n')
 
 	// prepend controller ID and send query
 	msg = strconv.Itoa(c.index) + " " + msg
@@ -163,7 +180,7 @@ func (c *Controller) query(msg string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	buf := make([]byte, 1500)
+	buf := make([]byte, tcpFrameSize)
 	n, err := wrap.Read(buf)
 	if err != nil {
 		return nil, err
@@ -201,17 +218,72 @@ func (c *Controller) readFloat(cmd, axis string) (float64, error) {
 
 // MoveAbs commands the controller to move an axis to an absolute position
 func (c *Controller) MoveAbs(axis string, pos float64) error {
-	msg1 := fmt.Sprintf("MOV %s %.9f", axis, pos)
-	msg2 := fmt.Sprintf("WAC ONT? %s = 1", axis)
-	return c.write(msg1, msg2)
+	// want to wait this long before reading position to wait for convergence
+	start := time.Now()
+	msg := fmt.Sprintf("MOV %s %.9f", axis, pos)
+	err := c.write(msg)
+	end := time.Now()
+	dur := end.Sub(start)
+	if err != nil {
+		return err
+	}
 
+	const maxChecks = 10000
+	for checks := 0; checks < maxChecks; checks++ {
+		time.Sleep(dur) // avoid threashing the controller
+		b, err := c.readBool("ONT?", axis)
+		if err != nil {
+			return err
+		}
+		if !b {
+			// not on target
+			if checks == maxChecks-1 {
+				lastPos, err := c.GetPos(axis)
+				if err != nil {
+					return err
+				}
+				return fmt.Errorf("pi/gsc2: stage position did not converge after %d checks, last value %f for target %f", maxChecks, lastPos, pos)
+			}
+		}
+		break
+	}
+	// position converged
+	return nil
 }
 
 // MoveRel commands the controller to move an axis by a delta
 func (c *Controller) MoveRel(axis string, delta float64) error {
-	msg1 := fmt.Sprintf("MVR %s %.9f", axis, delta)
-	msg2 := fmt.Sprintf("WAC ONT? %s = 1", axis)
-	return c.write(msg1, msg2)
+	// want to wait this long before reading position to wait for convergence
+	start := time.Now()
+	msg := fmt.Sprintf("MVR %s %.9f", axis, delta)
+	err := c.write(msg)
+	end := time.Now()
+	dur := end.Sub(start)
+	if err != nil {
+		return err
+	}
+
+	const maxChecks = 10000
+	for checks := 0; checks < maxChecks; checks++ {
+		time.Sleep(dur) // avoid threashing the controller
+		b, err := c.readBool("ONT?", axis)
+		if err != nil {
+			return err
+		}
+		if !b {
+			// not on target
+			if checks == maxChecks-1 {
+				lastPos, err := c.GetPos(axis)
+				if err != nil {
+					return err
+				}
+				return fmt.Errorf("pi/gsc2: stage position did not converge after %d checks, last value %f during relative move of %f", maxChecks, lastPos, delta)
+			}
+		}
+		break
+	}
+	// position converged
+	return nil
 }
 
 // GetPos returns the current position of an axis
