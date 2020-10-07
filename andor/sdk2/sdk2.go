@@ -586,18 +586,6 @@ func (c *Camera) GetTemperatureSetpoints() ([]string, error) {
 	return []string{minS, maxS}, nil
 }
 
-// GetTemperatureStatus gets the status of the TEC subsystem on the camera
-func (c *Camera) GetTemperatureStatus() (string, error) {
-	// this is pasted from the GetTemperature function with minor modification
-	var temp C.int
-	errCode := uint(C.GetTemperatureStatus(&temp))
-	err := Error(errCode)
-	if BeneignThermal(err) {
-		return ErrCodes[DRVError(errCode)], nil
-	}
-	return "", err
-}
-
 // SetFan allows the fan to be turned on or off.
 // this is not a 1:1 mimic of SDk2, since it is binary
 // on (HIGH) or off (OFF)
