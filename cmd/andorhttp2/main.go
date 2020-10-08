@@ -23,7 +23,7 @@ import (
 
 var (
 	// Version is the version number.  Typically injected via ldflags with git build
-	Version = "9"
+	Version = "10"
 
 	// ConfigFileName is what it sounds like
 	ConfigFileName = "andor-http.yml"
@@ -177,9 +177,48 @@ func run() {
 		log.Fatal(err)
 	}
 
+	err = c.SetADChannel(0)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	err = c.Configure(cfg.BootupArgs)
 	if err != nil {
 		log.Fatal(err)
+	}
+	n, err := c.GetNumberVSSpeeds()
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("the camera has", n, "vertical shift speeds.  They are:")
+	for i := 0; i < n; i++ {
+		f, err := c.GetVSSpeed(i)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("index %d: %f μs\n", i, f)
+	}
+	i, f, err := c.GetFastestRecommendedVSSpeed()
+	if err != nil {
+		log.Println(err)
+	}
+	log.Printf("the fastest recommended is index %d, %f μs\n", i, f)
+
+	adch, err := c.GetADChannel()
+	if err != nil {
+		log.Fatal(err)
+	}
+	n, err = c.GetNumberHSSpeeds(adch)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("the camera has", n, "horizontal shift speeds.  They are:")
+	for i := 0; i < n; i++ {
+		f, err := c.GetHSSpeed(adch, i)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("index %d: %f μs\n", i, f)
 	}
 
 	args := cfg.Recorder
