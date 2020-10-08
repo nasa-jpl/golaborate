@@ -778,8 +778,7 @@ func (c *Camera) SetShutterAuto(b bool) error {
 		err error
 	)
 	if b {
-		errCode := uint(C.SetShutter(1, 0, 0, 0))
-		err = Error(errCode)
+		err = c.setShutter(true, "Auto", time.Millisecond, time.Millisecond)
 	} else {
 		err = c.setShutter(true, "Close", time.Millisecond, time.Millisecond)
 	}

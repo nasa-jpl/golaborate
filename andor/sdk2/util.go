@@ -237,7 +237,7 @@ type Status uint
 
 const (
 	// WRAPVER is the wrapper version around andor SDK v2
-	WRAPVER = 3
+	WRAPVER = 4
 
 	// StatusIdle is IDLE waiting on instructions
 	StatusIdle Status = 20073
