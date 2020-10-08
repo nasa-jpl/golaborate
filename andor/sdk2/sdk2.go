@@ -63,6 +63,9 @@ type Camera struct {
 
 	// shutterAuto holds if the shutter is in automatic mode or manual
 	shutterAuto *bool
+
+	// adchannel holds the selected A/D channel
+	adchannel *int
 }
 
 /* this block contains functions which deal with camera initialization
@@ -356,23 +359,6 @@ func (c *Camera) SetReadoutMode(rm string) error {
 	return Error(errCode)
 }
 
-// SetShutter sets the shutter parameters of the camera.
-// ttlHi sends output TTL high signal to open shutter, else sends TTL low signal
-func (c *Camera) setShutter(ttlHi bool, mode string, opening, closing time.Duration) error {
-	i, ok := ShutterMode[mode]
-	if !ok {
-		return ErrBadEnumIndex
-	}
-	ot := opening.Milliseconds()
-	ct := closing.Milliseconds()
-	ttl := 0
-	if ttlHi {
-		ttl = 1
-	}
-	errCode := uint(C.SetShutter(C.int(ttl), C.int(i), C.int(ot), C.int(ct)))
-	return Error(errCode)
-}
-
 // SetExposureTime sets the exposure time of the camera in seconds
 func (c *Camera) SetExposureTime(t time.Duration) error {
 	tS := t.Seconds()
@@ -493,7 +479,19 @@ func (c *Camera) GetNumberADChannels() (int, error) {
 // camera is powered off
 func (c *Camera) SetADChannel(ch int) error {
 	errCode := uint(C.SetADChannel(C.int(ch)))
-	return Error(errCode)
+	err := Error(errCode)
+	if err == nil {
+		c.adchannel = &ch
+	}
+	return err
+}
+
+// GetADChannel returns the currently selected AD channel
+func (c *Camera) GetADChannel() (int, error) {
+	if c.adchannel == nil {
+		return 0, ErrParameterNotSet
+	}
+	return *c.adchannel, nil
 }
 
 // GetMaximumExposure gets the maximum exposure time supported in the current
@@ -731,6 +729,23 @@ func (c *Camera) GetSerialNumber() (int, error) {
 	return int(i), Error(errCode)
 }
 
+// SetShutter sets the shutter parameters of the camera.
+// ttlHi sends output TTL high signal to open shutter, else sends TTL low signal
+func (c *Camera) setShutter(ttlHi bool, mode string, opening, closing time.Duration) error {
+	i, ok := ShutterMode[mode]
+	if !ok {
+		return ErrBadEnumIndex
+	}
+	ot := opening.Milliseconds()
+	ct := closing.Milliseconds()
+	ttl := 0
+	if ttlHi {
+		ttl = 1
+	}
+	errCode := uint(C.SetShutter(C.int(ttl), C.int(i), C.int(ot), C.int(ct)))
+	return Error(errCode)
+}
+
 // SetShutter opens the shutter (true) or closes it (false)
 func (c *Camera) SetShutter(b bool) error {
 	var inp string
@@ -760,18 +775,13 @@ func (c *Camera) GetShutter() (bool, error) {
 // b=false will put the shutter into a manual configuration mode and close it.
 func (c *Camera) SetShutterAuto(b bool) error {
 	var (
-		inp string
 		err error
 	)
 	if b {
-		inp = "Auto"
+		errCode := uint(C.SetShutter(1, 0, 0, 0))
+		err = Error(errCode)
 	} else {
-		inp = "Close"
-	}
-	if b {
-		err = c.setShutter(true, inp, 0, 0)
-	} else {
-		err = c.setShutter(true, inp, time.Millisecond, time.Millisecond)
+		err = c.setShutter(true, "Close", time.Millisecond, time.Millisecond)
 	}
 	if err == nil {
 		c.shutterAuto = &b
@@ -904,7 +914,7 @@ func (c *Camera) Configure(settings map[string]interface{}) error {
 			err := f(b)
 			errs = append(errs, err)
 		case "ADChannel", "EMGain", "HSSpeed", "VSSpeed":
-			i := v.(int)
+			i := int(v.(float64))
 			f := intFuncs[k]
 			err := f(i)
 			errs = append(errs, err)
