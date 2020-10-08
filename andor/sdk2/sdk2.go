@@ -24,6 +24,7 @@ package sdk2
 */
 import "C"
 import (
+	"errors"
 	"fmt"
 	"image"
 	"reflect"
@@ -294,6 +295,13 @@ func (c *Camera) GetTemperatureSetpoints() ([]string, error) {
 	minS := strconv.Itoa(min)
 	maxS := strconv.Itoa(max)
 	return []string{minS, maxS}, nil
+}
+
+// GetTemperatureStatus queries the status of the cooling system.
+// it is not implemented in the SDK but is required to satisfy the thermalcontroller
+// interface
+func (c *Camera) GetTemperatureStatus() (string, error) {
+	return "", errors.New("andor/sdk2: GetTemperatureStatus not implemented on iXON EMCCD")
 }
 
 // SetFan allows the fan to be turned on or off.
