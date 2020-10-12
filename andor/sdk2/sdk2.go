@@ -936,7 +936,7 @@ func (c *Camera) Configure(settings map[string]interface{}) error {
 			f := strFuncs[k]
 			err := f(str)
 			errs = append(errs, err)
-		case "ShutterOpen", "ShutterAuto", "FanOn", "EMGainAdvanced", "SensorCooling", "BaselineClamp":
+		case "ShutterOpen", "ShutterAuto", "FanOn", "EMGainAdvanced", "SensorCooling", "BaselineClamp", "FrameTransferMode":
 			b := v.(bool)
 			f := boolFuncs[k]
 			err := f(b)
