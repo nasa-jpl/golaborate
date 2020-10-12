@@ -66,6 +66,9 @@ type Camera struct {
 
 	// adchannel holds the selected A/D channel
 	adchannel *int
+
+	// frameTransfer holds if the camera is in frame transfer mode
+	frameTransfer *bool
 }
 
 /* this block contains functions which deal with camera initialization
@@ -494,6 +497,31 @@ func (c *Camera) GetADChannel() (int, error) {
 	return *c.adchannel, nil
 }
 
+// SetFrameTransferMode puts the camera into frame transfer mode when
+// the argument is true
+func (c *Camera) SetFrameTransferMode(useFrameTransfer bool) error {
+	var mode C.int
+	if useFrameTransfer {
+		mode = 1
+	} else {
+		mode = 0
+	}
+	errCode := uint(C.SetFrameTransferMode(mode))
+	err := Error(errCode)
+	if err == nil {
+		c.frameTransfer = &useFrameTransfer
+	}
+	return err
+}
+
+// GetFrameTransferMode returns true if the camera is in frame transfer mode
+func (c *Camera) GetFrameTransferMode() (bool, error) {
+	if c.frameTransfer == nil {
+		return false, ErrParameterNotSet
+	}
+	return *c.frameTransfer, nil
+}
+
 // GetMaximumExposure gets the maximum exposure time supported in the current
 // configuration in seconds
 func (c *Camera) GetMaximumExposure() (float64, error) {
@@ -887,12 +915,13 @@ func (c *Camera) Configure(settings map[string]interface{}) error {
 		"TriggerMode":         c.SetTriggerMode,
 		"EMGainMode":          c.SetEMGainMode}
 	boolFuncs := map[string]fBoolErr{
-		"ShutterOpen":    c.SetShutter,
-		"ShutterAuto":    c.SetShutterAuto,
-		"FanOn":          c.SetFan,
-		"EMGainAdvanced": c.SetEMAdvanced,
-		"SensorCooling":  c.SetCooling,
-		"BaselineClamp":  c.SetBaselineClamp,
+		"ShutterOpen":       c.SetShutter,
+		"ShutterAuto":       c.SetShutterAuto,
+		"FanOn":             c.SetFan,
+		"EMGainAdvanced":    c.SetEMAdvanced,
+		"SensorCooling":     c.SetCooling,
+		"BaselineClamp":     c.SetBaselineClamp,
+		"FrameTransferMode": c.SetFrameTransferMode,
 	}
 	intFuncs := map[string]fIntErr{
 		"ADChannel": c.SetADChannel,
