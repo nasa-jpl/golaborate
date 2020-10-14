@@ -142,21 +142,19 @@ func pversion() {
 
 func run() {
 	cfg := config{}
-	k.Unmarshal("", &cfg)
+	err := k.Unmarshal("", &cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
 	log.Println("initializing SDK, andor's code can deadlock here.")
 	log.Println("Power cycle the camera if this is stuck.")
 	// load the library and see how many cameras are connected
-	err := sdk2.Initialize("/usr/local/etc/andor")
+	err = sdk2.Initialize("/usr/local/etc/andor")
 	if err != nil {
 		log.Fatal(err)
 	}
 	c := &sdk2.Camera{}
 	defer c.ShutDown()
-
-	err = c.SetFan(true)
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	hwv, err := c.GetHardwareVersion()
 	swv, err := c.GetSoftwareVersion()
@@ -167,6 +165,11 @@ func run() {
 	log.Printf("%+v hwv\n", hwv)
 	log.Println("software")
 	log.Printf("%+v\n", swv)
+
+	err = c.SetFan(true)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	width, height, err := c.GetDetector()
 	if err != nil {
