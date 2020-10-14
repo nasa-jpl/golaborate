@@ -316,9 +316,9 @@ func (c *Camera) GetTemperatureStatus() (string, error) {
 func (c *Camera) SetFan(on bool) error {
 	var in C.int
 	if on {
-		in = C.int(0)
+		in = 0
 	} else {
-		in = C.int(2)
+		in = 2
 	}
 	errCode := uint(C.SetFanMode(in))
 	err := Error(errCode)
