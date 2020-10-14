@@ -64,6 +64,9 @@ type Camera struct {
 	// shutterAuto holds if the shutter is in automatic mode or manual
 	shutterAuto *bool
 
+	// shutterSpeed indicates the opening AND closing time of the shutter
+	shutterSpeed *time.Duration
+
 	// adchannel holds the selected A/D channel
 	adchannel *int
 
@@ -814,6 +817,41 @@ func (c *Camera) SetShutterAuto(b bool) error {
 		c.shutterAuto = &b
 	}
 	return err
+}
+
+// SetShutterSpeed sets the shutter opening AND closing time for the camera
+func (c *Camera) SetShutterSpeed(t time.Duration) error {
+	var err error
+	if *c.shutterAuto {
+		err = c.setShutter(true, "Auto", t, t)
+	} else {
+		var (
+			b   bool
+			inp string = "Close"
+		)
+		if c.shutter == nil {
+			b = false
+		} else {
+			b = *c.shutter
+		}
+		if b {
+			inp = "Open"
+		}
+		err = c.setShutter(true, inp, t, t)
+	}
+	if err == nil {
+		c.shutterSpeed = &t
+	}
+	return err
+}
+
+// GetShutterSpeed retrieves if the shutter is in automatic (camera managed) or
+// manual (user managed) mode.
+func (c *Camera) GetShutterSpeed() (time.Duration, error) {
+	if c.shutterSpeed == nil {
+		return 0, ErrParameterNotSet
+	}
+	return *c.shutterSpeed, nil
 }
 
 // GetShutterAuto retrieves if the shutter is in automatic (camera managed) or
