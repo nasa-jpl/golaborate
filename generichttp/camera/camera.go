@@ -701,19 +701,19 @@ func NewHTTPCamera(p PictureTaker, rec *imgrec.Recorder) HTTPCamera {
 	w := HTTPCamera{PictureTaker: p}
 	rt := generichttp.RouteTable{}
 	HTTPPicture(p, rt, rec)
-	if thermal, ok := interface{}(p).(ThermalManager); ok {
+	if thermal, ok := p.(ThermalManager); ok {
 		HTTPThermalManager(thermal, rt)
 	}
-	if aoi, ok := interface{}(p).(AOIManipulator); ok {
+	if aoi, ok := p.(AOIManipulator); ok {
 		HTTPAOIManipulator(aoi, rt)
 	}
-	if em, ok := interface{}(p).(EMGainManager); ok {
+	if em, ok := p.(EMGainManager); ok {
 		HTTPEMGainManager(em, rt)
 	}
-	if sh, ok := interface{}(p).(ShutterController); ok {
+	if sh, ok := p.(ShutterController); ok {
 		HTTPShutterController(sh, rt)
 	}
-	if b, ok := interface{}(p).(Burster); ok {
+	if b, ok := p.(Burster); ok {
 		wrap := BurstWrapper{B: b}
 		wrap.Inject(rt)
 
