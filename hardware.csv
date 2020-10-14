@@ -17,3 +17,5 @@ Agilent,Function Generator,33250A (and series),function-generator
 PI,Motion Controller,GCS2 compatible (post-2010ish peizo/stepper/DC motors),pi-motion
 Acromag,DAC,AP236,AP236
 Acromag,DAC,AP235,AP235
+Andor,Camera,SDK3 (Neo,...),Camera
+Andor,Camera,SDK2 (iXON,...),Camera
