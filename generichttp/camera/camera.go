@@ -683,6 +683,39 @@ func HTTPShutterController(s ShutterController, table generichttp.RouteTable) {
 	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/shutter-auto"}] = SetShutterAuto(s)
 }
 
+type ExtendedShutterController interface {
+	ShutterController
+
+	SetShutterSpeed(time.Duration) error
+
+	GetShutterSpeed() (time.Duration, error)
+}
+
+func HTTPExtendedShutterController(e ExtendedShutterController, table generichttp.RouteTable) {
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/shutter-speed"}] = SetShutter(e)
+	return
+}
+
+func SetShutterSpeed(e ExtendedShutterController) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		f := generichttp.FloatT{}
+		err := json.NewDecoder(r.Body).Decode(&f)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		defer r.Body.Close()
+		d := time.Duration(f.F64 * 1e9)
+		err = e.SetShutterSpeed(d)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+}
+
 // Camera describes the most basic camera possible
 type Camera interface {
 	// GetFrame returns a frame from the device as a strided array
