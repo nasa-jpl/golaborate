@@ -455,7 +455,7 @@ func (c *Camera) GetAcquiredData() ([]int32, error) {
 	elements := 1024 * 1024
 	buf := make([]int32, elements)
 	ptr := (*C.at_32)(unsafe.Pointer(&buf[0]))
-	errCode := uint(C.GetAcquiredData(ptr, C.uint(1024*1024)))
+	errCode := uint(C.GetAcquiredData(ptr, C.uint(elements)))
 	return buf, Error(errCode)
 }
 
@@ -498,6 +498,35 @@ func (c *Camera) GetADChannel() (int, error) {
 		return 0, ErrParameterNotSet
 	}
 	return *c.adchannel, nil
+}
+
+// GetNumberPreAmpGains returns the number of preamplifier gain settings available
+func (c *Camera) GetNumberPreAmpGains() (int, error) {
+	var num C.int
+	errCode := uint(C.GetNumberPreAmpGains(&num))
+	return int(num), Error(errCode)
+}
+
+// GetPreAmpGain returns the preamp gain (multiplier) associated
+// with a given index
+func (c *Camera) GetPreAmpGain(idx int) (float64, error) {
+	var f C.float
+	errCode := uint(C.GetPreAmpGain(C.int(idx), &f))
+	return float64(f), Error(errCode)
+}
+
+// GetPreAmpGainText returns a text description of a given preamp gain
+func (c *Camera) GetPreAmpGainText(idx int) (string, error) {
+	var buf [30]C.char
+	errCode := uint(C.GetPreAmpGainText(C.int(idx), &buf[0], 30))
+	return C.GoString(&buf[0]), Error(errCode)
+}
+
+// SetPreAmpGain sets the preamp gain for the given AD channel
+// to the specified index
+func (c *Camera) SetPreAmpGain(idx int) error {
+	errCode := uint(C.SetPreAmpGain(C.int(idx)))
+	return Error(errCode)
 }
 
 // SetFrameTransferMode puts the camera into frame transfer mode when
@@ -544,6 +573,15 @@ func (c *Camera) SetImage(hbin, vbin, hstart, hend, vstart, vend int) error {
 	return err
 }
 
+// SetAOI sets the AoI used by the camera
+func (c *Camera) SetAOI(a camera.AOI) error {
+	bin, err := c.GetBinning() // trigger error if we have no knowledge
+	if err != nil {
+		return err
+	}
+	return c.SetImage(bin.H, bin.V, a.Left, a.Right(), a.Top, a.Bottom())
+}
+
 // GetAOI returns the current AOI in use by the camera
 func (c *Camera) GetAOI() (camera.AOI, error) {
 	if c.aoi == nil {
@@ -567,15 +605,6 @@ func (c *Camera) SetBinning(b camera.Binning) error {
 		return err
 	}
 	return c.SetImage(b.H, b.V, aoi.Left, aoi.Right(), aoi.Top, aoi.Bottom())
-}
-
-// SetAOI sets the AoI used by the camera
-func (c *Camera) SetAOI(a camera.AOI) error {
-	bin, err := c.GetBinning() // trigger error if we have no knowledge
-	if err != nil {
-		return err
-	}
-	return c.SetImage(bin.H, bin.V, a.Left, a.Right(), a.Top, a.Bottom())
 }
 
 // GetMaximumBinning returns the maximum binning factor usable.
@@ -688,7 +717,7 @@ func (c *Camera) GetFrameSize() (int, int, error) {
 	return aoi.Width, aoi.Height, nil
 }
 
-// GetFrame returns a frame from the camera as a strided buffer
+// GetFrame returns a frame from the camera
 func (c *Camera) GetFrame() (image.Image, error) {
 	ret := &image.Gray16{}
 	c.AbortAcquisition() // always clear out in case of dangling acq
@@ -951,7 +980,8 @@ func (c *Camera) Configure(settings map[string]interface{}) error {
 		"TemperatureSetpoint": c.SetTemperatureSetpoint,
 		"FilterMode":          c.SetFilterMode,
 		"TriggerMode":         c.SetTriggerMode,
-		"EMGainMode":          c.SetEMGainMode}
+		"EMGainMode":          c.SetEMGainMode,
+	}
 	boolFuncs := map[string]fBoolErr{
 		"ShutterOpen":       c.SetShutter,
 		"ShutterAuto":       c.SetShutterAuto,
@@ -962,10 +992,12 @@ func (c *Camera) Configure(settings map[string]interface{}) error {
 		"FrameTransferMode": c.SetFrameTransferMode,
 	}
 	intFuncs := map[string]fIntErr{
-		"ADChannel": c.SetADChannel,
-		"EMGain":    c.SetEMGain,
-		"HSSpeed":   c.SetHSSpeed,
-		"VSSpeed":   c.SetVSSpeed}
+		"ADChannel":  c.SetADChannel,
+		"EMGain":     c.SetEMGain,
+		"HSSpeed":    c.SetHSSpeed,
+		"VSSpeed":    c.SetVSSpeed,
+		"PreAmpGain": c.SetPreAmpGain,
+	}
 	var errs []error
 	for k, v := range settings {
 		var err error

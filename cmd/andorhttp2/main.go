@@ -224,6 +224,23 @@ func run() {
 		log.Printf("index %d: %f μs\n", i, f)
 	}
 
+	n, err = c.GetNumberPreAmpGains()
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("the camera has", n, "preamp gains.  They are:")
+	for i := 0; i < n; i++ {
+		f, err := c.GetPreAmpGain(i)
+		if err != nil {
+			log.Fatal(err)
+		}
+		s, err := c.GetPreAmpGainText(i)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("index %d: %f x (%s)\n", i, f, s)
+	}
+
 	args := cfg.Recorder
 	r := &imgrec.Recorder{Root: args.Root, Prefix: args.Prefix}
 	w := camera.NewHTTPCamera(c, r)
