@@ -683,19 +683,27 @@ func HTTPShutterController(s ShutterController, table generichttp.RouteTable) {
 	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/shutter-auto"}] = SetShutterAuto(s)
 }
 
+// ExtendedShutterController is a device which can manipulate its shutter speed
 type ExtendedShutterController interface {
 	ShutterController
 
+	// SetShutterSpeed sets the shutter speed (opening/closing time)
 	SetShutterSpeed(time.Duration) error
 
+	// GetShutterSpeed returns the shutter speed (opening/closing time)
 	GetShutterSpeed() (time.Duration, error)
 }
 
+// HTTPExtendedShutterController injects methods for Set and GetShutterSpeed
+// into table, bound by closure to e
 func HTTPExtendedShutterController(e ExtendedShutterController, table generichttp.RouteTable) {
 	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/shutter-speed"}] = SetShutter(e)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/shutter-speed"}] = GetShutter(e)
 	return
 }
 
+// SetShutterSpeed decodes a duration from the message body as json {'f64': texp}
+// and sets the camera by converting floating point seconds to a duration
 func SetShutterSpeed(e ExtendedShutterController) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		f := generichttp.FloatT{}
@@ -712,6 +720,22 @@ func SetShutterSpeed(e ExtendedShutterController) http.HandlerFunc {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
+		return
+	}
+}
+
+// GetShutterSpeed retrieves the current shutter speed in seconds and
+// returns it as seconds, encoded in {'f64': texpS}
+func GetShutterSpeed(e ExtendedShutterController) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		t, err := e.GetShutterSpeed()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		tS := t.Seconds()
+		hp := generichttp.HumanPayload{T: types.Float64, Float: tS}
+		hp.EncodeAndRespond(w, r)
 		return
 	}
 }
