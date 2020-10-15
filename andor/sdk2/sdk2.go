@@ -968,25 +968,18 @@ func (c *Camera) Configure(settings map[string]interface{}) error {
 		"VSSpeed":   c.SetVSSpeed}
 	var errs []error
 	for k, v := range settings {
-		switch k {
-		case "VSAmplitude", "AcquisitionMode", "ReadoutMode", "TemperatureSetpoint", "FilterMode", "TriggerMode", "EMGainMode":
-			str := v.(string)
-			f := strFuncs[k]
-			err := f(str)
-			errs = append(errs, err)
-		case "ShutterOpen", "ShutterAuto", "FanOn", "EMGainAdvanced", "SensorCooling", "BaselineClamp", "FrameTransferMode":
-			b := v.(bool)
-			f := boolFuncs[k]
-			err := f(b)
-			errs = append(errs, err)
-		case "ADChannel", "EMGain", "HSSpeed", "VSSpeed":
+		var err error
+		if f, ok := strFuncs[k]; ok {
+			err = f(v.(string))
+		} else if f, ok := boolFuncs[k]; ok {
+			err = f(v.(bool))
+		} else if f, ok := intFuncs[k]; ok {
 			i := int(v.(float64))
-			f := intFuncs[k]
-			err := f(i)
-			errs = append(errs, err)
-		default:
+			err = f(i)
+		} else {
 			return fmt.Errorf("Configuration parameter %s with value %v not understood or unavailble", k, v)
 		}
+		errs = append(errs, err)
 	}
 	return util.MergeErrors(errs)
 }
