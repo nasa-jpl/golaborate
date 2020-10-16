@@ -27,6 +27,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"log"
 	"reflect"
 	"strconv"
 	"time"
@@ -834,6 +835,7 @@ func (c *Camera) GetShutter() (bool, error) {
 //
 // b=false will put the shutter into a manual configuration mode and close it.
 func (c *Camera) SetShutterAuto(b bool) error {
+	log.Println("SetShutterAuto: incoming shutterSpeed is", c.shutterSpeed)
 	if c.shutterSpeed == nil {
 		return fmt.Errorf("cannot set auto shutter without first using SetShutterSpeed")
 	}
@@ -854,6 +856,13 @@ func (c *Camera) SetShutterAuto(b bool) error {
 // SetShutterSpeed sets the shutter opening AND closing time for the camera
 func (c *Camera) SetShutterSpeed(t time.Duration) error {
 	var err error
+	defer func() {
+		var speed time.Duration = -1
+		if c.shutterSpeed != nil {
+			speed = *c.shutterSpeed
+		}
+		log.Println("SetShutterSpeed: error", err, "speed", t, "speed set in struct", speed)
+	}()
 	if *c.shutterAuto {
 		err = c.setShutter(true, "Auto", t, t)
 	} else {
