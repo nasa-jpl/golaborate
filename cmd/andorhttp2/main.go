@@ -232,11 +232,13 @@ func run() {
 	for i := 0; i < n; i++ {
 		f, err := c.GetPreAmpGain(i)
 		if err != nil {
-			log.Fatal(err)
+			log.Printf("index %d: unusable - error getting value, %v\n", i, err)
+			continue
 		}
 		s, err := c.GetPreAmpGainText(i)
 		if err != nil {
-			log.Fatal(err)
+			log.Printf("index %d: unusable - error getting value, %v\n", i, err)
+			continue
 		}
 		log.Printf("index %d: %f x (%s)\n", i, f, s)
 	}
