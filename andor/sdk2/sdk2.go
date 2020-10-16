@@ -834,13 +834,16 @@ func (c *Camera) GetShutter() (bool, error) {
 //
 // b=false will put the shutter into a manual configuration mode and close it.
 func (c *Camera) SetShutterAuto(b bool) error {
+	if c.shutterSpeed == nil {
+		return fmt.Errorf("cannot set auto shutter without first using SetShutterSpeed")
+	}
 	var (
 		err error
 	)
 	if b {
-		err = c.setShutter(true, "Auto", time.Millisecond, time.Millisecond)
+		err = c.setShutter(true, "Auto", *c.shutterSpeed, *c.shutterSpeed)
 	} else {
-		err = c.setShutter(true, "Close", time.Millisecond, time.Millisecond)
+		err = c.setShutter(true, "Close", *c.shutterSpeed, *c.shutterSpeed)
 	}
 	if err == nil {
 		c.shutterAuto = &b
