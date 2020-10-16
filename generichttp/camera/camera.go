@@ -697,8 +697,8 @@ type ExtendedShutterController interface {
 // HTTPExtendedShutterController injects methods for Set and GetShutterSpeed
 // into table, bound by closure to e
 func HTTPExtendedShutterController(e ExtendedShutterController, table generichttp.RouteTable) {
-	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/shutter-speed"}] = SetShutter(e)
-	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/shutter-speed"}] = GetShutter(e)
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/shutter-speed"}] = SetShutterSpeed(e)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/shutter-speed"}] = GetShutterSpeed(e)
 	return
 }
 
