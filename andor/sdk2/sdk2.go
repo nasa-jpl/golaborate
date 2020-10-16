@@ -855,15 +855,16 @@ func (c *Camera) SetShutterAuto(b bool) error {
 
 // SetShutterSpeed sets the shutter opening AND closing time for the camera
 func (c *Camera) SetShutterSpeed(t time.Duration) error {
-	var err error
-	defer func() {
-		var speed time.Duration = -1
-		if c.shutterSpeed != nil {
-			speed = *c.shutterSpeed
-		}
-		log.Println("SetShutterSpeed: error", err, "speed", t, "speed set in struct", speed)
-	}()
-	if *c.shutterAuto {
+	var (
+		err  error
+		auto bool
+	)
+	if c.shutterAuto == nil {
+		auto = false
+	} else {
+		auto = *c.shutterAuto
+	}
+	if auto {
 		err = c.setShutter(true, "Auto", t, t)
 	} else {
 		var (
