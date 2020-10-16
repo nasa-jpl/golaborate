@@ -162,7 +162,7 @@ func run() {
 		log.Fatal(err)
 	}
 	log.Println("connected to camera with hardware")
-	log.Printf("%+v hwv\n", hwv)
+	log.Printf("%+v\n", hwv)
 	log.Println("software")
 	log.Printf("%+v\n", swv)
 
