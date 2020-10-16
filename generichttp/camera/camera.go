@@ -770,6 +770,9 @@ func NewHTTPCamera(p PictureTaker, rec *imgrec.Recorder) HTTPCamera {
 	if sh, ok := p.(ShutterController); ok {
 		HTTPShutterController(sh, rt)
 	}
+	if sh, ok := p.(ExtendedShutterController); ok {
+		HTTPExtendedShutterController(sh, rt)
+	}
 	if b, ok := p.(Burster); ok {
 		wrap := BurstWrapper{B: b}
 		wrap.Inject(rt)
