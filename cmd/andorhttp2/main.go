@@ -221,7 +221,7 @@ func run() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		log.Printf("index %d: %f μs\n", i, f)
+		log.Printf("index %d: %f MHz\n", i, f)
 	}
 
 	n, err = c.GetNumberPreAmpGains()
