@@ -47,6 +47,10 @@ type Camera struct {
 	// exposureTime is the length of time the exposure is set to
 	exposureTime *time.Duration
 
+	vsAmplitude *string //vs ==> vertical shift
+
+	acquisitionMode *string
+
 	// fanOn holds the status of the fan
 	fanOn *bool
 
@@ -135,6 +139,13 @@ func (c *Camera) GetNumberVSSpeeds() (int, error) {
 	var speeds C.int
 	errCode := uint(C.GetNumberVSSpeeds(&speeds))
 	return int(speeds), Error(errCode)
+}
+
+func (c *Camera) GetVSAmplitude() (string, error) {
+	if c.vsAmplitude == nil {
+		return "", ErrParameterNotSet
+	}
+	return *c.vsAmplitude, nil
 }
 
 // GetVSSpeed gets the vertical shift register speed in microseconds
@@ -353,7 +364,18 @@ func (c *Camera) SetAcquisitionMode(am string) error {
 		return ErrBadEnumIndex
 	}
 	errCode := uint(C.SetAcquisitionMode(C.int(i)))
-	return Error(errCode)
+	err := Error(errCode)
+	if err == nil {
+		c.acquisitionMode = &am
+	}
+	return err
+}
+
+func (c *Camera) GetAcquisitionMode() (string, error) {
+	if c.acquisitionMode == nil {
+		return "", ErrParameterNotSet
+	}
+	return *c.acquisitionMode, nil
 }
 
 // SetReadoutMode sets the readout mode of the camera.  We rename this from SetReadMode in the actual driver
@@ -979,6 +1001,91 @@ func (c *Camera) CollectHeaderMetadata() []fitsio.Card {
 		{Name: "AOIW", Value: aoi.Width, Comment: "AOI width, px"},
 		{Name: "AOIH", Value: aoi.Height, Comment: "AOI height, px"},
 		{Name: "AOIB", Value: binS, Comment: "AOI Binning, HxV"}}
+}
+func (c *Camera) SetFeature(feature string, v interface{}) error {
+	type fStrErr func(string) error
+	type fBoolErr func(bool) error
+	type fIntErr func(int) error
+	strFuncs := map[string]fStrErr{
+		"VSAmplitude":         c.SetVSAmplitude,
+		"AcquisitionMode":     c.SetAcquisitionMode,
+		"ReadoutMode":         c.SetReadoutMode,
+		"TemperatureSetpoint": c.SetTemperatureSetpoint,
+		"FilterMode":          c.SetFilterMode,
+		"TriggerMode":         c.SetTriggerMode,
+		"EMGainMode":          c.SetEMGainMode,
+	}
+	boolFuncs := map[string]fBoolErr{
+		"ShutterOpen":       c.SetShutter,
+		"ShutterAuto":       c.SetShutterAuto,
+		"FanOn":             c.SetFan,
+		"EMGainAdvanced":    c.SetEMAdvanced,
+		"SensorCooling":     c.SetCooling,
+		"BaselineClamp":     c.SetBaselineClamp,
+		"FrameTransferMode": c.SetFrameTransferMode,
+	}
+	intFuncs := map[string]fIntErr{
+		"ADChannel":  c.SetADChannel,
+		"EMGain":     c.SetEMGain,
+		"HSSpeed":    c.SetHSSpeed,
+		"VSSpeed":    c.SetVSSpeed,
+		"PreAmpGain": c.SetPreAmpGain,
+	}
+
+	var err error
+	if f, ok := strFuncs[feature]; ok {
+		err = f(v.(string))
+	} else if f, ok := boolFuncs[feature]; ok {
+		err = f(v.(bool))
+	} else if f, ok := intFuncs[feature]; ok {
+		i := int(v.(float64))
+		err = f(i)
+	} else {
+		return fmt.Errorf("Feature [%s] with value [%v] not understood or unavailble", feature, v)
+	}
+
+	return err
+}
+
+func (c *Camera) GetFeature(feature string) (interface{}, error) {
+	type fStrErr func() (string, error)
+	type fBoolErr func() (bool, error)
+	type fIntErr func() (int, error)
+	strFuncs := map[string]fStrErr{
+		"VSAmplitude":     c.GetVSAmplitude,
+		"AcquisitionMode": c.GetAcquisitionMode,
+		//"ReadoutMode":         c.GetReadoutMode,
+		"TemperatureSetpoint": c.GetTemperatureSetpoint,
+		//"FilterMode":          c.GetFilterMode,
+		//"TriggerMode":         c.GetTriggerMode,
+		"EMGainMode": c.GetEMGainMode,
+	}
+	boolFuncs := map[string]fBoolErr{
+		//"ShutterOpen":       c.GetShutter,
+		//"ShutterAuto":       c.GetShutterAuto,
+		//"FanOn":             c.GetFan,
+		//"EMGainAdvanced":    c.GetEMAdvanced,
+		//"SensorCooling":     c.GetCooling,
+		//"BaselineClamp":     c.GetBaselineClamp,
+		//"FrameTransferMode": c.GetFrameTransferMode,
+	}
+	intFuncs := map[string]fIntErr{
+		//"ADChannel":  c.GetADChannel,
+		//"EMGain":     c.GetEMGain,
+		//"HSSpeed":    c.GetHSSpeed,
+		//"VSSpeed":    c.GetVSSpeed,
+		//"PreAmpGain": c.GetPreAmpGain,
+	}
+
+	if f, ok := strFuncs[feature]; ok {
+		return f()
+	} else if f, ok := boolFuncs[feature]; ok {
+		return f()
+	} else if f, ok := intFuncs[feature]; ok {
+		return f()
+	} else {
+		return nil, fmt.Errorf("Feature [%s] unknown", feature)
+	}
 }
 
 // Configure sets many values for the camera at once
