@@ -757,7 +757,7 @@ func (c *Camera) GetFrame() (image.Image, error) {
 	}
 	stat, err := c.GetStatus()
 	// sometimes the SDK frees you from sleep even though the camera is still in acq
-	// this block will spam the camera for if it is acquiring for up (tExp + 5 seconds)
+	// this block will spam the camera for if it is acquiring for up (tExp + 15 seconds)
 	// to "guarantee" we aren't trapped in a bad state.
 	if stat == StatusAcquiring {
 		deadline := time.Now().Add(tExp + 15*time.Second)
