@@ -221,7 +221,7 @@ func run() {
 	}
 	log.Println("the camera has", n, "horizontal shift speeds.  They are:")
 	for i := 0; i < n; i++ {
-		f, err := c.GetHSSpeedIndex(adch, outputAmpType, i)
+		f, err := c.GetHSSpeedOption(adch, outputAmpType, i)
 		if err != nil {
 			log.Fatal(err)
 		}

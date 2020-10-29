@@ -220,11 +220,11 @@ func (c *Camera) GetNumberHSSpeeds(ch int) (int, error) {
 	return int(ret), Error(errCode)
 }
 
-// GetHSSpeedIndex gets the horizontal shift speed
+// GetHSSpeedOption gets the horizontal shift speed in Megahertz
 // adcCh is an ADC channel
 // outputAmpType is the output amplifier type; 0 => EM gain; 1 => conventional
 // idx is the enum index
-func (c *Camera) GetHSSpeedIndex(adcCh, outputAmpType, idx int) (float64, error) {
+func (c *Camera) GetHSSpeedOption(adcCh, outputAmpType, idx int) (float64, error) {
 	cch := C.int(adcCh)
 	ctyp := C.int(outputAmpType)
 	cidx := C.int(idx)
@@ -234,25 +234,25 @@ func (c *Camera) GetHSSpeedIndex(adcCh, outputAmpType, idx int) (float64, error)
 	return float64(ret), Error(errCode)
 }
 
-// GetHSSpeed gets the horizontal shift speed
+// GetHSSpeed gets the horizontal shift speed in Megahertz
 // idx is the enum index
 //
 // ADC channel obtain from the last set
 // Output amplifier type; 0 => EM gain; 1 => conventional, obtained from last
 func (c *Camera) GetHSSpeed(idx int) (float64, error) {
 	if c.adchannel == nil {
-		return float64(-1), ErrBadEnumIndex
+		return -1, ErrBadEnumIndex
 	}
 	outputAmpType, ok := VerticalClockVoltage[*c.vsAmplitude]
 	if !ok {
-		return float64(-1), ErrBadEnumIndex
+		return -1, ErrBadEnumIndex
 	}
 
 	cch := *c.adchannel
 	ctyp := outputAmpType
 	cidx := idx
 
-	return c.GetHSSpeedIndex(cch, ctyp, cidx)
+	return c.GetHSSpeedOption(cch, ctyp, cidx)
 }
 
 // SetHSSpeedIndex sets the horizontal shift speed
@@ -271,6 +271,9 @@ func (c *Camera) SetHSSpeedIndex(outputAmpType, idx int) error {
 // NOTE:  The output amplitude type is the obtained from the last set
 func (c *Camera) SetHSSpeed(idx int) error {
 
+	if c.vsAmplitude== nil {
+		return ErrParameterNotSet
+	}
 	outputAmpType, ok := VerticalClockVoltage[*c.vsAmplitude]
 	if !ok {
 		return ErrBadEnumIndex
