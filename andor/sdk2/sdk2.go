@@ -51,6 +51,12 @@ type Camera struct {
 
 	acquisitionMode *string
 
+	readoutMode *string
+
+	triggerMode *string
+
+	filterMode *string
+
 	// fanOn holds the status of the fan
 	fanOn *bool
 
@@ -65,6 +71,10 @@ type Camera struct {
 
 	// shutter holds if the shutter is currently open
 	shutter *bool
+
+	emAdvanced *bool
+
+	baselineClamp *bool
 
 	// shutterAuto holds if the shutter is in automatic mode or manual
 	shutterAuto *bool
@@ -385,7 +395,19 @@ func (c *Camera) SetReadoutMode(rm string) error {
 		return ErrBadEnumIndex
 	}
 	errCode := uint(C.SetReadMode(C.int(i)))
-	return Error(errCode)
+	err := Error(errCode)
+	if err == nil {
+		c.readoutMode = &rm
+	}
+	return err
+}
+
+// GetReadoutMode returns the current read mode
+func (c *Camera) GetReadoutMode() (string, error) {
+	if c.readoutMode == nil {
+		return "", ErrParameterNotSet
+	}
+	return *c.readoutMode, nil
 }
 
 // SetExposureTime sets the exposure time of the camera in seconds
@@ -414,7 +436,19 @@ func (c *Camera) SetTriggerMode(tm string) error {
 		return ErrBadEnumIndex
 	}
 	errCode := uint(C.SetTriggerMode(C.int(i)))
-	return Error(errCode)
+	err := Error(errCode)
+	if err == nil {
+		c.triggerMode = &tm
+	}
+	return err
+}
+
+// GetTriggerMode returns the current trigger mode
+func (c *Camera) GetTriggerMode() (string, error) {
+	if c.triggerMode == nil {
+		return "", ErrParameterNotSet
+	}
+	return *c.triggerMode, nil
 }
 
 // SetAccumulationCycleTime sets the accumulation cycle time of the camera in seconds
@@ -658,7 +692,19 @@ func (c *Camera) SetFilterMode(fm string) error {
 		return ErrBadEnumIndex
 	}
 	errCode := uint(C.Filter_SetMode(C.uint(i)))
-	return Error(errCode)
+	err := Error(errCode)
+	if err == nil {
+		c.filterMode = &fm
+	}
+	return err
+}
+
+// GetFilterMode returns the current filter mode
+func (c *Camera) GetFilterMode() (string, error) {
+	if c.filterMode == nil {
+		return "", ErrParameterNotSet
+	}
+	return *c.filterMode, nil
 }
 
 // SetBaselineClamp toggles the baseline clamp feature of the camera on (true) or off (false)
@@ -668,7 +714,19 @@ func (c *Camera) SetBaselineClamp(b bool) error {
 		on = 1
 	}
 	errCode := uint(C.SetBaselineClamp(C.int(on)))
-	return Error(errCode)
+	err := Error(errCode)
+	if err == nil {
+		c.baselineClamp = &b
+	}
+	return err
+}
+
+// GetBaselineClamp returns the EM advanced
+func (c *Camera) GetBaselineClamp() (bool, error) {
+	if c.baselineClamp == nil {
+		return false, ErrParameterNotSet
+	}
+	return *c.baselineClamp, nil
 }
 
 /* the previous section deals with processing, the below deals with EMCCD features.
@@ -728,7 +786,19 @@ func (c *Camera) SetEMAdvanced(b bool) error {
 		enabled = 1
 	}
 	errCode := uint(C.SetEMAdvanced(C.int(enabled)))
-	return Error(errCode)
+	err := Error(errCode)
+	if err == nil {
+		c.emAdvanced = &b
+	}
+	return err
+}
+
+// GetEMAdvanced returns the EM advanced
+func (c *Camera) GetEMAdvanced() (bool, error) {
+	if c.emAdvanced == nil {
+		return false, ErrParameterNotSet
+	}
+	return *c.emAdvanced, nil
 }
 
 // GetFrameSize gets the W, H of a frame as recorded in the strided buffer
@@ -1051,30 +1121,28 @@ func (c *Camera) GetFeature(feature string) (interface{}, error) {
 	type fStrErr func() (string, error)
 	type fBoolErr func() (bool, error)
 	type fIntErr func() (int, error)
+	type fIntIdxErr func(idx int) (float64, error)
 	strFuncs := map[string]fStrErr{
-		"VSAmplitude":     c.GetVSAmplitude,
-		"AcquisitionMode": c.GetAcquisitionMode,
-		//"ReadoutMode":         c.GetReadoutMode,
+		"VSAmplitude":         c.GetVSAmplitude,
+		"AcquisitionMode":     c.GetAcquisitionMode,
+		"ReadoutMode":         c.GetReadoutMode,
 		"TemperatureSetpoint": c.GetTemperatureSetpoint,
-		//"FilterMode":          c.GetFilterMode,
-		//"TriggerMode":         c.GetTriggerMode,
-		"EMGainMode": c.GetEMGainMode,
+		"FilterMode":          c.GetFilterMode,
+		"TriggerMode":         c.GetTriggerMode,
+		"EMGainMode":          c.GetEMGainMode,
 	}
 	boolFuncs := map[string]fBoolErr{
-		//"ShutterOpen":       c.GetShutter,
-		//"ShutterAuto":       c.GetShutterAuto,
-		//"FanOn":             c.GetFan,
-		//"EMGainAdvanced":    c.GetEMAdvanced,
-		//"SensorCooling":     c.GetCooling,
-		//"BaselineClamp":     c.GetBaselineClamp,
-		//"FrameTransferMode": c.GetFrameTransferMode,
+		"ShutterOpen":       c.GetShutter,
+		"ShutterAuto":       c.GetShutterAuto,
+		"FanOn":             c.GetFan,
+		"EMGainAdvanced":    c.GetEMAdvanced,
+		"SensorCooling":     c.GetCooling,
+		"BaselineClamp":     c.GetBaselineClamp,
+		"FrameTransferMode": c.GetFrameTransferMode,
 	}
 	intFuncs := map[string]fIntErr{
-		//"ADChannel":  c.GetADChannel,
-		//"EMGain":     c.GetEMGain,
-		//"HSSpeed":    c.GetHSSpeed,
-		//"VSSpeed":    c.GetVSSpeed,
-		//"PreAmpGain": c.GetPreAmpGain,
+		"ADChannel": c.GetADChannel,
+		"EMGain":    c.GetEMGain,
 	}
 
 	if f, ok := strFuncs[feature]; ok {
@@ -1086,6 +1154,21 @@ func (c *Camera) GetFeature(feature string) (interface{}, error) {
 	} else {
 		return nil, fmt.Errorf("Feature [%s] unknown", feature)
 	}
+}
+
+func (c *Camera) GetFeatureIdx(index int, feature string) (interface{}, error) {
+	type fIntIdxErr func(idx int) (float64, error)
+
+	intIdxFuncs := map[string]fIntIdxErr{
+		"VSSpeed":    c.GetVSSpeed,
+		"PreAmpGain": c.GetPreAmpGain,
+	}
+
+	if f, ok := intIdxFuncs[feature]; ok {
+		return f(index)
+	}
+
+	return nil, fmt.Errorf("Feature [%s] unknown", feature)
 }
 
 // Configure sets many values for the camera at once
