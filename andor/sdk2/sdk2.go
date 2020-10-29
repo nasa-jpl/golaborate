@@ -210,16 +210,12 @@ func (c *Camera) GetNumberHSSpeeds(ch int) (int, error) {
 }
 
 // GetHSSpeed gets the horizontal shift speed
-func (c *Camera) GetHSSpeed(ch int, idx int) (float64, error) {
-	// var emint int
-	// if emMode {
-	// 	emint = 0
-	// } else {
-	// 	emint = 1
-	// }
-	// commented out, mode 1 never applies?
-	cch := C.int(ch)
-	ctyp := C.int(0)
+// adcCh is an ADC channel
+// outputAmpType is the output amplifier type; 0 => EM gain; 1 => conventional
+// idx is the enum index
+func (c *Camera) GetHSSpeed(adcCh, outputAmpType, idx int) (float64, error) {
+	cch := C.int(adcCh)
+	ctyp := C.int(outputAmpType)
 	cidx := C.int(idx)
 	var ret C.float
 
@@ -228,15 +224,10 @@ func (c *Camera) GetHSSpeed(ch int, idx int) (float64, error) {
 }
 
 // SetHSSpeed sets the horizontal shift speed
-func (c *Camera) SetHSSpeed(idx int) error {
-	// var emint int
-	// if emMode {
-	// 	emint = 0
-	// } else {
-	// 	emint = 1
-	// }
-	// commented out -- seems we are always using 0 / are not in NIR (for 1)
-	ctyp := C.int(0)
+// outputAmpType is the output amplifier type; 0 => EM gain; 1 => conventional
+// idx is the enum index
+func (c *Camera) SetHSSpeed(outputAmpType, idx int) error {
+	ctyp := C.int(outputAmpType)
 	cidx := C.int(idx)
 
 	errCode := uint(C.SetHSSpeed(ctyp, cidx))
@@ -836,7 +827,7 @@ func (c *Camera) GetFrame() (image.Image, error) {
 	}
 	stat, err := c.GetStatus()
 	// sometimes the SDK frees you from sleep even though the camera is still in acq
-	// this block will spam the camera for if it is acquiring for up (tExp + 5 seconds)
+	// this block will spam the camera for if it is acquiring for up (tExp + 15 seconds)
 	// to "guarantee" we aren't trapped in a bad state.
 	if stat == StatusAcquiring {
 		deadline := time.Now().Add(tExp + 15*time.Second)
