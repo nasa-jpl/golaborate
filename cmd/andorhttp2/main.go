@@ -215,9 +215,13 @@ func run() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	outputAmpType, err := c.GetVSAmplitudeType()
+	if err != nil {
+		log.Fatal(err)
+	}
 	log.Println("the camera has", n, "horizontal shift speeds.  They are:")
 	for i := 0; i < n; i++ {
-		f, err := c.GetHSSpeed(adch, i)
+		f, err := c.GetHSSpeedIndex(adch, outputAmpType, i)
 		if err != nil {
 			log.Fatal(err)
 		}
