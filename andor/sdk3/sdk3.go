@@ -34,9 +34,9 @@ const (
 
 	// WRAPVER is the andor wrapper code version.
 	// Increment this when pkg sdk3 is updated.
-	WRAPVER = 9
+	WRAPVER = 10
 
-	// NeoBufferSize is the size of the buffer on the Andor Neo camera itself
+	// NeoBufferSize is the size of the buffer on the Andor Neo camera itself (4GB)
 	NeoBufferSize = 4e9
 
 	// CLBaseSpeed is the transfer rate in MB/s of base speed camera link,
@@ -261,7 +261,6 @@ func (c *Camera) GetAOITop() (int, error) {
 // calculated from the difference of the sensor dimensions and top-left if they
 // are zero
 func (c *Camera) SetAOI(aoi camera.AOI) error {
-	defer c.Allocate()
 	var err error
 
 	err = SetInt(c.Handle, "AOIWidth", int64(aoi.Width))
@@ -379,6 +378,8 @@ func (c *Camera) GetFrame() (image.Image, error) {
 		return &ret, err
 	}
 
+	c.Allocate()
+
 	// injected here 2019-12-03, not writable on AcqStart happens because
 	// CameraAcquiring is true
 	IssueCommand(c.Handle, "AcquisitionStop") // gobble any errors from this
@@ -440,6 +441,8 @@ func (c *Camera) Burst(frames int, fps float64, ch chan<- image.Image) error {
 	if err != nil {
 		return err
 	}
+
+	c.Allocate()
 
 	IssueCommand(c.Handle, "AcquisitionStop")
 
@@ -746,6 +749,209 @@ func (c *Camera) Configure(settings map[string]interface{}) error {
 		errs = append(errs, err)
 	}
 	return util.MergeErrors(errs)
+}
+
+// GetFeature implements generichttp/camera.FeatureManipulator
+// the return value's type is known through the camera.Features() function
+// the types map as:
+//
+// int => int
+// float => float64
+// string => string
+// bool => bool
+// enum => string (current value)
+func (c *Camera) GetFeature(feature string) (interface{}, error) {
+	t, ok := Features[feature]
+	if !ok {
+		return nil, ErrFeatureNotFound{feature}
+	}
+	switch t {
+	case "int":
+		return GetInt(c.Handle, feature)
+	case "float":
+		return GetFloat(c.Handle, feature)
+	case "bool":
+		return GetBool(c.Handle, feature)
+	case "string":
+		return GetString(c.Handle, feature)
+	case "enum":
+		return GetEnumString(c.Handle, feature)
+	default:
+		return nil, fmt.Errorf("andor/sdk3: feature %s was recognized, but its type of %s was not", feature, t)
+	}
+}
+
+// GetFeatureInfo retrieves information about a feature which varies based on its type
+//
+//
+func (c *Camera) GetFeatureInfo(feature string) (map[string]interface{}, error) {
+	t, ok := Features[feature]
+	if !ok {
+		return nil, ErrFeatureNotFound{feature}
+	}
+	ret := make(map[string]interface{})
+	switch t {
+	case "int":
+		ret["type"] = "int"
+		min, err := GetIntMin(c.Handle, feature)
+		if err != nil {
+			return ret, err
+		}
+		max, err := GetIntMax(c.Handle, feature)
+		if err != nil {
+			return ret, err
+		}
+		ret["min"] = min
+		ret["max"] = max
+	case "float":
+		ret["type"] = "float"
+		min, err := GetFloatMin(c.Handle, feature)
+		if err != nil {
+			return ret, err
+		}
+		max, err := GetFloatMax(c.Handle, feature)
+		if err != nil {
+			return ret, err
+		}
+		ret["min"] = min
+		ret["max"] = max
+	case "bool":
+		ret["type"] = "bool"
+	case "string":
+		ret["type"] = "string"
+		maxlen, err := GetStringMaxLength(c.Handle, feature)
+		if err != nil {
+			return ret, err
+		}
+		ret["maxLength"] = maxlen
+	case "enum":
+		ret["type"] = "enum"
+		opts, err := GetEnumStrings(c.Handle, feature)
+		if err != nil {
+			return ret, err
+		}
+		ret["options"] = opts
+	default:
+		return nil, fmt.Errorf("andor/sdk3: feature %s was recognized, but its type of %s was not", feature, t)
+	}
+	return ret, nil
+}
+
+// SetFeature implements generichttp/camera.FeatureManipulator
+// the feature's type is known through the camera.Features() function
+// the types map as:
+//
+// int => int
+// float => float64
+// string => string
+// bool => bool
+// enum => string
+//
+// This function will return an error if the feature is not known
+// or the type is mismatched, with the exception of integral float64s
+// for integer features or integers for float64s
+func (c *Camera) SetFeature(feature string, v interface{}) error {
+	t, ok := Features[feature]
+	if !ok {
+		return ErrFeatureNotFound{feature}
+	}
+	switch t {
+	case "string":
+		vv, ok := v.(string)
+		if !ok {
+			return fmt.Errorf("andor/sdk3: feature %s set with type %T, expected %s", feature, v, t)
+		}
+		return SetString(c.Handle, feature, vv)
+	case "enum":
+		vv, ok := v.(string)
+		if !ok {
+			return fmt.Errorf("andor/sdk3: feature %s set with type %T, expected %s", feature, v, t)
+		}
+		return SetEnumString(c.Handle, feature, vv)
+	case "bool":
+		vv, ok := v.(bool)
+		if !ok {
+			return fmt.Errorf("andor/sdk3: feature %s set with type %T, expected %s", feature, v, t)
+		}
+		return SetBool(c.Handle, feature, vv)
+	case "int":
+		switch vv := v.(type) {
+		case int:
+			return SetInt(c.Handle, feature, int64(vv))
+		case int8:
+			return SetInt(c.Handle, feature, int64(vv))
+		case int16:
+			return SetInt(c.Handle, feature, int64(vv))
+		case int32:
+			return SetInt(c.Handle, feature, int64(vv))
+		case int64:
+			return SetInt(c.Handle, feature, int64(vv))
+		case uint:
+			return SetInt(c.Handle, feature, int64(vv))
+		case uint8:
+			return SetInt(c.Handle, feature, int64(vv))
+		case uint16:
+			return SetInt(c.Handle, feature, int64(vv))
+		case uint32:
+			return SetInt(c.Handle, feature, int64(vv))
+		case uint64:
+			return SetInt(c.Handle, feature, int64(vv))
+		case float32:
+			return SetInt(c.Handle, feature, int64(vv))
+		case float64:
+			return SetInt(c.Handle, feature, int64(vv))
+		default:
+			return fmt.Errorf("andor/sdk3: feature %s set with type %T, expected %s", feature, v, t)
+		}
+	case "float":
+		switch vv := v.(type) {
+		case int:
+			return SetFloat(c.Handle, feature, float64(vv))
+		case int8:
+			return SetFloat(c.Handle, feature, float64(vv))
+		case int16:
+			return SetFloat(c.Handle, feature, float64(vv))
+		case int32:
+			return SetFloat(c.Handle, feature, float64(vv))
+		case int64:
+			return SetFloat(c.Handle, feature, float64(vv))
+		case uint:
+			return SetFloat(c.Handle, feature, float64(vv))
+		case uint8:
+			return SetFloat(c.Handle, feature, float64(vv))
+		case uint16:
+			return SetFloat(c.Handle, feature, float64(vv))
+		case uint32:
+			return SetFloat(c.Handle, feature, float64(vv))
+		case uint64:
+			return SetFloat(c.Handle, feature, float64(vv))
+		case float32:
+			return SetFloat(c.Handle, feature, float64(vv))
+		case float64:
+			return SetFloat(c.Handle, feature, float64(vv))
+		default:
+			return fmt.Errorf("andor/sdk3: feature %s set with type %T, expected %s", feature, v, t)
+		}
+	default:
+		return fmt.Errorf("andor/sdk3: feature %s was recognized, but its type of %s was not", feature, t)
+	}
+}
+
+// Features returns a map of feature names to their types, as strings
+// the types map as:
+//
+// int => int
+// float => float64
+// string => string
+// bool => bool
+// enum => string
+//
+// Caller editing of the map is considered a usage error and results in undefined
+// behavior
+//
+// the error is always nil
+func (c *Camera) Features() (map[string]string, error) {
+	return Features, nil
 }
 
 // UnpadBuffer strips padding bytes from a buffer

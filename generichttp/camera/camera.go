@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/astrogo/fitsio"
+	"github.com/go-chi/chi"
 	"github.jpl.nasa.gov/bdube/golab/generichttp"
 	"github.jpl.nasa.gov/bdube/golab/imgrec"
 	"github.jpl.nasa.gov/bdube/golab/util"
@@ -303,6 +304,11 @@ func HTTPPicture(p PictureTaker, table generichttp.RouteTable, rec *imgrec.Recor
 	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/exposure-time"}] = GetExposureTime(p)
 	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/exposure-time"}] = SetExposureTime(p)
 	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/image"}] = GetFrame(p, rec)
+
+	if rec != nil {
+		rW := imgrec.NewHTTPWrapper(rec)
+		rW.Inject(table)
+	}
 }
 
 // SetExposureTime sets the exposure time on a POST request.
@@ -563,12 +569,6 @@ func GetBinning(a AOIManipulator) http.HandlerFunc {
 	}
 }
 
-// FeatureManager describes an interface which can manage its features
-type FeatureManager interface {
-	// Configure adjusts several features of the camera at once
-	Configure(map[string]interface{}) error
-}
-
 // EMGainManager describes an interface that can manage its electron multiplying gain
 type EMGainManager interface {
 	// GetEMGainMode returns how the EM gain is applied in the camera
@@ -740,6 +740,124 @@ func GetShutterSpeed(e ExtendedShutterController) http.HandlerFunc {
 	}
 }
 
+// FeatureManager is a type that can manage many features in a generic capacity
+type FeatureManager interface {
+	// Features returns a mapping of feature names to types, as strings
+	Features() (map[string]string, error)
+
+	// GetFeature returns the value of a given feature, as its associated
+	// type
+	GetFeature(string) (interface{}, error)
+
+	// GetFeatureInfo returns information about a given feature, including
+	// its type, range of values, etc
+	GetFeatureInfo(string) (map[string]interface{}, error)
+
+	// SetFeature sets the value of a given feature
+	SetFeature(string, interface{}) error
+}
+
+// Features retrieves the feature mapping from the manager
+func Features(f FeatureManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		features, err := f.Features()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		err = json.NewEncoder(w).Encode(features)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+}
+
+// GetFeature returns a feature that is URL encoded from the manager
+func GetFeature(f FeatureManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		feature := chi.URLParam(r, "feature")
+		v, err := f.GetFeature(feature)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		var hp generichttp.HumanPayload
+		switch vv := v.(type) {
+		case int:
+			hp = generichttp.HumanPayload{T: types.Int, Int: vv}
+		case float64:
+			hp = generichttp.HumanPayload{T: types.Float64, Float: vv}
+		case string:
+			hp = generichttp.HumanPayload{T: types.String, String: vv}
+		case bool:
+			hp = generichttp.HumanPayload{T: types.Bool, Bool: vv}
+		default:
+			http.Error(w, fmt.Sprintf("GetFeature returned value of type %T, was not in {int,f64,string,bool}", v), http.StatusBadRequest)
+			return
+		}
+		hp.EncodeAndRespond(w, r)
+		return
+	}
+}
+
+// GetFeatureInfo retrieves information about a feature from f
+func GetFeatureInfo(f FeatureManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		feature := chi.URLParam(r, "feature")
+		i, err := f.GetFeatureInfo(feature)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		err = json.NewEncoder(w).Encode(i)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+}
+
+// featureValue packages a feature and a value together
+type featureValue struct {
+	// Feature is the feature being set
+	Feature string `json:"feature"`
+
+	// Value is the value being applied
+	Value interface{} `json:"value"`
+}
+
+// SetFeature sets a particular feature on f
+func SetFeature(f FeatureManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		feature := chi.URLParam(r, "feature")
+		var fv featureValue
+		err := json.NewDecoder(r.Body).Decode(&fv)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		err = f.SetFeature(feature, fv.Value)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+// HTTPFeatureManager adds routes to rt for feature management
+func HTTPFeatureManager(f FeatureManager, rt generichttp.RouteTable) {
+	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/feature"}] = Features(f)
+	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/feature/{feature}"}] = GetFeature(f)
+	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/feature/{feature}/options"}] = GetFeatureInfo(f)
+	rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/feature/{feature}"}] = SetFeature(f)
+}
+
 // Camera describes the most basic camera possible
 type Camera interface {
 	// GetFrame returns a frame from the device as a strided array
@@ -777,6 +895,9 @@ func NewHTTPCamera(p PictureTaker, rec *imgrec.Recorder) HTTPCamera {
 		wrap := BurstWrapper{B: b}
 		wrap.Inject(rt)
 
+	}
+	if fm, ok := p.(FeatureManager); ok {
+		HTTPFeatureManager(fm, rt)
 	}
 
 	w.RouteTable = rt

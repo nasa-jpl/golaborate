@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.jpl.nasa.gov/bdube/golab/generichttp"
+	"github.jpl.nasa.gov/bdube/golab/generichttp/camera"
 	"github.jpl.nasa.gov/bdube/golab/imgrec"
 
 	"github.com/go-chi/chi"
@@ -22,7 +23,7 @@ import (
 
 var (
 	// Version is the version number.  Typically injected via ldflags with git build
-	Version = "10"
+	Version = "11"
 
 	// ConfigFileName is what it sounds like
 	ConfigFileName = "andor-http.yml"
@@ -209,7 +210,7 @@ func run() {
 	defer c.Close()
 	args := cfg.Recorder
 	r := &imgrec.Recorder{Root: args.Root, Prefix: args.Prefix}
-	w := sdk3.NewHTTPWrapper(c, r)
+	w := camera.NewHTTPCamera(c, r)
 
 	// clean up the submux string
 	hndlrS := cfg.Root

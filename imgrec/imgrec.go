@@ -188,8 +188,7 @@ func (h HTTPWrapper) SetEnabled(w http.ResponseWriter, r *http.Request) {
 }
 
 // Inject adds GET and POST routes for /autorwrite/root and /autowrite/prefix to the HTTPer which manipulate this wrapper's recorder
-func (h HTTPWrapper) Inject(other generichttp.HTTPer) {
-	rt := other.RT()
+func (h HTTPWrapper) Inject(rt generichttp.RouteTable) {
 	rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/autowrite/root"}] = h.SetRoot
 	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/autowrite/root"}] = h.GetRoot
 	rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/autowrite/prefix"}] = h.SetPrefix
