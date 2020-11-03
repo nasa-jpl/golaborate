@@ -296,3 +296,12 @@ func BeneignThermal(err error) bool {
 	}
 	return false
 }
+
+// enumKeys returns the keys of an enum with the minimum number of allocations possible
+func enumKeys(e Enum) []string {
+	out := make([]string, 0, len(e))
+	for k := range e {
+		out = append(out, k)
+	}
+	return out
+}
