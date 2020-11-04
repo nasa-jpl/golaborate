@@ -561,6 +561,11 @@ func (dac *AP235) PopulateWaveform(channel int, data []float64) error {
 	if err != nil {
 		return err
 	}
+
+	err := dac.Clear()
+	if err != nil {
+		return err // err is beneign, but dump the buffer first
+	}
 	if dac.cptr[channel] != nil {
 		// free old buffer and replace
 		C.aligned_free(unsafe.Pointer(dac.cptr[channel]))
@@ -582,9 +587,8 @@ func (dac *AP235) PopulateWaveform(channel int, data []float64) error {
 	return nil
 }
 
-// serviceInterrupts should be run as a background goroutine;
-// it advances the cursor into the data buffer for each channel
-// and triggers new DMA writes to keep the DAC fed
+// serviceInterrupts should be run as a background goroutine; it handles
+// interrupts from the DAC to keep it fed
 func (dac *AP235) serviceInterrupts() {
 	// the minimum recommended timer period is 0x136
 	// which is (310 * 32 ns) = 9.9us
