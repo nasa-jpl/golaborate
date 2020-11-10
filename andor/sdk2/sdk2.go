@@ -185,7 +185,11 @@ func (c *Camera) GetVSSpeed(idx int) (float64, error) {
 
 // GetVSSpeedMinMax gets the vertical shift register speed in microseconds
 func (c *Camera) GetVSSpeedMinMax() (float64, float64, error) {
-	return 0, 100., nil
+	max, err := c.GetNumberVSSpeeds()
+	if err != nil {
+		return 0, 0, err
+	}
+	return 0, float64(max), nil
 }
 
 // GetVSSpeedOption gets the vertical shift register speed in microseconds
@@ -201,11 +205,7 @@ func (c *Camera) GetVSSpeedOption(idx int) (float64, error) {
 	if err != nil {
 		return nil, err
 	}
-	return map[string]interface{}{
-		"type":    "floatEnum",
-		"options": ary,
-	}, nil
-
+	return ary, nil
 }*/
 
 // GetFastestRecommendedVSSpeed gets the fastest vertical shift register speed
