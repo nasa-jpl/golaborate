@@ -169,12 +169,44 @@ func (c *Camera) GetVSAmplitudeType() (int, error) {
 	return outputAmpType, nil
 }
 
+/*func (c* Camera) GetVSAmplitudeInfo() (map[string]interface{}, error) {
+	ret := map[string]interface{}
+	ret["type"] = "enum"
+	ret["options"] = enumKeys(VerticalClockVoltage)
+    return ret, nil
+}*/
+
 // GetVSSpeed gets the vertical shift register speed in microseconds
 func (c *Camera) GetVSSpeed(idx int) (float64, error) {
 	var f C.float
 	errCode := uint(C.GetVSSpeed(C.int(idx), &f))
 	return float64(f), Error(errCode)
 }
+
+// GetVSSpeedMinMax gets the vertical shift register speed in microseconds
+func (c *Camera) GetVSSpeedMinMax() (float64, float64, error) {
+	return 0, 100., nil
+}
+
+// GetVSSpeedOption gets the vertical shift register speed in microseconds
+func (c *Camera) GetVSSpeedOption(idx int) (float64, error) {
+	var f C.float
+	errCode := uint(C.GetVSSpeed(C.int(idx), &f))
+	return float64(f), Error(errCode)
+}
+
+// GetVSSpeedOptions gets the vertical shift register speed in microseconds
+/*func (c *Camera) GetVSSpeedOptions() (map[string]interface{}, error) {
+	ary, err := c.floatEnumOptions(c.GetNumberVSSpeeds, c.GetVSSpeed)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{
+		"type":    "floatEnum",
+		"options": ary,
+	}, nil
+
+}*/
 
 // GetFastestRecommendedVSSpeed gets the fastest vertical shift register speed
 // that does not require changing the vertical clock voltage.  It returns
@@ -194,12 +226,18 @@ func (c *Camera) SetVSSpeed(idx int) error {
 
 // SetVSAmplitude sets the vertical shift register voltage
 func (c *Camera) SetVSAmplitude(vcv string) error {
+	var err error
 	i, ok := VerticalClockVoltage[vcv]
 	if !ok {
 		return ErrBadEnumIndex
 	}
 	cint := C.int(i)
 	errCode := uint(C.SetVSAmplitude(cint))
+	err = Error(errCode)
+	if err == nil {
+
+	}
+
 	return Error(errCode)
 }
 
@@ -271,7 +309,7 @@ func (c *Camera) SetHSSpeedIndex(outputAmpType, idx int) error {
 // NOTE:  The output amplitude type is the obtained from the last set
 func (c *Camera) SetHSSpeed(idx int) error {
 
-	if c.vsAmplitude== nil {
+	if c.vsAmplitude == nil {
 		return ErrParameterNotSet
 	}
 	outputAmpType, ok := VerticalClockVoltage[*c.vsAmplitude]
@@ -355,6 +393,20 @@ func (c *Camera) GetTemperatureSetpoint() (string, error) {
 	return *c.tempSetpoint, nil
 }
 
+/*func (c* Camera) GetTemperatureSetpointInfo() (map[string]interface{}, error) {
+	setpoint, err := c.GetTemperatureSetpoint()
+	ret := map[string]interface{}
+	minS, maxS, err = c.GetTemperatureRange()
+	if err != nil {
+		return {}, err
+	}
+	ret["type"] = "int"
+	ret["min"] = minS
+	ret["max"] = maxS
+
+    return ret, nil
+}*/
+
 // GetTemperatureSetpoints returns an array of the MIN and MAX temperatures.
 // Any integer intermediate is valid
 func (c *Camera) GetTemperatureSetpoints() ([]string, error) {
@@ -427,6 +479,18 @@ func (c *Camera) GetAcquisitionMode() (string, error) {
 	return *c.acquisitionMode, nil
 }
 
+/*func (c* Camera) GetAcquisitionModeInfo() (map[string]interface{}, error) {
+	mode, err := c.GetAcquisitionMode()
+    if err != nil {
+		return {}, err
+	}
+
+	ret := map[string]interface{}
+	ret["type"] = "enum"
+	ret["options"] = enumKeys(AcquisitionMode)
+    return ret, nil
+}*/
+
 // SetReadoutMode sets the readout mode of the camera.  We rename this from SetReadMode in the actual driver
 func (c *Camera) SetReadoutMode(rm string) error {
 	i, ok := ReadoutMode[rm]
@@ -448,6 +512,18 @@ func (c *Camera) GetReadoutMode() (string, error) {
 	}
 	return *c.readoutMode, nil
 }
+
+/*func (c* Camera) GetReadoutModeInfo() (map[string]interface{}, error) {
+	mode, err := c.GetReadoutMode()
+    if err != nil {
+		return {}, err
+	}
+	ret := map[string]interface{}
+	ret["type"] = "enum"
+	ret["options"] = enumKeys(ReadoutMode)
+
+    return ret, nil
+}*/
 
 // SetExposureTime sets the exposure time of the camera in seconds
 func (c *Camera) SetExposureTime(t time.Duration) error {
@@ -489,6 +565,14 @@ func (c *Camera) GetTriggerMode() (string, error) {
 	}
 	return *c.triggerMode, nil
 }
+
+/*func (c* Camera) GetTriggerModeInfo() (map[string]interface{}, error) {
+	ret := map[string]interface{}{}
+	ret["type"] = "enum"
+	ret["options"] = enumKeys(TriggerMode)
+
+    return ret, nil
+}*/
 
 // SetAccumulationCycleTime sets the accumulation cycle time of the camera in seconds
 func (c *Camera) SetAccumulationCycleTime(t float64) error {
@@ -596,6 +680,16 @@ func (c *Camera) GetADChannel() (int, error) {
 	return *c.adchannel, nil
 }
 
+// GetADChannelMinMax returns the currently selected AD channel
+func (c *Camera) GetADChannelMinMax() (int, int, error) {
+
+	max, err := c.GetNumberADChannels()
+	if err != nil {
+		return 0, 0, err
+	}
+	return 0, max, nil
+}
+
 // GetNumberPreAmpGains returns the number of preamplifier gain settings available
 func (c *Camera) GetNumberPreAmpGains() (int, error) {
 	var num C.int
@@ -616,6 +710,19 @@ func (c *Camera) GetPreAmpGainText(idx int) (string, error) {
 	var buf [30]C.char
 	errCode := uint(C.GetPreAmpGainText(C.int(idx), &buf[0], 30))
 	return C.GoString(&buf[0]), Error(errCode)
+}
+
+// GetPreAmpOptions
+func (c *Camera) GetPreAmpOptions() (map[string]interface{}, error) {
+	i, err := c.GetNumberPreAmpGains()
+	if err != nil {
+		return nil, err
+	}
+	ret := map[string]interface{}{}
+	ret["min"] = 0
+	ret["max"] = i
+	ret["type"] = "int"
+	return ret, err
 }
 
 // SetPreAmpGain sets the preamp gain for the given AD channel
@@ -746,6 +853,15 @@ func (c *Camera) GetFilterMode() (string, error) {
 	return *c.filterMode, nil
 }
 
+/*func (c* Camera) GetFilterModeInfo() (map[string]interface{}, error) {
+
+	ret := map[string]interface{}{}
+	ret["type"] = "enum"
+	ret["options"] = enumKeys(FilterMode)
+
+    return ret, nil
+}*/
+
 // SetBaselineClamp toggles the baseline clamp feature of the camera on (true) or off (false)
 func (c *Camera) SetBaselineClamp(b bool) error {
 	on := 0
@@ -815,6 +931,14 @@ func (c *Camera) GetEMGainMode() (string, error) {
 	}
 	return *c.emgainMode, nil
 }
+
+/*func (c* Camera) GetEMGainModeInfo() (map[string]interface{}, error) {
+
+	ret := map[string]interface{}{}
+	ret["type"] = "enum"
+	ret["options"] = enumKeys(EMGainMode)
+    return ret, nil
+}*/
 
 // SetEMAdvanced allows setting of the EM gain setting to values higher than
 // 300x.  Using this setting with more than 10s of photons per pixel per readout
@@ -960,6 +1084,13 @@ func (c *Camera) GetShutter() (bool, error) {
 	}
 	return *c.shutter, nil
 }
+
+/*func (c* Camera) GetShutterInfo() (map[string]interface{}, error) {
+
+	ret := map[string]interface{}{}
+	ret["type"] = "boolean"
+    return ret, nil
+}*/
 
 // SetShutterAuto puts the camera into or out of automatic shutering mode,
 // in which the camera itself controls the signaling and timing of the shutter.
@@ -1156,6 +1287,106 @@ func (c *Camera) SetFeature(feature string, v interface{}) error {
 	return err
 }
 
+var (
+	FeatureTypes = map[string]string{
+
+		//String
+		"VSAmplitude":     "enum",
+		"AcquisitionMode": "enum",
+		"ReadoutMode":     "enum",
+		"FilterMode":      "enum",
+		"TriggerMode":     "enum",
+		"EMGainMode":      "enum",
+		//Boolean
+		"ShutterOpen":       "bool",
+		"ShutterAuto":       "bool",
+		"FanOn":             "bool",
+		"EMGainAdvanced":    "bool",
+		"SensorCooling":     "bool",
+		"BaselineClamp":     "bool",
+		"FrameTransferMode": "bool",
+		//Int
+		"TemperatureSetpoint": "int",
+		//Float
+		"VSSpeed": "float",
+	}
+	FeatureEnums = map[string]Enum{
+
+		//String
+		"VSAmplitude":     VerticalClockVoltage,
+		"AcquisitionMode": AcquisitionMode,
+		"ReadoutMode":     ReadoutMode,
+		"FilterMode":      FilterMode,
+		"TriggerMode":     TriggerMode,
+		"EMGainMode":      EMGainMode,
+	}
+)
+
+// GetFeatureInfo
+// For numerical features, it returns the min and max values.  For enum
+// features, it returns the possible strings that can be used
+func (c *Camera) GetFeatureInfo(feature string) (map[string]interface{}, error) {
+	type fIntErr func() (int, int, error)
+	type fFloatErr func() (float64, float64, error)
+
+	intFuncs := map[string]fIntErr{
+		"ADChannel":           c.GetADChannelMinMax,
+		"EMGain":              c.GetEMGainRange,
+		"TemperatureSetpoint": c.GetTemperatureRange,
+		//"PreAmpGain": c.GetPreAmpGain,
+		//"GetHSSpeed": c.GetHSSpeed,
+	}
+	floatFuncs := map[string]fFloatErr{
+		"VSSpeed": c.GetVSSpeedMinMax,
+	}
+	ret := map[string]interface{}{}
+
+	t, ok := FeatureTypes[feature]
+	if !ok {
+		return nil, ErrFeatureNotFound{feature}
+	}
+	ret["type"] = t
+
+	switch t {
+	case "int":
+		if f, ok := intFuncs[feature]; ok {
+			min, max, err := f()
+			if err != nil {
+				return nil, err
+			}
+			ret["min"] = min
+			ret["max"] = max
+		} else {
+			return nil, ErrFeatureNotFound{feature}
+		}
+	case "float":
+		if f, ok := floatFuncs[feature]; ok {
+			min, max, err := f()
+			if err != nil {
+				return nil, err
+			}
+			ret["min"] = min
+			ret["max"] = max
+		} else {
+			return nil, ErrFeatureNotFound{feature}
+		}
+	case "bool":
+		// Only "type" is set for boolean
+	case "enum":
+		e, ok := FeatureEnums[feature]
+		if !ok {
+			return nil, ErrFeatureNotFound{feature}
+		}
+		ret["options"] = enumKeys(e)
+	case "string":
+		ret["maxLength"] = 256
+	default:
+		return nil, ErrFeatureNotFound{feature}
+	}
+
+	return ret, nil
+}
+
 func (c *Camera) GetFeature(feature string) (interface{}, error) {
 	type fStrErr func() (string, error)
 	type fBoolErr func() (bool, error)
@@ -1183,6 +1414,12 @@ func (c *Camera) GetFeature(feature string) (interface{}, error) {
 		"ADChannel": c.GetADChannel,
 		"EMGain":    c.GetEMGain,
 	}
+
+	/*intIdxFuncs := map[string]fIntIdxErr{
+		"VSSpeed":    c.GetVSSpeed,
+		"PreAmpGain": c.GetPreAmpGain,
+		"GetHSSpeed": c.GetHSSpeed,
+	}*/
 
 	if f, ok := strFuncs[feature]; ok {
 		return f()

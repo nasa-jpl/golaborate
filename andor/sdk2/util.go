@@ -10,6 +10,18 @@ import (
 // Enum behaves a bit like a C enum
 type Enum map[string]int
 
+// ErrFeatureNotFound is generated when a feature is looked up in the Features
+// map but does not exist there
+type ErrFeatureNotFound struct {
+	// Feature is the specific feature not found
+	Feature string
+}
+
+// Error satisfies the error interface
+func (e ErrFeatureNotFound) Error() string {
+	return fmt.Sprintf("feature %s not found in Features map, see golab/andor/sdk3#Features for known features", e.Feature)
+}
+
 var (
 	// ErrBadEnumIndex is generated when an unknown enum index is used
 	ErrBadEnumIndex = errors.New("index not found in enum")
