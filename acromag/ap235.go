@@ -562,7 +562,7 @@ func (dac *AP235) PopulateWaveform(channel int, data []float64) error {
 		return err
 	}
 
-	err := dac.Clear()
+	err = dac.Clear(channel)
 	if err != nil {
 		return err // err is beneign, but dump the buffer first
 	}
