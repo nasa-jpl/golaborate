@@ -197,12 +197,13 @@ type BurstWrapper struct {
 	// ch is the channel of images streamed from the camera
 	ch chan image.Image
 
-	// errCh is the channel that will receive an error from Burst if it occurs
-	errCh chan error
+	// err is any error in the burst
+	err error
 
 	// B is the bursty camera
 	B Burster
 
+	// frames is the number of frames in the burst
 	frames int
 }
 
@@ -224,7 +225,7 @@ func (b *BurstWrapper) SetupBurst(w http.ResponseWriter, r *http.Request) {
 	}
 	b.ch = make(chan image.Image, t.Spool)
 	go func() {
-		b.errCh <- b.B.Burst(t.Frames, t.FPS, b.ch)
+		b.err = b.B.Burst(t.Frames, t.FPS, b.ch)
 	}()
 	w.WriteHeader(http.StatusOK)
 	return
@@ -233,24 +234,24 @@ func (b *BurstWrapper) SetupBurst(w http.ResponseWriter, r *http.Request) {
 // ReadFrame returns one frame from the buffer, as FITS, over HTTP
 func (b *BurstWrapper) ReadFrame(w http.ResponseWriter, r *http.Request) {
 	select {
-	case err := <-b.errCh:
-		// there was an error, feedback to the burst to stop by closing the channel
-		close(b.ch)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
 	case <-time.After(2 * time.Second): // if you're doing a burst the frames should come far faster than this
-		// feedback to the burst
-		close(b.ch)
 		http.Error(w, "timeout waiting for frame from the camera", http.StatusInternalServerError)
 		return
 	case img := <-b.ch:
+		// if ch closed, err
+		if img == nil {
+			if b.err != nil {
+				http.Error(w, b.err.Error(), http.StatusInternalServerError)
+				return
+			}
+			panic("generichttp/camera:burster nil img and nil err, unintelligible state")
+		}
 		hdr := w.Header()
 		hdr.Set("Content-Type", "image/fits")
 		hdr.Set("Content-Disposition", "attachment; filename=image.fits")
 		w.WriteHeader(http.StatusOK)
 		err := WriteFits(w, []fitsio.Card{}, []image.Image{img})
 		if err != nil {
-			fmt.Println(err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -261,12 +262,14 @@ func (b *BurstWrapper) ReadFrame(w http.ResponseWriter, r *http.Request) {
 // cube to a single FITS file
 func (b *BurstWrapper) ReadAllFrames(w http.ResponseWriter, r *http.Request) {
 	var images []image.Image
+	cntr := 0
 	for img := range b.ch {
+		cntr++
 		images = append(images, img)
 	}
 	// get the error if there is one, otherwise use nil as the
 	// default
-	err := <-b.errCh
+	err := b.err
 	var errS string
 	if err != nil {
 		errS = err.Error()
