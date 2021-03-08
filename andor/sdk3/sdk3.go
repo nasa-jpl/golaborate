@@ -182,7 +182,7 @@ type Camera struct {
 // Open opens a connection to the camera.  Typically, a real camera
 // is index 0, and there are two simulator cameras at indices 1 and 2
 func Open(camIdx int) (*Camera, error) {
-	var c camera
+	var c Camera
 	var hndle C.AT_H
 	err := enrich(Error(int(C.AT_Open(C.int(camIdx), &hndle))), "AT_OPEN")
 	c.Handle = int(hndle)
