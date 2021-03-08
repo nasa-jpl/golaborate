@@ -173,18 +173,23 @@ type Camera struct {
 
 	// Handle holds the int that points to a specific camera
 	Handle int
+
+	// UseSpinner indicates whether to run a spinner in the command line when
+	// taking video
+	UseSpinner bool
 }
 
 // Open opens a connection to the camera.  Typically, a real camera
 // is index 0, and there are two simulator cameras at indices 1 and 2
 func Open(camIdx int) (*Camera, error) {
-	c := Camera{}
+	var c camera
 	var hndle C.AT_H
 	err := enrich(Error(int(C.AT_Open(C.int(camIdx), &hndle))), "AT_OPEN")
 	c.Handle = int(hndle)
 	if err == nil {
 		c.Allocate()
 	}
+	c.UseSpinner = true
 	return &c, err
 }
 
@@ -419,6 +424,7 @@ func (c *Camera) GetFrame() (image.Image, error) {
 // The images are streamed to ch, and are image.Gray16.
 // the channel is always closed after
 func (c *Camera) Burst(frames int, fps float64, ch chan<- image.Image) error {
+	spinning := c.UseSpinner
 	defer close(ch)
 	imgS, err := c.ImageSizeBytes()
 	if err != nil {
@@ -481,24 +487,27 @@ func (c *Camera) Burst(frames int, fps float64, ch chan<- image.Image) error {
 		SetFloat(c.Handle, "FrameRate", prevFps)
 		SetEnumString(c.Handle, "CycleMode", prevCycle)
 	}()
+	var spinner *yacspin.Spinner
+	if spinning {
+		cfg := yacspin.Config{
+			Frequency:       100 * time.Millisecond,
+			CharSet:         yacspin.CharSets[36],
+			Suffix:          "capturing burst",
+			SuffixAutoColon: true,
+			StopColors:      []string{"fgGreen"}}
 
-	cfg := yacspin.Config{
-		Frequency:       100 * time.Millisecond,
-		CharSet:         yacspin.CharSets[36],
-		Suffix:          "capturing burst",
-		SuffixAutoColon: true,
-		StopColors:      []string{"fgGreen"}}
-
-	spinner, err := yacspin.New(cfg)
-	if err != nil {
-		return err
+		spinner, err = yacspin.New(cfg)
+		if err != nil {
+			return err
+		}
+		defer spinner.Stop()
+		spinner.Start()
 	}
-	defer spinner.Stop()
+
 	err = IssueCommand(c.Handle, "AcquisitionStart")
 	if err != nil {
 		return err
 	}
-	spinner.Start()
 
 	for idx := 0; idx < frames; idx++ {
 		err = c.QueueBuffer()
@@ -512,7 +521,9 @@ func (c *Camera) Burst(frames int, fps float64, ch chan<- image.Image) error {
 		buf := c.Buffer()
 		buf = UnpadBuffer(buf, stride, aoi.Width, aoi.Height)
 		ch <- &image.Gray16{Pix: buf, Stride: aoi.Width * 2, Rect: image.Rect(0, 0, aoi.Width, aoi.Height)}
-		spinner.Message(fmt.Sprintf("frame %d/%d", idx, frames))
+		if spinning {
+			spinner.Message(fmt.Sprintf("frame %d/%d", idx, frames))
+		}
 	}
 	return err
 }
