@@ -22,7 +22,7 @@ func WriteFits(w io.Writer, metadata []fitsio.Card, imgs []image.Image) error {
 	defer fits.Close()
 	dims := []int{width, height}
 	if nframes > 1 {
-		dims = append([]int{nframes}, dims...)
+		dims = append(dims, nframes)
 	}
 	im := fitsio.NewImage(16, dims)
 	defer im.Close()
