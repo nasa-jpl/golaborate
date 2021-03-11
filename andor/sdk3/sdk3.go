@@ -27,6 +27,14 @@ import (
 )
 
 const (
+	// 10 buffers is a middle child sized number of bufs
+	// in a real-time system, the most you could need in
+	// a sustained fashion is 2 for capture-process parallelism
+	//
+	// in non-realtime you could want an unlimited number, but
+	// the images are spooled outside the camera's capture loop
+	// (~= zero processing lag) so it is moot
+	nbufs = 10
 	// LengthOfUndefinedBuffers is how large a buffer to allocate for a Wchar
 	// string when we have no way of knowing ahead of time how big it is
 	// it is measured in Wchars
@@ -152,24 +160,14 @@ var (
 
 // Camera represents a camera from SDK3
 type Camera struct {
-	// buffer is written to by the SDK.
-	// It must be 8-byte aligned.
-	// uint64 causes the Go runtime to guarantee 8-byte alignment
-	// and we use dtype hacking via unsafe.SliceHeader so the type is not actually important
-	buffer []uint64
+	// bufs is the queue of buffers to send TO andor
+	bufs [nbufs]buffer
 
-	// cptr is a C pointer to the first byte in buffer
-	cptr *C.AT_U8
+	// nextbuf indicates which element of bufs to send next
+	nextbuf int
 
-	// cptrsize is the 'size' of the c pointer
-	cptrsize C.int
-
-	// gptr is a Go pointer to the first byte in buffer
-	gptr unsafe.Pointer
-
-	// bufferOnQueue is a flag indicating if we have put a buffer onto the SDK's
-	// queue yet
-	bufferOnQueue bool
+	// recvbuf is the last buffer recieved FROM andor
+	recvdbuf *buffer
 
 	// Handle holds the int that points to a specific camera
 	Handle int
@@ -195,7 +193,7 @@ func Open(camIdx int) (*Camera, error) {
 
 // Close closes a connection to the camera
 func (c *Camera) Close() error {
-	return enrich(Error(int(C.AT_Close(C.AT_H(c.Handle)))), "AT_CLOSE")
+	return enrich(Error(int(C.AT_Close(C.AT_H(c.Handle)))), "AT_Close")
 }
 
 // Allocate creates the buffer that will be populated by the SDK
@@ -206,12 +204,14 @@ func (c *Camera) Allocate() error {
 	if err != nil {
 		return err
 	}
-	c.buffer = make([]uint64, sze/8) // uint64 forces byte alignment, 8 bytes per uint64
-	c.gptr = unsafe.Pointer(&c.buffer[0])
-	c.cptr = (*C.AT_U8)(c.gptr)
-	c.cptrsize = C.int(sze)
-	return enrich(Error(int(C.AT_Flush(C.AT_H(c.Handle)))), "AT_Flush")
-	// return nil
+	for i := 0; i < nbufs; i++ {
+		b := c.bufs[i]
+		b.buf = make([]uint64, sze/8) // uint64 forces byte alignment, 8 bytes per uint64
+		b.gptr = unsafe.Pointer(&b.buf[0])
+		b.cptr = (*C.AT_U8)(b.gptr)
+		b.cptrsize = C.int(sze)
+	}
+	return c.Flush()
 }
 
 // ImageSizeBytes is the size of the image buffer in bytes.  This function
@@ -349,28 +349,45 @@ func (c *Camera) GetSerialNumber() (string, error) {
 // only one buffer is supported in this wrapper, though the SDK supports
 // multiple buffers
 func (c *Camera) QueueBuffer() error {
-	if len(c.buffer) == 0 {
-		return fmt.Errorf("go buffer cannot hold entire frame, likely uninitialized, len=%d, cap=%d", len(c.buffer), cap(c.buffer))
+	buf := c.bufs[c.nextbuf]
+	if len(buf.buf) == 0 {
+		return fmt.Errorf("go buffer cannot hold entire frame, likely uninitialized, len=%d, cap=%d", len(buf.buf), cap(buf.buf))
 	}
-	err := Error(int(C.AT_QueueBuffer(C.AT_H(c.Handle), c.cptr, c.cptrsize)))
+	err := Error(int(C.AT_QueueBuffer(C.AT_H(c.Handle), buf.cptr, buf.cptrsize)))
+	err = enrich(err, "AT_QueueBuffer")
 	if err == nil {
-		c.bufferOnQueue = true
+		// advance the buffer index and wrap if needed
+		c.nextbuf = (c.nextbuf + 1) % nbufs
 	}
+
 	return err
 }
 
 // WaitBuffer waits for the camera to push a frame into the buffer
 // errors if Queue has not been called, on timeout, or on an SDK error
 func (c *Camera) WaitBuffer(timeout time.Duration) error {
-	if !c.bufferOnQueue {
-		return ErrBufferNotOnQueue
-	}
 	tout := C.uint(timeout.Milliseconds()) // 2020-03-04 nanoseconds/1e6 -> milliseconds, go1.13+
 	var (
 		size C.int
 		ptr  *C.AT_U8
 	)
 	err := Error(int(C.AT_WaitBuffer(C.AT_H(c.Handle), &ptr, &size, tout)))
+	err = enrich(err, "AT_WaitBuffer")
+	if err == nil {
+		for i := 0; i < nbufs; i++ {
+			if c.bufs[i].cptr == ptr {
+				c.recvdbuf = &c.bufs[i]
+				return nil
+			}
+		}
+		panic("recieved an unknown pointer from andor")
+	}
+	return err
+}
+
+// Flush removes any pending buffers from the andor SDK's internal queue
+func (c *Camera) Flush() error {
+	err := enrich(Error(int(C.AT_Flush(C.AT_H(c.Handle)))), "AT_Flush")
 	return err
 }
 
@@ -404,6 +421,10 @@ func (c *Camera) GetFrame() (image.Image, error) {
 		return &ret, err
 	}
 	err = IssueCommand(c.Handle, "AcquisitionStop")
+	if err != nil {
+		return &ret, err
+	}
+	err = c.Flush()
 	if err != nil {
 		return &ret, err
 	}
@@ -629,9 +650,9 @@ func (c *Camera) Buffer() []byte {
 	// this function is needed because we use a buffer of uint64 to
 	// guarantee 8-byte alignment.  We want the underlying data
 	var buf []byte
-	l := len(c.buffer) * 8
+	l := len(c.recvdbuf.buf) * 8
 	hdr := (*reflect.SliceHeader)(unsafe.Pointer(&buf))
-	hdr.Data = uintptr(unsafe.Pointer(&c.buffer[0]))
+	hdr.Data = uintptr(unsafe.Pointer(&c.recvdbuf.buf[0]))
 	hdr.Len = l
 	hdr.Cap = l
 	return buf
