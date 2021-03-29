@@ -27,14 +27,15 @@ import (
 )
 
 const (
-	// 10 buffers is a middle child sized number of bufs
+	// 3 buffers is a middle child sized number of bufs
 	// in a real-time system, the most you could need in
 	// a sustained fashion is 2 for capture-process parallelism
 	//
 	// in non-realtime you could want an unlimited number, but
 	// the images are spooled outside the camera's capture loop
 	// (~= zero processing lag) so it is moot
-	nbufs = 10
+	nbufs = 3
+
 	// LengthOfUndefinedBuffers is how large a buffer to allocate for a Wchar
 	// string when we have no way of knowing ahead of time how big it is
 	// it is measured in Wchars
@@ -42,12 +43,12 @@ const (
 
 	// WRAPVER is the andor wrapper code version.
 	// Increment this when pkg sdk3 is updated.
-	WRAPVER = 10
+	WRAPVER = 11
 
 	// NeoBufferSize is the size of the buffer on the Andor Neo camera itself (4GB)
 	NeoBufferSize = 4e9
 
-	// CLBaseSpeed is the transfer rate in MB/s of base speed camera link,
+	// CLBaseSpeed is the transfer rate in B/s of base speed camera link,
 	// used by the Andor Neo camera.
 	CLBaseSpeed = 255e6
 )
@@ -210,6 +211,7 @@ func (c *Camera) Allocate() error {
 		b.gptr = unsafe.Pointer(&b.buf[0])
 		b.cptr = (*C.AT_U8)(b.gptr)
 		b.cptrsize = C.int(sze)
+		c.bufs[i] = b
 	}
 	return c.Flush()
 }
@@ -284,6 +286,10 @@ func (c *Camera) SetAOI(aoi camera.AOI) error {
 	}
 
 	err = SetInt(c.Handle, "AOITop", int64(aoi.Top))
+	if err != nil {
+		return err
+	}
+	err = c.Allocate()
 	return err
 }
 
@@ -359,7 +365,6 @@ func (c *Camera) QueueBuffer() error {
 		// advance the buffer index and wrap if needed
 		c.nextbuf = (c.nextbuf + 1) % nbufs
 	}
-
 	return err
 }
 
