@@ -107,7 +107,7 @@ var (
 		"MetadataTimestamp":           "bool",
 		"Overlap":                     "bool", // TODO: see if enabling this fixes fast shutter problems
 		"RollingShutterGlobalClear":   "bool",
-		"ScanSpeedControlEnable ":     "bool",
+		"ScanSpeedControlEnable":      "bool",
 		"SensorCooling":               "bool",
 		"SpuriousNoiseFilter":         "bool",
 		"StaticBlemishCorrection":     "bool",
@@ -145,7 +145,7 @@ var (
 		"TemperatureControl":       "enum",
 		"TemperatureStatus":        "enum",
 		"TriggerMode":              "enum",
-		"SensorReadoutMode ":       "enum",
+		"SensorReadoutMode":        "enum",
 		"SimplePreAmpGainControl":  "enum",
 
 		// strings
@@ -205,13 +205,12 @@ func (c *Camera) Allocate() error {
 	if err != nil {
 		return err
 	}
+
 	for i := 0; i < nbufs; i++ {
-		b := c.bufs[i]
-		b.buf = make([]uint64, sze/8) // uint64 forces byte alignment, 8 bytes per uint64
-		b.gptr = unsafe.Pointer(&b.buf[0])
-		b.cptr = (*C.AT_U8)(b.gptr)
-		b.cptrsize = C.int(sze)
-		c.bufs[i] = b
+		if c.bufs[i].allocated {
+			c.bufs[i].Free()
+		}
+		c.bufs[i].Alloc(sze)
 	}
 	return c.Flush()
 }
@@ -356,8 +355,8 @@ func (c *Camera) GetSerialNumber() (string, error) {
 // multiple buffers
 func (c *Camera) QueueBuffer() error {
 	buf := c.bufs[c.nextbuf]
-	if len(buf.buf) == 0 {
-		return fmt.Errorf("go buffer cannot hold entire frame, likely uninitialized, len=%d, cap=%d", len(buf.buf), cap(buf.buf))
+	if !buf.allocated {
+		return fmt.Errorf("image buffer not allocated")
 	}
 	err := Error(int(C.AT_QueueBuffer(C.AT_H(c.Handle), buf.cptr, buf.cptrsize)))
 	err = enrich(err, "AT_QueueBuffer")
@@ -655,9 +654,9 @@ func (c *Camera) Buffer() []byte {
 	// this function is needed because we use a buffer of uint64 to
 	// guarantee 8-byte alignment.  We want the underlying data
 	var buf []byte
-	l := len(c.recvdbuf.buf) * 8
+	l := c.recvdbuf.size
 	hdr := (*reflect.SliceHeader)(unsafe.Pointer(&buf))
-	hdr.Data = uintptr(unsafe.Pointer(&c.recvdbuf.buf[0]))
+	hdr.Data = uintptr(unsafe.Pointer(c.recvdbuf.cptr))
 	hdr.Len = l
 	hdr.Cap = l
 	return buf
