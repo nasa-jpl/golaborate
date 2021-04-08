@@ -89,6 +89,55 @@ type Camera struct {
 	frameTransfer *bool
 }
 
+func boolOptionHelper() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "bool",
+	}
+}
+
+func enumOptionHelper(e Enum) map[string]interface{} {
+	return map[string]interface{}{
+		"type":    "enum",
+		"options": enumKeys(e),
+	}
+}
+
+type noptsFunc func() (int, error)
+type rangeOptFunc func() (int, int, error)
+type intOptFunc func(int) (int, error)
+type optFunc func(int) (float64, error)
+
+func intOptionHelper(rangefunc rangeOptFunc) map[string]interface{} {
+	min, max, err := rangefunc()
+	if err != nil {
+		return nil
+	}
+	return map[string]interface{}{
+		"type": "int",
+		"min":  min,
+		"max":  max,
+	}
+}
+
+func floatEnumOptionHelper(nfunc noptsFunc, optfunc optFunc) (map[string]interface{}, error) {
+	n, err := nfunc()
+	if err != nil {
+		return nil, err
+	}
+	opts := make([]float64, n)
+	for i := 0; i < n; i++ {
+		opt, err := optfunc(i)
+		if err != nil {
+			return nil, err
+		}
+		opts[i] = opt
+	}
+	return map[string]interface{}{
+		"type":    "floatEnum",
+		"options": opts,
+	}, nil
+}
+
 /* this block contains functions which deal with camera initialization
 
  */
@@ -176,6 +225,31 @@ func (c *Camera) GetVSSpeed(idx int) (float64, error) {
 	return float64(f), Error(errCode)
 }
 
+// GetVSSpeedRange gets the vertical shift register speed in microseconds
+func (c *Camera) GetVSSpeedRange() (float64, float64, error) {
+	max, err := c.GetNumberVSSpeeds()
+	if err != nil {
+		return 0, 0, err
+	}
+	return 0, float64(max), nil
+}
+
+// GetVSSpeedOption gets the vertical shift register speed in microseconds
+func (c *Camera) GetVSSpeedOption(idx int) (float64, error) {
+	var f C.float
+	errCode := uint(C.GetVSSpeed(C.int(idx), &f))
+	return float64(f), Error(errCode)
+}
+
+// GetVSSpeedOptions gets the vertical shift register speed in microseconds
+/*func (c *Camera) GetVSSpeedOptions() (map[string]interface{}, error) {
+	ary, err := c.floatEnumOptions(c.GetNumberVSSpeeds, c.GetVSSpeed)
+	if err != nil {
+		return nil, err
+	}
+	return ary, nil
+}*/
+
 // GetFastestRecommendedVSSpeed gets the fastest vertical shift register speed
 // that does not require changing the vertical clock voltage.  It returns
 // the fastest vertical clock speed's intcode and the actual speed in microseconds
@@ -200,6 +274,7 @@ func (c *Camera) SetVSAmplitude(vcv string) error {
 	}
 	cint := C.int(i)
 	errCode := uint(C.SetVSAmplitude(cint))
+
 	return Error(errCode)
 }
 
@@ -271,7 +346,7 @@ func (c *Camera) SetHSSpeedIndex(outputAmpType, idx int) error {
 // NOTE:  The output amplitude type is the obtained from the last set
 func (c *Camera) SetHSSpeed(idx int) error {
 
-	if c.vsAmplitude== nil {
+	if c.vsAmplitude == nil {
 		return ErrParameterNotSet
 	}
 	outputAmpType, ok := VerticalClockVoltage[*c.vsAmplitude]
@@ -353,6 +428,20 @@ func (c *Camera) GetTemperatureSetpoint() (string, error) {
 		return "", ErrParameterNotSet
 	}
 	return *c.tempSetpoint, nil
+}
+
+//GetTemperatureSetpointInfo Return possible options for temp setpoint
+func (c *Camera) GetTemperatureSetpointInfo() (map[string]interface{}, error) {
+	ret := map[string]interface{}{}
+	min, max, err := c.GetTemperatureRange()
+	if err != nil {
+		return nil, err
+	}
+	ret["type"] = "string"
+	ret["min"] = strconv.Itoa(min)
+	ret["max"] = strconv.Itoa(max)
+
+	return ret, nil
 }
 
 // GetTemperatureSetpoints returns an array of the MIN and MAX temperatures.
@@ -596,6 +685,16 @@ func (c *Camera) GetADChannel() (int, error) {
 	return *c.adchannel, nil
 }
 
+// GetADChannelRange returns the currently selected AD channel
+func (c *Camera) GetADChannelRange() (int, int, error) {
+
+	max, err := c.GetNumberADChannels()
+	if err != nil {
+		return 0, 0, err
+	}
+	return 0, max - 1, nil
+}
+
 // GetNumberPreAmpGains returns the number of preamplifier gain settings available
 func (c *Camera) GetNumberPreAmpGains() (int, error) {
 	var num C.int
@@ -616,6 +715,19 @@ func (c *Camera) GetPreAmpGainText(idx int) (string, error) {
 	var buf [30]C.char
 	errCode := uint(C.GetPreAmpGainText(C.int(idx), &buf[0], 30))
 	return C.GoString(&buf[0]), Error(errCode)
+}
+
+// GetPreAmpOptions
+func (c *Camera) GetPreAmpOptions() (map[string]interface{}, error) {
+	i, err := c.GetNumberPreAmpGains()
+	if err != nil {
+		return nil, err
+	}
+	ret := map[string]interface{}{}
+	ret["min"] = 0
+	ret["max"] = i - 1
+	ret["type"] = "int"
+	return ret, err
 }
 
 // SetPreAmpGain sets the preamp gain for the given AD channel
@@ -1156,6 +1268,38 @@ func (c *Camera) SetFeature(feature string, v interface{}) error {
 	return err
 }
 
+// GetFeatureInfo For numerical features, it returns the min and max values.  For enum
+// features, it returns the possible strings that can be used
+func (c *Camera) GetFeatureInfo(feature string) (map[string]interface{}, error) {
+
+	switch feature {
+	case "AcquisitionMode":
+		return enumOptionHelper(AcquisitionMode), nil
+	case "VSAmplitude":
+		return enumOptionHelper(VerticalClockVoltage), nil
+	case "ReadoutMode":
+		return enumOptionHelper(ReadoutMode), nil
+	case "FilterMode":
+		return enumOptionHelper(FilterMode), nil
+	case "TriggerMode":
+		return enumOptionHelper(TriggerMode), nil
+	case "EMGainMode":
+		return enumOptionHelper(EMGainMode), nil
+	case "VSSpeed":
+		return floatEnumOptionHelper(c.GetNumberVSSpeeds, c.GetVSSpeedOption)
+	case "ShutterOpen", "ShutterAuto", "FanOn", "EMGainAdvanced", "SensorCooling", "BaselineClamp", "FrameTransferMode":
+		return boolOptionHelper(), nil
+	case "ADChannel":
+		return intOptionHelper(c.GetADChannelRange), nil
+	case "EMGain":
+		return intOptionHelper(c.GetEMGainRange), nil
+	case "TemperatureSetpoint":
+		return c.GetTemperatureSetpointInfo()
+	default:
+		return nil, ErrFeatureNotFound{feature}
+	}
+}
+
 func (c *Camera) GetFeature(feature string) (interface{}, error) {
 	type fStrErr func() (string, error)
 	type fBoolErr func() (bool, error)
@@ -1183,6 +1327,12 @@ func (c *Camera) GetFeature(feature string) (interface{}, error) {
 		"ADChannel": c.GetADChannel,
 		"EMGain":    c.GetEMGain,
 	}
+
+	/*intIdxFuncs := map[string]fIntIdxErr{
+		"VSSpeed":    c.GetVSSpeed,
+		"PreAmpGain": c.GetPreAmpGain,
+		"GetHSSpeed": c.GetHSSpeed,
+	}*/
 
 	if f, ok := strFuncs[feature]; ok {
 		return f()
