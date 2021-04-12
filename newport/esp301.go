@@ -58,6 +58,10 @@ var (
 		{Cmd: "MO", Alias: "enable-axis", Description: "Turn the motor on for an axis", UsesAxis: true},
 		{Cmd: "MF", Alias: "disable-axis", Description: "turn the motor off for an axis", UsesAxis: true},
 
+		// WS1 => the 1 is the delay after end of motion in ms;
+		// a zero value causes the WS to be ignored
+		{Cmd: "WS1", Alias: "wait", Description: "Wait for the axis' motion to stop", UsesAxis: true},
+
 		// Not implemented:
 		// - General mode selection,
 		// - motion device parameters,
@@ -332,7 +336,13 @@ func (esp *ESP301) GetPos(axis string) (float64, error) {
 // MoveAbs sets the absolute position of an axis in controller units (usually mm)
 func (esp *ESP301) MoveAbs(axis string, pos float64) error {
 	c, _ := commandFromAlias("move-abs")
-	tele := makeTelegram(c, axis, true, pos)
+	c2, _ := commandFromAlias("wait")
+	cmds := []Command{c, c2}
+	axes := []string{axis, axis}
+	write := []bool{true, true}
+	data := []float64{pos, 0}
+	// tele := makeTelegram(c, axis, true, pos)
+	tele := makeTelegramPlural(cmds, axes, write, data)
 	_, err := esp.RawCommand(tele)
 	return err
 }
@@ -340,7 +350,13 @@ func (esp *ESP301) MoveAbs(axis string, pos float64) error {
 // MoveRel triggers a relative motion of an axis in controller units
 func (esp *ESP301) MoveRel(axis string, pos float64) error {
 	c, _ := commandFromAlias("move-rel")
-	tele := makeTelegram(c, axis, true, pos)
+	c2, _ := commandFromAlias("wait")
+	cmds := []Command{c, c2}
+	axes := []string{axis, axis}
+	write := []bool{true, true}
+	data := []float64{pos, 0}
+	// tele := makeTelegram(c, axis, true, pos)
+	tele := makeTelegramPlural(cmds, axes, write, data)
 	_, err := esp.RawCommand(tele)
 	return err
 }
