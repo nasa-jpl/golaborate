@@ -6,6 +6,8 @@ It also includes some lower level libraries for allowing transparent use of seri
 
 See hardware.csv for a list of supported hardware.
 
+Users likely need not interact with this repository at all, but simply run the appropriate executable acquired from [releases](https://github.jpl.nasa.gov/bdube/golab/releases).  
+
 Point of Contact: [Brandon Dube (383D)](mailto:brandon.dube@jpl.nasa.gov)
 
 ## How to Use this
