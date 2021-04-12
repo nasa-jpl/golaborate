@@ -88,7 +88,6 @@ func NewAP235(deviceIndex int) (*AP235, error) {
 	}
 	o.cScatterInfo = ptr
 	// binitialize and bAP are set in Setup_board, ditto for rwcc235
-	// go out.serviceInterrupts()
 	return out, nil
 }
 
@@ -96,6 +95,8 @@ func NewAP235(deviceIndex int) (*AP235, error) {
 // this function only returns an error if the range is not allowed
 // rngS is specified as in ValidateOutputRange
 func (dac *AP235) SetRange(channel int, rngS string) error {
+	dac.Lock()
+	defer dac.Unlock()
 	rng, err := ValidateOutputRange(rngS)
 	if err != nil {
 		return err
@@ -117,6 +118,8 @@ func (dac *AP235) GetRange(channel int) (string, error) {
 // SetPowerUpVoltage configures the voltage set on the DAC at power up
 // The error is only non-nil if the scale is invalid
 func (dac *AP235) SetPowerUpVoltage(channel int, scale OutputScale) error {
+	dac.Lock()
+	defer dac.Unlock()
 	if scale < ZeroScale || scale > FullScale {
 		return fmt.Errorf("output scale %d is not allowed", scale)
 	}
@@ -135,6 +138,8 @@ func (dac *AP235) GetPowerUpVoltage(channel int) (OutputScale, error) {
 // SetClearVoltage sets the voltage applied at the output when the device is cleared
 // the error is only non-nil if the voltage is invalid
 func (dac *AP235) SetClearVoltage(channel int, scale OutputScale) error {
+	dac.Lock()
+	defer dac.Unlock()
 	if scale < ZeroScale || scale > FullScale {
 		return fmt.Errorf("output scale %d is not allowed", scale)
 	}
@@ -154,6 +159,8 @@ func (dac *AP235) GetClearVoltage(channel int) (OutputScale, error) {
 // is detected.  Shutdown == true -> shut down the board on overtemp
 // the error is always nil
 func (dac *AP235) SetOverTempBehavior(channel int, shutdown bool) error {
+	dac.Lock()
+	defer dac.Unlock()
 	i := 0
 	if shutdown {
 		i = 1
@@ -174,6 +181,8 @@ func (dac *AP235) GetOverTempBehavior(channel int) (bool, error) {
 // allowed == true allows the DAC to operate slightly beyond limits
 // the error is always nil
 func (dac *AP235) SetOverRange(channel int, allowed bool) error {
+	dac.Lock()
+	defer dac.Unlock()
 	i := 0
 	if allowed {
 		i = 1
@@ -193,6 +202,8 @@ func (dac *AP235) GetOverRange(channel int) (bool, error) {
 // SetTriggerMode configures the DAC for a given triggering mode
 // the error is only non-nil if the trigger mode is invalid
 func (dac *AP235) SetTriggerMode(channel int, triggerMode string) error {
+	dac.Lock()
+	defer dac.Unlock()
 	tm, err := ValidateTriggerMode(triggerMode)
 	if err != nil {
 		return err
@@ -218,6 +229,8 @@ func (dac *AP235) GetTriggerMode(channel int) (string, error) {
 // SetTriggerDirection if the DAC's trigger is input (false) or output (true)
 // the error is always nil.
 func (dac *AP235) SetTriggerDirection(b bool) error {
+	dac.Lock()
+	defer dac.Unlock()
 	var i int // init to zero value, false->0
 	if b {
 		i = 1
@@ -248,6 +261,8 @@ func (dac *AP235) GetTriggerDirection() (bool, error) {
 // err should be checked on the later of the two calls to
 // SetOperatingMode and SetTriggerMode
 func (dac *AP235) SetOperatingMode(channel int, mode string) error {
+	dac.Lock()
+	defer dac.Unlock()
 	o, err := ValidateOperatingMode(mode)
 	if err != nil {
 		return err
@@ -274,6 +289,8 @@ func (dac *AP235) GetOperatingMode(channel int) (string, error) {
 // SetClearOnUnderflow configures the DAC to clear output on an underflow if true
 // the error is always nil
 func (dac *AP235) SetClearOnUnderflow(channel int, b bool) error {
+	dac.Lock()
+	defer dac.Unlock()
 	var i int // init to zero value, false->0
 	if b {
 		i = 1
@@ -297,6 +314,8 @@ func (dac *AP235) GetClearOnUnderflow(channel int) (bool, error) {
 // SetOutputSimultaneous configures the DAC to simultaneous mode or async mode
 // this function will always return nil.
 func (dac *AP235) SetOutputSimultaneous(channel int, simultaneous bool) error {
+	dac.Lock()
+	defer dac.Unlock()
 	sim := 0
 	if simultaneous {
 		sim = 1
@@ -323,6 +342,8 @@ func (dac *AP235) GetOutputSimultaneous(channel int) (bool, error) {
 // the DAC cannot be fed data for all sixteen channels
 // in parallel.
 func (dac *AP235) SetTimerPeriod(nanoseconds uint32) error {
+	dac.Lock()
+	defer dac.Unlock()
 	tdiv := nanoseconds / 32
 	dac.cfg.TimerDivider = C.uint32_t(tdiv)
 	if tdiv < 310 { // minimum recommended value from Acromag, based on DAC settling time
@@ -363,6 +384,8 @@ func (dac *AP235) Output(channel int, voltage float64) error {
 // if the channel is set up for waveform mode, an error is generated.
 // otherwise, it is nil.
 func (dac *AP235) OutputDN16(channel int, value uint16) error {
+	dac.Lock()
+	defer dac.Unlock()
 	if dac.isWaveform[channel] {
 		return ErrIncompatibleWaveform
 	}
@@ -400,6 +423,8 @@ func (dac *AP235) OutputDN16(channel int, value uint16) error {
 //
 // passing zero length slices will cause a panic.  Slices must be of equal length.
 func (dac *AP235) OutputMulti(channels []int, voltages []float64) error {
+	dac.Lock()
+	defer dac.Unlock()
 	// how this is different to AP236:
 	// AP236 is immediate output.  Write output -> it happens.
 	// AP235 is waveform and has three triggering modes for each
@@ -440,6 +465,8 @@ func (dac *AP235) OutputMulti(channels []int, voltages []float64) error {
 // OutputMultiDN16 is equivalent to OutputMulti, but with DNs instead of volts.
 // see the docstring of OutputMulti for more information.
 func (dac *AP235) OutputMultiDN16(channels []int, uint16s []uint16) error {
+	dac.Lock()
+	defer dac.Unlock()
 	// how this is different to AP236:
 	// AP236 is immediate output.  Write output -> it happens.
 	// AP235 is waveform and has three triggering modes for each
@@ -485,6 +512,8 @@ func (dac *AP235) Flush() {
 // StartWaveform starts waveform playback on all waveform channels
 // the error is only non-nil if playback is already occuring
 func (dac *AP235) StartWaveform() error {
+	dac.Lock()
+	defer dac.Unlock()
 	if dac.playingBack {
 		return errors.New("AP235 is already playing back a waveform")
 	}
@@ -497,6 +526,8 @@ func (dac *AP235) StartWaveform() error {
 // StopWaveform stops playback on all channels.
 // the error is non-nil only if playback is not occuring
 func (dac *AP235) StopWaveform() error {
+	dac.Lock()
+	defer dac.Unlock()
 	if !dac.playingBack {
 		return errors.New("AP235 is not playing back a waveform")
 	}
@@ -630,6 +661,8 @@ func (dac *AP235) serviceInterrupts() {
 // Clear soft resets the DAC, clearing the output but not configuration
 // the error is always nil
 func (dac *AP235) Clear(channel int) error {
+	dac.Lock()
+	defer dac.Unlock()
 	dac.cfg.opts._chan[C.int(channel)].DataReset = C.int(1)
 	dac.sendCfgToBoard(channel)
 	dac.cfg.opts._chan[C.int(channel)].DataReset = C.int(0)
@@ -639,6 +672,8 @@ func (dac *AP235) Clear(channel int) error {
 // Reset completely clears both data and configuration for a channel
 // the error is always nil
 func (dac *AP235) Reset(channel int) error {
+	dac.Lock()
+	defer dac.Unlock()
 	dac.cfg.opts._chan[C.int(channel)].FullReset = C.int(1)
 	dac.sendCfgToBoard(channel)
 	dac.cfg.opts._chan[C.int(channel)].FullReset = C.int(0)
@@ -654,6 +689,8 @@ func (dac *AP235) Close() error {
 
 // Status retrieves the status of a given channel of the DAC
 func (dac *AP235) Status(channel int) ChannelStatus {
+	dac.Lock()
+	defer dac.Unlock()
 	C.rsts235(dac.cfg)
 	out := ChannelStatus{Channel: channel}
 	stat := dac.cfg.ChStatus[channel]
