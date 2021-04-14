@@ -423,8 +423,6 @@ func (dac *AP235) OutputDN16(channel int, value uint16) error {
 //
 // passing zero length slices will cause a panic.  Slices must be of equal length.
 func (dac *AP235) OutputMulti(channels []int, voltages []float64) error {
-	dac.Lock()
-	defer dac.Unlock()
 	// how this is different to AP236:
 	// AP236 is immediate output.  Write output -> it happens.
 	// AP235 is waveform and has three triggering modes for each
@@ -465,8 +463,6 @@ func (dac *AP235) OutputMulti(channels []int, voltages []float64) error {
 // OutputMultiDN16 is equivalent to OutputMulti, but with DNs instead of volts.
 // see the docstring of OutputMulti for more information.
 func (dac *AP235) OutputMultiDN16(channels []int, uint16s []uint16) error {
-	dac.Lock()
-	defer dac.Unlock()
 	// how this is different to AP236:
 	// AP236 is immediate output.  Write output -> it happens.
 	// AP235 is waveform and has three triggering modes for each
@@ -577,8 +573,6 @@ func (dac *AP235) PopulateWaveform(channel int, data []float64) error {
 	// since we only want to start the one thread, not one per channel.
 
 	// create a buffer long enough to hold the waveform in uint16s
-	dac.Lock()
-	defer dac.Unlock()
 	if dac.playingBack {
 		return errors.New("AP235 cannot change waveform table during playback")
 	}
@@ -637,8 +631,20 @@ func (dac *AP235) serviceInterrupts() {
 	// suggest to add an error to the timer period
 	// function for periods < 2x the recommended limit
 	// which is ~50kHz
+	dac.Lock()
 	C.enable_interrupts(dac.cfg)
+	dac.Unlock()
 	for {
+		// fetch_status blocks for an extended period, so we will hold the lock
+		// for an extended period.  At 5k samples per second and 2048 samples
+		// per channel, that could be 500 ms (an eternitity for real time)
+		// this is a nasty pickle.
+		//
+		// it isn't solved here.  You might be okay if you run a waveform and
+		// try to talk to the DAC on other channels at the same time.  It could
+		// deadlock.  I don't know how to solve this problem in a way that makes
+		// the waveform and any real time needs happy simultaneously.
+		// TODO
 		Cstatus := C.fetch_status(dac.cfg)
 		status := uint(Cstatus)
 
@@ -704,7 +710,6 @@ func (dac *AP235) Status(channel int) ChannelStatus {
 }
 
 func (dac *AP235) doTransfer(channel int) {
-	// TODO: check this thoroughly for off-by-one errors
 	head := dac.cursor[channel]
 	tailOffset := dac.sampleCount[channel] - dac.cursor[channel]
 	if tailOffset > MaxXferSize {
