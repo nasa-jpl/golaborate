@@ -31,18 +31,24 @@ func WriteFits(w io.Writer, metadata []fitsio.Card, imgs []image.Image) error {
 		return err
 	}
 
+	bufSize := 1
+	for _, s := range dims {
+		bufSize *= s
+	}
+	ints := make([]int16, bufSize)
+	offset := 0
 	for _, img := range imgs {
 		imgConcrete := (img).(*image.Gray16)
 		uints := bytesToUint(imgConcrete.Pix)
 		l := len(uints)
-		ints := make([]int16, l)
 		for idx := 0; idx < l; idx++ {
-			ints[idx] = int16(uints[idx] - 32768)
+			ints[offset+idx] = int16(uints[idx] - 32768)
 		}
-		err = im.Write(ints)
-		if err != nil {
-			return err
-		}
+		offset += l
+	}
+	err = im.Write(ints)
+	if err != nil {
+		return err
 	}
 	return fits.Write(im)
 }
