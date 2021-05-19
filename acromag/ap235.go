@@ -527,6 +527,7 @@ func (dac *AP235) StopWaveform() error {
 	if !dac.playingBack {
 		return errors.New("AP235 is not playing back a waveform")
 	}
+	dac.playingBack = false
 	C.stop_waveform(dac.cfg)
 	return nil
 }
