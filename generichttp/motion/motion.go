@@ -18,6 +18,7 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.jpl.nasa.gov/bdube/golab/generichttp"
+	"github.jpl.nasa.gov/bdube/golab/generichttp/ascii"
 	"github.jpl.nasa.gov/bdube/golab/util"
 )
 
@@ -353,14 +354,17 @@ func NewHTTPMotionController(c Controller) HTTPMotionController {
 	rt := generichttp.RouteTable{}
 	// the interface{}().(foo); ok syntax is an awful go-ism to test if c implements foo
 	HTTPMove(c, rt)
-	if enabler, ok := interface{}(c).(Enabler); ok {
+	if enabler, ok := (c).(Enabler); ok {
 		HTTPEnable(enabler, rt)
 	}
-	if speeder, ok := interface{}(c).(Speeder); ok {
+	if speeder, ok := (c).(Speeder); ok {
 		HTTPSpeed(speeder, rt)
 	}
-	if initializer, ok := interface{}(c).(Initializer); ok {
+	if initializer, ok := (c).(Initializer); ok {
 		HTTPInitialize(initializer, rt)
+	}
+	if rawer, ok := (c).(ascii.RawCommunicator); ok {
+		ascii.InjectRawComm(rt, rawer)
 	}
 	w.RouteTable = rt
 	return w
