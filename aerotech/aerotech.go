@@ -347,6 +347,5 @@ func (e *Ensemble) GetVelocity(axis string) (float64, error) {
 
 // Raw implements ascii.Rawer
 func (e *Ensemble) Raw(s string) (string, error) {
-	resp, err := e.writeReadRaw(s)
-	return string(resp.body), err
+	return e.writeRead(s)
 }
