@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"image"
 	"reflect"
+	"sync"
 	"time"
 	"unsafe"
 
@@ -161,6 +162,8 @@ var (
 
 // Camera represents a camera from SDK3
 type Camera struct {
+	sync.Mutex
+
 	// bufs is the queue of buffers to send TO andor
 	bufs [nbufs]buffer
 
@@ -397,6 +400,8 @@ func (c *Camera) Flush() error {
 
 // GetFrame triggers an exposure and returns the frame as an image.Gray16 masquerading as an image.Image
 func (c *Camera) GetFrame() (image.Image, error) {
+	c.Lock()
+	defer c.Unlock()
 	var ret image.Gray16
 	// if we have to query hardware for exposure time, there may be an error
 	expT, err := c.GetExposureTime()
@@ -449,6 +454,8 @@ func (c *Camera) GetFrame() (image.Image, error) {
 // The images are streamed to ch, and are image.Gray16.
 // the channel is always closed after
 func (c *Camera) Burst(frames int, fps float64, ch chan<- image.Image) error {
+	c.Lock()
+	defer c.Unlock()
 	spinning := c.UseSpinner
 	defer close(ch)
 	imgS, err := c.ImageSizeBytes()
