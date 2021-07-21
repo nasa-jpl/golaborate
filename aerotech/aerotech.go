@@ -67,14 +67,23 @@ func (r response) string() string {
 }
 
 func parse(raw []byte) response {
+	if len(raw) < 2 {
+		return response{}
+	}
 	var r response
 	var v byte
 	// scan for the ok/nok code.  Assume the last one belongs to us, if there
 	// are multiple (e.g. unread responses)
 	// it's ok to return something invalid if there was a "read" that was not
 	// flushed, this should be considered unrecoverable.
-	for v = raw[0]; v == OKCode || v == BadReqCode; {
-		raw = raw[1:]
+	for {
+		tmp := raw[0]
+		if tmp == OKCode || tmp == BadReqCode {
+			raw = raw[1:]
+			v = tmp
+		} else {
+			break
+		}
 	}
 	r.code = v
 	// strip any terminators
