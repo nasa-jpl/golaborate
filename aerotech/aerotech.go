@@ -155,7 +155,8 @@ func (e *Ensemble) writeReadRaw(msg string) (response, error) {
 			// error getting a connection, bail completely
 			return resp, err
 		}
-		wrap, err = comm.NewTimeout(wrap, e.timeout)
+		wrap, err = comm.NewTimeout(conn, e.timeout)
+		wrap = comm.NewTerminator(wrap, Terminator, Terminator)
 		if err != nil {
 			// timeout unsupported, bail completely
 			return resp, err
@@ -215,7 +216,8 @@ func (e *Ensemble) writeReadRaw(msg string) (response, error) {
 					// error getting a connection, bail completely
 					return resp, err
 				}
-				wrap, err = comm.NewTimeout(wrap, e.timeout)
+				wrap, err = comm.NewTimeout(conn, e.timeout)
+				wrap = comm.NewTerminator(wrap, Terminator, Terminator)
 				if err != nil {
 					// timeout unsupported, bail completely
 					return resp, err
@@ -243,7 +245,7 @@ func (e *Ensemble) writeOnly(msg string) error {
 	if err != nil {
 		return err
 	}
-	if !resp.isOK() {
+	if !resp.isOK() && resp.code != 0 { // zero code occurs when we get no response, some generations of EPAQ do not ACK cmds that only write
 		return fmt.Errorf("unexpected response, expected %s got %s", string([]byte{resp.code}), resp.string())
 	}
 	return nil
@@ -321,18 +323,8 @@ func (e *Ensemble) GetPos(axis string) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	if resp[0] != OKCode {
-		return 0, ErrBadResponse{string(resp)}
-	}
-	// there may be a garbage OK/NOK flag in the second byte
-	// if a long-running communication was cut short by TCP timeout,
-	// we just discard the first byte (which came from the old message)
-	// since there is nothing to do with it now (we are on a separate communication)
-	if len(resp) > 2 && (resp[1] == OKCode) {
-		resp = resp[1:]
-	}
-	str = string(resp[1:])
-	return strconv.ParseFloat(str, 64)
+	// at this point, we are in OK land; our response is just a string of a float
+	return strconv.ParseFloat(resp, 64)
 }
 
 // SetVelocity sets the velocity of an axis in mm/s
@@ -351,4 +343,10 @@ func (e *Ensemble) GetVelocity(axis string) (float64, error) {
 		return vel, nil
 	}
 	return 0, errors.New("velocity not known for axis, use SetVelocity to make it known")
+}
+
+// Raw implements ascii.Rawer
+func (e *Ensemble) Raw(s string) (string, error) {
+	resp, err := e.writeReadRaw(s)
+	return string(resp.body), err
 }
