@@ -254,7 +254,7 @@ func (e *Ensemble) writeOnly(msg string) error {
 // writeRead does a write and reads an ASCII response
 func (e *Ensemble) writeRead(msg string) (string, error) {
 	resp, err := e.writeReadRaw(msg)
-	if !resp.isOK() {
+	if !resp.isOK() && resp.code != 0 {
 		return "", fmt.Errorf("unexpected response, expected %s got %s", string([]byte{resp.code}), resp.string())
 	}
 	return resp.string(), err
@@ -283,15 +283,6 @@ func (e *Ensemble) GetEnabled(axis string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if resp[0] != OKCode {
-		return false, ErrBadResponse{string(resp)}
-	}
-	if resp[0] == OKCode {
-		resp = resp[1:] // expected this time
-	}
-	if resp[0] == OKCode {
-		resp = resp[1:] // the ensemble may have a % in its write buffer still from a connection it dropped
-	}
 
 	lastByte := resp[len(resp)-1]
 	return util.GetBit(lastByte, 0), nil // this might actually need to be 1 on the index
@@ -317,7 +308,6 @@ func (e *Ensemble) MoveRel(axis string, dist float64) error {
 
 // GetPos gets the absolute position of an axis from the controller
 func (e *Ensemble) GetPos(axis string) (float64, error) {
-	// this could be refactored into something like a talkReadSingleFloat
 	str := fmt.Sprintf("PFBK %s", axis)
 	resp, err := e.writeRead(str)
 	if err != nil {
