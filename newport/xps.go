@@ -310,7 +310,7 @@ type XPS struct {
 // NewXPS makes a new XPS instance
 func NewXPS(addr string) *XPS {
 	maker := comm.BackingOffTCPConnMaker(addr, 3*time.Second)
-	pool := comm.NewPool(1, 30*time.Second, maker)
+	pool := comm.NewPool(3, 30*time.Second, maker)
 	return &XPS{pool: pool}
 }
 
@@ -487,4 +487,16 @@ func (xps *XPS) SetVelocity(axis string, vel float64) error {
 	}
 	return nil
 
+}
+
+// Raw implements ascii.Rawer
+func (xps *XPS) Raw(s string) (string, error) {
+	resp, err := xps.openReadWriteClose(s)
+	if err != nil {
+		return "", err
+	}
+	if resp.errCode != 0 {
+		return "", XPSErr(resp.errCode)
+	}
+	return resp.content, nil
 }
