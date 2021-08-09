@@ -39,8 +39,7 @@ func (rw *RawWrapper) HTTPRaw(w http.ResponseWriter, r *http.Request) {
 }
 
 // InjectRawComm injects a /raw POST route into the route table of an HTTPer
-func InjectRawComm(other generichttp.HTTPer, raw RawCommunicator) {
+func InjectRawComm(rt generichttp.RouteTable, raw RawCommunicator) {
 	wrap := RawWrapper{Comm: raw}
-	rt := other.RT()
 	rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/raw"}] = wrap.HTTPRaw
 }

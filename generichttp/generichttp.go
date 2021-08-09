@@ -127,7 +127,6 @@ func (hp *HumanPayload) EncodeAndRespond(w http.ResponseWriter, r *http.Request)
 		}
 	case types.String:
 		obj := StrT{Str: hp.String}
-
 		err := json.NewEncoder(w).Encode(obj)
 		if err != nil {
 			fstr := fmt.Sprintf("error encoding %+v hp to JSON, %q", hp, err)

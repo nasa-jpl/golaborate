@@ -179,7 +179,7 @@ OuterLoop:
 					ctl := network.Add(daisy.ControllerID, true) // true => handshaking//error checking
 					limiter := motion.LimitMiddleware{Limits: limiters, Mov: ctl}
 					httper = motion.NewHTTPMotionController(ctl)
-					ascii.InjectRawComm(httper, ctl)
+					ascii.InjectRawComm(httper.RT(), ctl)
 					limiter.Inject(httper)
 					middleware = append(middleware, limiter.Check)
 					// prepare the URL, "omc/nkt" => "/omc/nkt/*"
@@ -206,7 +206,7 @@ OuterLoop:
 				ctl := network.Add(1, true)
 				limiter := motion.LimitMiddleware{Limits: limiters, Mov: ctl}
 				httper = motion.NewHTTPMotionController(ctl)
-				ascii.InjectRawComm(httper, ctl)
+				ascii.InjectRawComm(httper.RT(), ctl)
 				limiter.Inject(httper)
 				middleware = append(middleware, limiter.Check)
 
@@ -246,7 +246,7 @@ OuterLoop:
 				log.Fatal(err)
 			}
 			httper = laser.NewHTTPLaserController(itc)
-			ascii.InjectRawComm(httper, itc)
+			ascii.InjectRawComm(httper.RT(), itc)
 
 		case "thermocube", "chiller":
 			chiller := thermocube.NewChiller(node.Addr, node.Serial)
