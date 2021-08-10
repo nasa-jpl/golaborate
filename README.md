@@ -6,7 +6,7 @@ It also includes some lower level libraries for allowing transparent use of seri
 
 See hardware.csv for a list of supported hardware.
 
-Users likely need not interact with this repository at all, but simply run the appropriate executable acquired from [releases](https://github.jpl.nasa.gov/bdube/golab/releases).  
+Users likely need not interact with this repository at all, but simply run the appropriate executable acquired from [releases](https://github.jpl.nasa.gov/bdube/golab/releases).
 
 Point of Contact: [Brandon Dube (383D)](mailto:brandon.dube@jpl.nasa.gov)
 
@@ -55,3 +55,11 @@ HTTP interface.
 To view the documentation for the `Go` code, from the root of the `$GOPATH`, then run `godoc -http=:6060` and visit http://localhost:6060/pkg/github.jpl.nasa.gov/bdube/golab/ in your browser.
 
 You will most likely interact primarily through the various client repositories, which each have their own documentation.  Each `cmd` binary behaves like a standard unix binary with its own `help` command that explains the configuration files, which are [YAML](https://getopentest.org/reference/yaml-primer.html).
+
+## Who's Using Golab
+
+- Roman-CGI
+- PIAACMC
+- Decadal Survey Testbed
+- EMIT
+- MISE
