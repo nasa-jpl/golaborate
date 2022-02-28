@@ -634,10 +634,17 @@ func (c *Camera) GetStatus() (Status, error) {
 }
 
 // GetAcquiredData gets the acquired data / frame
-//
-// Implementing a 32-bit function is left for the future
 func (c *Camera) GetAcquiredData() ([]int32, error) {
-	elements := 1024 * 1024
+	// primary consumer of this code is andorhttp2, which explicitly inits
+	// the frame size to the detector area
+	// getframesize may fail otherwise, but we should have failed prior
+	// to starting data acquisition (even earlier than data transfer, this
+	// function) anyway
+	w, h, err := c.GetFrameSize()
+	if err != nil {
+		return nil, err
+	}
+	elements := w * h
 	buf := make([]int32, elements)
 	ptr := (*C.at_32)(unsafe.Pointer(&buf[0]))
 	errCode := uint(C.GetAcquiredData(ptr, C.uint(elements)))
