@@ -43,11 +43,11 @@ import (
 const (
 	// OKCode is the first byte in the controller's response when the message
 	// is acknowledged and response nominal
-	OKCode = byte(37)
+	OKCode = byte(37) // %
 
 	// BadReqCode is the first byte in the controller's response when the message
 	// was not understood
-	BadReqCode = byte(33)
+	BadReqCode = byte(33) // !
 
 	// Terminator is the request terminator used
 	Terminator = '\n'
@@ -192,6 +192,7 @@ func (e *Ensemble) writeReadRaw(msg string) (response, error) {
 			Then we just evaluate the N/OK code.
 			Or return any irrecoverable errors along the way.
 			If the code is OK, return nil.
+
 	*/
 	n := 0
 	tries = 0
