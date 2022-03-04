@@ -22,12 +22,17 @@ func (e ErrFeatureNotFound) Error() string {
 	return fmt.Sprintf("feature %s not found in Features map, see golab/andor/sdk3#Features for known features", e.Feature)
 }
 
+type ErrParameterNotSet struct {
+	Parameter string
+}
+
+func (e ErrParameterNotSet) Error() string {
+	return fmt.Sprintf("parameter %s not set and not queryable from SDK, set to learn in wrapper", e.Parameter)
+}
+
 var (
 	// ErrBadEnumIndex is generated when an unknown enum index is used
 	ErrBadEnumIndex = errors.New("index not found in enum")
-
-	// ErrParameterNotSet is generated when a parameter is Gotten before it is set
-	ErrParameterNotSet = errors.New("parameter not set and not queryable from SDK, set to learn in wrapper")
 
 	// AcquisitionMode maps names to the values used by the SDK
 	AcquisitionMode = Enum{

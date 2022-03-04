@@ -202,14 +202,14 @@ func (c *Camera) GetNumberVSSpeeds() (int, error) {
 
 func (c *Camera) GetVSAmplitude() (string, error) {
 	if c.vsAmplitude == nil {
-		return "", ErrParameterNotSet
+		return "", ErrParameterNotSet{"VSAmplitude"}
 	}
 	return *c.vsAmplitude, nil
 }
 
 func (c *Camera) GetVSAmplitudeType() (int, error) {
 	if c.vsAmplitude == nil {
-		return -1, ErrParameterNotSet
+		return -1, ErrParameterNotSet{"VSAmplitudeType"}
 	}
 	outputAmpType, ok := VerticalClockVoltage[*c.vsAmplitude]
 	if !ok {
@@ -347,7 +347,7 @@ func (c *Camera) SetHSSpeedIndex(outputAmpType, idx int) error {
 func (c *Camera) SetHSSpeed(idx int) error {
 
 	if c.vsAmplitude == nil {
-		return ErrParameterNotSet
+		return ErrParameterNotSet{"HSSpeed"}
 	}
 	outputAmpType, ok := VerticalClockVoltage[*c.vsAmplitude]
 	if !ok {
@@ -425,7 +425,7 @@ func (c *Camera) SetTemperatureSetpoint(t string) error {
 // GetTemperatureSetpoint returns the setpoint of the camera's TEC
 func (c *Camera) GetTemperatureSetpoint() (string, error) {
 	if c.tempSetpoint == nil {
-		return "", ErrParameterNotSet
+		return "", ErrParameterNotSet{"TemperatureSetpoint"}
 	}
 	return *c.tempSetpoint, nil
 }
@@ -486,7 +486,7 @@ func (c *Camera) SetFan(on bool) error {
 // even if the value is false.  A true value should always mimic reality.
 func (c *Camera) GetFan() (bool, error) {
 	if c.fanOn == nil {
-		return false, ErrParameterNotSet
+		return false, ErrParameterNotSet{"Fan"}
 	}
 	return *c.fanOn, nil
 }
@@ -511,7 +511,7 @@ func (c *Camera) SetAcquisitionMode(am string) error {
 
 func (c *Camera) GetAcquisitionMode() (string, error) {
 	if c.acquisitionMode == nil {
-		return "", ErrParameterNotSet
+		return "", ErrParameterNotSet{"AcquisitionMode"}
 	}
 	return *c.acquisitionMode, nil
 }
@@ -533,7 +533,7 @@ func (c *Camera) SetReadoutMode(rm string) error {
 // GetReadoutMode returns the current read mode
 func (c *Camera) GetReadoutMode() (string, error) {
 	if c.readoutMode == nil {
-		return "", ErrParameterNotSet
+		return "", ErrParameterNotSet{"ReadoutMode"}
 	}
 	return *c.readoutMode, nil
 }
@@ -552,7 +552,7 @@ func (c *Camera) SetExposureTime(t time.Duration) error {
 // GetExposureTime returns the current exposure time
 func (c *Camera) GetExposureTime() (time.Duration, error) {
 	if c.exposureTime == nil {
-		return 0, ErrParameterNotSet
+		return 0, ErrParameterNotSet{"ExposureTime"}
 	}
 	return *c.exposureTime, nil
 }
@@ -574,7 +574,7 @@ func (c *Camera) SetTriggerMode(tm string) error {
 // GetTriggerMode returns the current trigger mode
 func (c *Camera) GetTriggerMode() (string, error) {
 	if c.triggerMode == nil {
-		return "", ErrParameterNotSet
+		return "", ErrParameterNotSet{"TriggerMode"}
 	}
 	return *c.triggerMode, nil
 }
@@ -687,7 +687,7 @@ func (c *Camera) SetADChannel(ch int) error {
 // GetADChannel returns the currently selected AD channel
 func (c *Camera) GetADChannel() (int, error) {
 	if c.adchannel == nil {
-		return 0, ErrParameterNotSet
+		return 0, ErrParameterNotSet{"ADChannel"}
 	}
 	return *c.adchannel, nil
 }
@@ -764,7 +764,7 @@ func (c *Camera) SetFrameTransferMode(useFrameTransfer bool) error {
 // GetFrameTransferMode returns true if the camera is in frame transfer mode
 func (c *Camera) GetFrameTransferMode() (bool, error) {
 	if c.frameTransfer == nil {
-		return false, ErrParameterNotSet
+		return false, ErrParameterNotSet{"FrameTransferMode"}
 	}
 	return *c.frameTransfer, nil
 }
@@ -800,7 +800,7 @@ func (c *Camera) SetAOI(a camera.AOI) error {
 // GetAOI returns the current AOI in use by the camera
 func (c *Camera) GetAOI() (camera.AOI, error) {
 	if c.aoi == nil {
-		return camera.AOI{}, ErrParameterNotSet
+		return camera.AOI{}, ErrParameterNotSet{"AOI"}
 	}
 	return *c.aoi, nil
 }
@@ -808,7 +808,7 @@ func (c *Camera) GetAOI() (camera.AOI, error) {
 // GetBinning returns the current binning used by the camera
 func (c *Camera) GetBinning() (camera.Binning, error) {
 	if c.bin == nil {
-		return camera.Binning{}, ErrParameterNotSet
+		return camera.Binning{}, ErrParameterNotSet{"Binning"}
 	}
 	return *c.bin, nil
 }
@@ -860,7 +860,7 @@ func (c *Camera) SetFilterMode(fm string) error {
 // GetFilterMode returns the current filter mode
 func (c *Camera) GetFilterMode() (string, error) {
 	if c.filterMode == nil {
-		return "", ErrParameterNotSet
+		return "", ErrParameterNotSet{"FilterMode"}
 	}
 	return *c.filterMode, nil
 }
@@ -882,7 +882,7 @@ func (c *Camera) SetBaselineClamp(b bool) error {
 // GetBaselineClamp returns the EM advanced
 func (c *Camera) GetBaselineClamp() (bool, error) {
 	if c.baselineClamp == nil {
-		return false, ErrParameterNotSet
+		return false, ErrParameterNotSet{"BaselineClamp"}
 	}
 	return *c.baselineClamp, nil
 }
@@ -930,7 +930,7 @@ func (c *Camera) SetEMGainMode(gm string) error {
 // GetEMGainMode returns the current EM gain mode
 func (c *Camera) GetEMGainMode() (string, error) {
 	if c.emgainMode == nil {
-		return "", ErrParameterNotSet
+		return "", ErrParameterNotSet{"EMGainMode"}
 	}
 	return *c.emgainMode, nil
 }
@@ -954,7 +954,7 @@ func (c *Camera) SetEMAdvanced(b bool) error {
 // GetEMAdvanced returns the EM advanced
 func (c *Camera) GetEMAdvanced() (bool, error) {
 	if c.emAdvanced == nil {
-		return false, ErrParameterNotSet
+		return false, ErrParameterNotSet{"EMAdvanced"}
 	}
 	return *c.emAdvanced, nil
 }
@@ -1075,7 +1075,7 @@ func (c *Camera) SetShutter(b bool) error {
 // GetShutter returns true if the shutter is currently open
 func (c *Camera) GetShutter() (bool, error) {
 	if c.shutter == nil {
-		return false, ErrParameterNotSet
+		return false, ErrParameterNotSet{"Shutter"}
 	}
 	return *c.shutter, nil
 }
@@ -1141,7 +1141,7 @@ func (c *Camera) SetShutterSpeed(t time.Duration) error {
 // manual (user managed) mode.
 func (c *Camera) GetShutterSpeed() (time.Duration, error) {
 	if c.shutterSpeed == nil {
-		return 0, ErrParameterNotSet
+		return 0, ErrParameterNotSet{"ShutterSpeed"}
 	}
 	return *c.shutterSpeed, nil
 }
@@ -1150,7 +1150,7 @@ func (c *Camera) GetShutterSpeed() (time.Duration, error) {
 // manual (user managed) mode.
 func (c *Camera) GetShutterAuto() (bool, error) {
 	if c.shutterAuto == nil {
-		return false, ErrParameterNotSet
+		return false, ErrParameterNotSet{"ShutterAuto"}
 	}
 	return *c.shutterAuto, nil
 }

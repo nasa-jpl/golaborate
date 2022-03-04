@@ -23,7 +23,7 @@ import (
 
 var (
 	// Version is the version number.  Typically injected via ldflags with git build
-	Version = "11"
+	Version = "12"
 
 	// ConfigFileName is what it sounds like
 	ConfigFileName = "andor-http.yml"
