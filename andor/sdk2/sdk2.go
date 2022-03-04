@@ -239,21 +239,6 @@ func (c *Camera) SetVSSpeed(idx int) error {
 	return nil
 }
 
-// SetVSAmplitude sets the vertical shift register voltage
-func (c *Camera) SetVSAmplitude(vcv string) error {
-	i, ok := VerticalClockVoltage[vcv]
-	if !ok {
-		return ErrBadEnumIndex
-	}
-	cint := C.int(i)
-	errCode := uint(C.SetVSAmplitude(cint))
-	err := Error(errCode)
-	if err == nil {
-		c.vsAmplitude = &vcv
-	}
-	return err
-}
-
 // GetNumberHSSpeeds gets the number of horizontal shift register speeds available
 func (c *Camera) GetNumberHSSpeeds(ch int) (int, error) {
 	// var emint int
