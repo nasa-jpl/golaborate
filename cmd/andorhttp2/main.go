@@ -52,9 +52,7 @@ func setupconfig() {
 		SerialNumber: "auto",
 		Recorder:     recorder{},
 		BootupArgs: map[string]interface{}{
-			"VSAmplitude": "Normal",
-			// "VSSpeed":             "1Hz",
-			// "HSSpeed":             "TBD",
+			"VSAmplitude":         "Normal",
 			"AcquisitionMode":     "SingleScan",
 			"ReadoutMode":         "Image",
 			"TemperatureSetpoint": "-15",
@@ -180,7 +178,12 @@ func run() {
 		log.Fatal(err)
 	}
 
-	err = c.SetADChannel(0)
+	adch := 0
+	err = c.SetADChannel(adch)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = c.SetVSAmplitude("Normal")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -201,27 +204,20 @@ func run() {
 		}
 		log.Printf("index %d: %f μs\n", i, f)
 	}
+
 	i, f, err := c.GetFastestRecommendedVSSpeed()
 	if err != nil {
 		log.Println(err)
 	}
 	log.Printf("the fastest recommended is index %d, %f μs\n", i, f)
 
-	adch, err := c.GetADChannel()
-	if err != nil {
-		log.Fatal(err)
-	}
 	n, err = c.GetNumberHSSpeeds(adch)
-	if err != nil {
-		log.Fatal(err)
-	}
-	outputAmpType, err := c.GetVSAmplitudeType()
 	if err != nil {
 		log.Fatal(err)
 	}
 	log.Println("the camera has", n, "horizontal shift speeds.  They are:")
 	for i := 0; i < n; i++ {
-		f, err := c.GetHSSpeedOption(adch, outputAmpType, i)
+		f, err := c.GetHSSpeedOption(adch, 0, i)
 		if err != nil {
 			log.Fatal(err)
 		}

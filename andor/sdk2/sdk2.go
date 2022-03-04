@@ -42,51 +42,25 @@ import (
 type Camera struct {
 	// nil values cause get functions to bounce
 	// tempSetpoint is the temperature the TEC is set to
-	tempSetpoint *string
-
-	// exposureTime is the length of time the exposure is set to
-	exposureTime *time.Duration
-
-	vsAmplitude *string //vs ==> vertical shift
-
+	tempSetpoint    *string
+	exposureTime    *time.Duration
+	vsAmplitude     *string //vs ==> vertical shift
+	vsSpeed         *float64
 	acquisitionMode *string
-
-	readoutMode *string
-
-	triggerMode *string
-
-	filterMode *string
-
-	// fanOn holds the status of the fan
-	fanOn *bool
-
-	// aoi holds the AOI parameters
-	aoi *camera.AOI
-
-	// binning holds the binning parameters
-	bin *camera.Binning
-
-	// emgainmode holds the EM gain mode
-	emgainMode *string
-
-	// shutter holds if the shutter is currently open
-	shutter *bool
-
-	emAdvanced *bool
-
-	baselineClamp *bool
-
-	// shutterAuto holds if the shutter is in automatic mode or manual
-	shutterAuto *bool
-
-	// shutterSpeed indicates the opening AND closing time of the shutter
-	shutterSpeed *time.Duration
-
-	// adchannel holds the selected A/D channel
-	adchannel *int
-
-	// frameTransfer holds if the camera is in frame transfer mode
-	frameTransfer *bool
+	readoutMode     *string
+	triggerMode     *string
+	filterMode      *string
+	fanOn           *bool
+	aoi             *camera.AOI
+	bin             *camera.Binning
+	emgainMode      *string
+	shutter         *bool
+	emAdvanced      *bool
+	baselineClamp   *bool
+	shutterAuto     *bool
+	shutterSpeed    *time.Duration
+	adchannel       *int
+	frameTransfer   *bool
 }
 
 func boolOptionHelper() map[string]interface{} {
@@ -207,15 +181,15 @@ func (c *Camera) GetVSAmplitude() (string, error) {
 	return *c.vsAmplitude, nil
 }
 
-func (c *Camera) GetVSAmplitudeType() (int, error) {
+func (c *Camera) GetVSAmplitudeIndex() (int, error) {
 	if c.vsAmplitude == nil {
 		return -1, ErrParameterNotSet{"VSAmplitudeType"}
 	}
-	outputAmpType, ok := VerticalClockVoltage[*c.vsAmplitude]
+	i, ok := VerticalClockVoltage[*c.vsAmplitude]
 	if !ok {
 		return -1, ErrBadEnumIndex
 	}
-	return outputAmpType, nil
+	return i, nil
 }
 
 // GetVSSpeed gets the vertical shift register speed in microseconds
@@ -241,15 +215,6 @@ func (c *Camera) GetVSSpeedOption(idx int) (float64, error) {
 	return float64(f), Error(errCode)
 }
 
-// GetVSSpeedOptions gets the vertical shift register speed in microseconds
-/*func (c *Camera) GetVSSpeedOptions() (map[string]interface{}, error) {
-	ary, err := c.floatEnumOptions(c.GetNumberVSSpeeds, c.GetVSSpeed)
-	if err != nil {
-		return nil, err
-	}
-	return ary, nil
-}*/
-
 // GetFastestRecommendedVSSpeed gets the fastest vertical shift register speed
 // that does not require changing the vertical clock voltage.  It returns
 // the fastest vertical clock speed's intcode and the actual speed in microseconds
@@ -263,7 +228,15 @@ func (c *Camera) GetFastestRecommendedVSSpeed() (int, float64, error) {
 // SetVSSpeed sets the vertical shift register speed
 func (c *Camera) SetVSSpeed(idx int) error {
 	errCode := uint(C.SetVSSpeed(C.int(idx)))
-	return Error(errCode)
+	err := Error(errCode)
+	if err == nil {
+		f, err := c.GetVSSpeed(idx)
+		if err != nil {
+			return err
+		}
+		c.vsSpeed = &f
+	}
+	return nil
 }
 
 // SetVSAmplitude sets the vertical shift register voltage
@@ -274,8 +247,11 @@ func (c *Camera) SetVSAmplitude(vcv string) error {
 	}
 	cint := C.int(i)
 	errCode := uint(C.SetVSAmplitude(cint))
-
-	return Error(errCode)
+	err := Error(errCode)
+	if err == nil {
+		c.vsAmplitude = &vcv
+	}
+	return err
 }
 
 // GetNumberHSSpeeds gets the number of horizontal shift register speeds available
@@ -318,13 +294,9 @@ func (c *Camera) GetHSSpeed(idx int) (float64, error) {
 	if c.adchannel == nil {
 		return -1, ErrBadEnumIndex
 	}
-	outputAmpType, ok := VerticalClockVoltage[*c.vsAmplitude]
-	if !ok {
-		return -1, ErrBadEnumIndex
-	}
 
 	cch := *c.adchannel
-	ctyp := outputAmpType
+	ctyp := 0 // hardcode 0: option 1 is only relevant to a camera (clara) no longer for sale
 	cidx := idx
 
 	return c.GetHSSpeedOption(cch, ctyp, cidx)
@@ -345,16 +317,33 @@ func (c *Camera) SetHSSpeedIndex(outputAmpType, idx int) error {
 // idx is the enum index
 // NOTE:  The output amplitude type is the obtained from the last set
 func (c *Camera) SetHSSpeed(idx int) error {
-
 	if c.vsAmplitude == nil {
 		return ErrParameterNotSet{"HSSpeed"}
 	}
-	outputAmpType, ok := VerticalClockVoltage[*c.vsAmplitude]
+	if c.adchannel == nil {
+		return ErrParameterNotSet{"ADChannel"}
+	}
+	return c.SetHSSpeedIndex(*c.adchannel, idx)
+}
+
+// SetVSAmplitudeIndex sets the VS Amplitude by index
+func (c *Camera) SetVSAmplitudeIndex(idx int) error {
+	errCode := uint(C.SetVSAmplitude(C.int(idx)))
+	return Error(errCode)
+}
+
+// SetVSAmplitude configures the vertical shift amplitude based on a human
+// legible string
+func (c *Camera) SetVSAmplitude(v string) error {
+	i, ok := VerticalClockVoltage[v]
 	if !ok {
 		return ErrBadEnumIndex
 	}
-
-	return c.SetHSSpeedIndex(outputAmpType, idx)
+	err := c.SetVSAmplitudeIndex(i)
+	if err == nil {
+		c.vsAmplitude = &v
+	}
+	return err
 }
 
 /* the above deals with camera initialization, the below deals with temperature regulation.
