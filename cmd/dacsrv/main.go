@@ -1,11 +1,14 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
@@ -117,6 +120,26 @@ func SetupHTTP(dac daq.DAC) chi.Router {
 	httpD.RouteTable.Bind(r)
 	return r
 }
+
+// LoadWaveform loads a waveform into system memory, for on-demand copying into
+// the DAC's buffer
+func LoadWaveform(dac *acromag.AP235, name string, period time.Duration) error {
+	if period < 0 {
+		return errors.New("LoadWaveform: period must be positive")
+	}
+	f, err := os.Open(name)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	periodNano := period.Nanoseconds()
+	err = daq.LoadCSVFloats(dac, f, uint32(periodNano))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func main() {
 	root := chi.NewRouter()
 	root.Use(middleware.Logger)
@@ -127,6 +150,24 @@ func main() {
 	} else {
 		r235 := SetupHTTP(ap235)
 		root.Mount("/ap235/", r235)
+		r235.Post("/load-waveform", func(w http.ResponseWriter, r *http.Request) {
+			type msg struct {
+				Filename string `json:"filename"`
+				Periodns int64  `json:"period_ns"`
+			}
+			var input msg
+			err := json.NewDecoder(r.Body).Decode(&input)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			err = LoadWaveform(ap235, input.Filename, time.Duration(input.Periodns)*time.Nanosecond)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		})
 		log.Println("AP235 available via HTTP at /ap235")
 	}
 	log.Println("connecting to AP236 (non-waveform DAC).  If the program is hanging, the driver has glitched;\n reboot the computer")
