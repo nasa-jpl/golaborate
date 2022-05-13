@@ -101,147 +101,152 @@ func (e ErrBadResponse) Error() string {
 	return fmt.Sprintf("bad response, OK returns %%, got %s", e.resp)
 }
 
-type Status struct {
-	Enabled            bool
-	Homed              bool
-	InPosition         bool
-	MoveActive         bool
-	AccelPhase         bool
-	DecelPhase         bool
-	PositionCapture    bool
-	CurrentClamp       bool
-	BrakeOutput        bool
-	MotionIsCw         bool
-	MasterSlaveControl bool
-	CalActive          bool
-	CalEnabled         bool
-	JoystickControl    bool
-	Homing             bool
-	MasterSuppress     bool
-	GantryActive       bool
-	GantryMaster       bool
-	AutofocusActive    bool
-	CommandFilterDone  bool
-	InPosition2        bool
-	ServoControl       bool
-	CwEOTLimit         bool
-	CcwEOTLimit        bool
-	HomeLimit          bool
-	MarkerInput        bool
-	HallAInput         bool
-	HallBInput         bool
-	HallCInput         bool
-	SineEncoderError   bool
-	CosineEncoderError bool
-	ESTOPInput         bool
-}
+// Status is the Aerotech AXISSTATUS bitfield
+type Status int32
 
-func StatusFromBitfield(b int32) Status {
-	var s Status
-	s.Enabled = (b>>0)&1 == 1
-	s.Homed = (b>>1)&1 == 1
-	s.InPosition = (b>>2)&1 == 1
-	s.MoveActive = (b>>3)&1 == 1
-	s.AccelPhase = (b>>4)&1 == 1
-	s.DecelPhase = (b>>5)&1 == 1
-	s.PositionCapture = (b>>6)&1 == 1
-	s.CurrentClamp = (b>>7)&1 == 1
-	s.BrakeOutput = (b>>8)&1 == 1
-	s.MotionIsCw = (b>>9)&1 == 1
-	s.MasterSlaveControl = (b>>10)&1 == 1
-	s.CalActive = (b>>11)&1 == 1
-	s.CalEnabled = (b>>12)&1 == 1
-	s.JoystickControl = (b>>13)&1 == 1
-	s.Homing = (b>>14)&1 == 1
-	s.MasterSuppress = (b>>15)&1 == 1
-	s.GantryActive = (b>>16)&1 == 1
-	s.GantryMaster = (b>>17)&1 == 1
-	s.AutofocusActive = (b>>18)&1 == 1
-	s.CommandFilterDone = (b>>19)&1 == 1
-	s.InPosition2 = (b>>20)&1 == 1
-	s.ServoControl = (b>>21)&1 == 1
-	s.CwEOTLimit = (b>>22)&1 == 1
-	s.CcwEOTLimit = (b>>23)&1 == 1
-	s.HomeLimit = (b>>24)&1 == 1
-	s.MarkerInput = (b>>25)&1 == 1
-	s.HallAInput = (b>>26)&1 == 1
-	s.HallBInput = (b>>27)&1 == 1
-	s.HallCInput = (b>>28)&1 == 1
-	s.SineEncoderError = (b>>29)&1 == 1
-	s.CosineEncoderError = (b>>30)&1 == 1
-	s.ESTOPInput = (b>>31)&1 == 1
-	return s
-}
+// TODO: Zeebo's design here is fantastic -- backport this to all the other
+// bitfields in golab
+
+func (s Status) Enabled() bool            { return (s>>0)&1 == 1 }
+func (s Status) Homed() bool              { return (s>>1)&1 == 1 }
+func (s Status) InPosition() bool         { return (s>>2)&1 == 1 }
+func (s Status) MoveActive() bool         { return (s>>3)&1 == 1 }
+func (s Status) AccelPhase() bool         { return (s>>4)&1 == 1 }
+func (s Status) DecelPhase() bool         { return (s>>5)&1 == 1 }
+func (s Status) PositionCapture() bool    { return (s>>6)&1 == 1 }
+func (s Status) CurrentClamp() bool       { return (s>>7)&1 == 1 }
+func (s Status) BrakeOutput() bool        { return (s>>8)&1 == 1 }
+func (s Status) MotionIsCw() bool         { return (s>>9)&1 == 1 }
+func (s Status) MasterSlaveControl() bool { return (s>>10)&1 == 1 }
+func (s Status) CalActive() bool          { return (s>>11)&1 == 1 }
+func (s Status) CalEnabled() bool         { return (s>>12)&1 == 1 }
+func (s Status) JoystickControl() bool    { return (s>>13)&1 == 1 }
+func (s Status) Homing() bool             { return (s>>14)&1 == 1 }
+func (s Status) MasterSuppress() bool     { return (s>>15)&1 == 1 }
+func (s Status) GantryActive() bool       { return (s>>16)&1 == 1 }
+func (s Status) GantryMaster() bool       { return (s>>17)&1 == 1 }
+func (s Status) AutofocusActive() bool    { return (s>>18)&1 == 1 }
+func (s Status) CommandFilterDone() bool  { return (s>>19)&1 == 1 }
+func (s Status) InPosition2() bool        { return (s>>20)&1 == 1 }
+func (s Status) ServoControl() bool       { return (s>>21)&1 == 1 }
+func (s Status) CwEOTLimit() bool         { return (s>>22)&1 == 1 }
+func (s Status) CcwEOTLimit() bool        { return (s>>23)&1 == 1 }
+func (s Status) HomeLimit() bool          { return (s>>24)&1 == 1 }
+func (s Status) MarkerInput() bool        { return (s>>25)&1 == 1 }
+func (s Status) HallAInput() bool         { return (s>>26)&1 == 1 }
+func (s Status) HallBInput() bool         { return (s>>27)&1 == 1 }
+func (s Status) HallCInput() bool         { return (s>>28)&1 == 1 }
+func (s Status) SineEncoderError() bool   { return (s>>29)&1 == 1 }
+func (s Status) CosineEncoderError() bool { return (s>>30)&1 == 1 }
+func (s Status) ESTOPInput() bool         { return (s>>31)&1 == 1 }
 
 func (s Status) Bit(label string) bool {
 	label = strings.ToLower(label)
 	switch label {
 	case "enabled":
-		return s.Enabled
+		return s.Enabled()
 	case "homed":
-		return s.Homed
+		return s.Homed()
 	case "inposition":
-		return s.InPosition
+		return s.InPosition()
 	case "moveactive":
-		return s.MoveActive
+		return s.MoveActive()
 	case "accelphase":
-		return s.AccelPhase
+		return s.AccelPhase()
 	case "decelphase":
-		return s.DecelPhase
+		return s.DecelPhase()
 	case "positioncapture":
-		return s.PositionCapture
+		return s.PositionCapture()
 	case "currentclamp":
-		return s.CurrentClamp
+		return s.CurrentClamp()
 	case "brakeoutput":
-		return s.BrakeOutput
+		return s.BrakeOutput()
 	case "motioniscw":
-		return s.MotionIsCw
+		return s.MotionIsCw()
 	case "masterslavecontrol":
-		return s.MasterSlaveControl
+		return s.MasterSlaveControl()
 	case "calactive":
-		return s.CalActive
+		return s.CalActive()
 	case "calenabled":
-		return s.CalEnabled
+		return s.CalEnabled()
 	case "joystickcontrol":
-		return s.JoystickControl
+		return s.JoystickControl()
 	case "homing":
-		return s.Homing
+		return s.Homing()
 	case "mastersuppress":
-		return s.MasterSuppress
+		return s.MasterSuppress()
 	case "gantryactive":
-		return s.GantryActive
+		return s.GantryActive()
 	case "gantrymaster":
-		return s.GantryMaster
+		return s.GantryMaster()
 	case "autofocusactive":
-		return s.AutofocusActive
+		return s.AutofocusActive()
 	case "commandfilterdone":
-		return s.CommandFilterDone
+		return s.CommandFilterDone()
 	case "inposition2":
-		return s.InPosition2
+		return s.InPosition2()
 	case "servocontrol":
-		return s.ServoControl
+		return s.ServoControl()
 	case "cweotlimit":
-		return s.CwEOTLimit
+		return s.CwEOTLimit()
 	case "ccweotlimit":
-		return s.CcwEOTLimit
+		return s.CcwEOTLimit()
 	case "homelimit":
-		return s.HomeLimit
+		return s.HomeLimit()
 	case "markerinput":
-		return s.MarkerInput
+		return s.MarkerInput()
 	case "hallainput":
-		return s.HallAInput
+		return s.HallAInput()
 	case "hallbinput":
-		return s.HallBInput
+		return s.HallBInput()
 	case "hallcinput":
-		return s.HallCInput
+		return s.HallCInput()
 	case "sineencodererror":
-		return s.SineEncoderError
+		return s.SineEncoderError()
 	case "cosineencodererror":
-		return s.CosineEncoderError
+		return s.CosineEncoderError()
 	case "estopinput":
-		return s.ESTOPInput
+		return s.ESTOPInput()
 	default:
 		panic("aerotech: bit queried not present in Status bitfield")
+	}
+}
+
+// All returns a k:v map of all bits in the bitfield
+func (s Status) All() map[string]bool {
+	return map[string]bool{
+		"Enabled":            s.Enabled(),
+		"Homed":              s.Homed(),
+		"InPosition":         s.InPosition(),
+		"MoveActive":         s.MoveActive(),
+		"AccelPhase":         s.AccelPhase(),
+		"DecelPhase":         s.DecelPhase(),
+		"PositionCapture":    s.PositionCapture(),
+		"CurrentClamp":       s.CurrentClamp(),
+		"BrakeOutput":        s.BrakeOutput(),
+		"MotionIsCw":         s.MotionIsCw(),
+		"MasterSlaveControl": s.MasterSlaveControl(),
+		"CalActive":          s.CalActive(),
+		"CalEnabled":         s.CalEnabled(),
+		"JoystickControl":    s.JoystickControl(),
+		"Homing":             s.Homing(),
+		"MasterSuppress":     s.MasterSuppress(),
+		"GantryActive":       s.GantryActive(),
+		"GantryMaster":       s.GantryMaster(),
+		"AutofocusActive":    s.AutofocusActive(),
+		"CommandFilterDone":  s.CommandFilterDone(),
+		"InPosition2":        s.InPosition2(),
+		"ServoControl":       s.ServoControl(),
+		"CwEOTLimit":         s.CwEOTLimit(),
+		"CcwEOTLimit":        s.CcwEOTLimit(),
+		"HomeLimit":          s.HomeLimit(),
+		"MarkerInput":        s.MarkerInput(),
+		"HallAInput":         s.HallAInput(),
+		"HallBInput":         s.HallBInput(),
+		"HallCInput":         s.HallCInput(),
+		"SineEncoderError":   s.SineEncoderError(),
+		"CosineEncoderError": s.CosineEncoderError(),
+		"ESTOPInput":         s.ESTOPInput(),
 	}
 }
 
@@ -427,26 +432,25 @@ func (e *Ensemble) GetStatus(axis string) (Status, error) {
 	// do not ponder these things...
 	resp, err := e.writeRead(fmt.Sprintf("AXISSTATUS(%s)", axis))
 	if err != nil {
-		return Status{}, err
+		return 0, err
 	}
 	i64, err := strconv.ParseInt(resp, 10, 32)
 	if err != nil {
-		return Status{}, err
+		return 0, err
 	}
-	b := int32(i64)
-	return StatusFromBitfield(b), nil
+	return Status(i64), nil
 }
 
 // GetEnabled gets if the given axis is enabled or not
 func (e *Ensemble) GetEnabled(axis string) (bool, error) {
 	// get the status, it is a 32-bit int, which is really a bitfield
 	status, err := e.GetStatus(axis)
-	return status.Enabled, err
+	return status.Enabled(), err
 }
 
 func (e *Ensemble) GetInPosition(axis string) (bool, error) {
 	status, err := e.GetStatus(axis)
-	return status.InPosition, err
+	return status.InPosition(), err
 }
 
 // Home commands the controller to home an axis
