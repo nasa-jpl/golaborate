@@ -9,8 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.jpl.nasa.gov/bdube/golab/util"
-
 	"github.jpl.nasa.gov/bdube/golab/comm"
 )
 
@@ -101,6 +99,150 @@ type ErrBadResponse struct {
 
 func (e ErrBadResponse) Error() string {
 	return fmt.Sprintf("bad response, OK returns %%, got %s", e.resp)
+}
+
+type Status struct {
+	Enabled            bool
+	Homed              bool
+	InPosition         bool
+	MoveActive         bool
+	AccelPhase         bool
+	DecelPhase         bool
+	PositionCapture    bool
+	CurrentClamp       bool
+	BrakeOutput        bool
+	MotionIsCw         bool
+	MasterSlaveControl bool
+	CalActive          bool
+	CalEnabled         bool
+	JoystickControl    bool
+	Homing             bool
+	MasterSuppress     bool
+	GantryActive       bool
+	GantryMaster       bool
+	AutofocusActive    bool
+	CommandFilterDone  bool
+	InPosition2        bool
+	ServoControl       bool
+	CwEOTLimit         bool
+	CcwEOTLimit        bool
+	HomeLimit          bool
+	MarkerInput        bool
+	HallAInput         bool
+	HallBInput         bool
+	HallCInput         bool
+	SineEncoderError   bool
+	CosineEncoderError bool
+	ESTOPInput         bool
+}
+
+func StatusFromBitfield(b int32) Status {
+	var s Status
+	s.Enabled = (b>>0)&1 == 1
+	s.Homed = (b>>1)&1 == 1
+	s.InPosition = (b>>2)&1 == 1
+	s.MoveActive = (b>>3)&1 == 1
+	s.AccelPhase = (b>>4)&1 == 1
+	s.DecelPhase = (b>>5)&1 == 1
+	s.PositionCapture = (b>>6)&1 == 1
+	s.CurrentClamp = (b>>7)&1 == 1
+	s.BrakeOutput = (b>>8)&1 == 1
+	s.MotionIsCw = (b>>9)&1 == 1
+	s.MasterSlaveControl = (b>>10)&1 == 1
+	s.CalActive = (b>>11)&1 == 1
+	s.CalEnabled = (b>>12)&1 == 1
+	s.JoystickControl = (b>>13)&1 == 1
+	s.Homing = (b>>14)&1 == 1
+	s.MasterSuppress = (b>>15)&1 == 1
+	s.GantryActive = (b>>16)&1 == 1
+	s.GantryMaster = (b>>17)&1 == 1
+	s.AutofocusActive = (b>>18)&1 == 1
+	s.CommandFilterDone = (b>>19)&1 == 1
+	s.InPosition2 = (b>>20)&1 == 1
+	s.ServoControl = (b>>21)&1 == 1
+	s.CwEOTLimit = (b>>22)&1 == 1
+	s.CcwEOTLimit = (b>>23)&1 == 1
+	s.HomeLimit = (b>>24)&1 == 1
+	s.MarkerInput = (b>>25)&1 == 1
+	s.HallAInput = (b>>26)&1 == 1
+	s.HallBInput = (b>>27)&1 == 1
+	s.HallCInput = (b>>28)&1 == 1
+	s.SineEncoderError = (b>>29)&1 == 1
+	s.CosineEncoderError = (b>>30)&1 == 1
+	s.ESTOPInput = (b>>31)&1 == 1
+	return s
+}
+
+func (s Status) Bit(label string) bool {
+	label = strings.ToLower(label)
+	switch label {
+	case "enabled":
+		return s.Enabled
+	case "homed":
+		return s.Homed
+	case "inposition":
+		return s.InPosition
+	case "moveactive":
+		return s.MoveActive
+	case "accelphase":
+		return s.AccelPhase
+	case "decelphase":
+		return s.DecelPhase
+	case "positioncapture":
+		return s.PositionCapture
+	case "currentclamp":
+		return s.CurrentClamp
+	case "brakeoutput":
+		return s.BrakeOutput
+	case "motioniscw":
+		return s.MotionIsCw
+	case "masterslavecontrol":
+		return s.MasterSlaveControl
+	case "calactive":
+		return s.CalActive
+	case "calenabled":
+		return s.CalEnabled
+	case "joystickcontrol":
+		return s.JoystickControl
+	case "homing":
+		return s.Homing
+	case "mastersuppress":
+		return s.MasterSuppress
+	case "gantryactive":
+		return s.GantryActive
+	case "gantrymaster":
+		return s.GantryMaster
+	case "autofocusactive":
+		return s.AutofocusActive
+	case "commandfilterdone":
+		return s.CommandFilterDone
+	case "inposition2":
+		return s.InPosition2
+	case "servocontrol":
+		return s.ServoControl
+	case "cweotlimit":
+		return s.CwEOTLimit
+	case "ccweotlimit":
+		return s.CcwEOTLimit
+	case "homelimit":
+		return s.HomeLimit
+	case "markerinput":
+		return s.MarkerInput
+	case "hallainput":
+		return s.HallAInput
+	case "hallbinput":
+		return s.HallBInput
+	case "hallcinput":
+		return s.HallCInput
+	case "sineencodererror":
+		return s.SineEncoderError
+	case "cosineencodererror":
+		return s.CosineEncoderError
+	case "estopinput":
+		return s.ESTOPInput
+	default:
+		panic("aerotech: bit queried not present in Status bitfield")
+	}
 }
 
 // Ensemble represents an Ensemble motion controller
@@ -276,18 +418,35 @@ func (e *Ensemble) Disable(axis string) error {
 	return e.gCodeWriteOnly("DISABLE", axis)
 }
 
+// GetStatus returns the (unpacked) status bitfield for the given axis
+func (e *Ensemble) GetStatus(axis string) (Status, error) {
+	// test with an HCIT ensemble
+	// AXISSTATUS(X) => %-1791485433
+	// Q.E.D the integer is written in ASCII format,
+	// so why did the old GetEnabled work by just popping the last byte?
+	// do not ponder these things...
+	resp, err := e.writeRead(fmt.Sprintf("AXISSTATUS(%s)", axis))
+	if err != nil {
+		return Status{}, err
+	}
+	i64, err := strconv.ParseInt(resp, 10, 32)
+	if err != nil {
+		return Status{}, err
+	}
+	b := int32(i64)
+	return StatusFromBitfield(b), nil
+}
+
 // GetEnabled gets if the given axis is enabled or not
 func (e *Ensemble) GetEnabled(axis string) (bool, error) {
 	// get the status, it is a 32-bit int, which is really a bitfield
-	str := fmt.Sprintf("AXISSTATUS(%s)", axis)
-	resp, err := e.writeRead(str)
-	if err != nil {
-		return false, err
-	}
+	status, err := e.GetStatus(axis)
+	return status.Enabled, err
+}
 
-	lastByte := resp[len(resp)-1]
-	return util.GetBit(lastByte, 0), nil // this might actually need to be 1 on the index
-	// the very last bit in the response contains the axis enabled status
+func (e *Ensemble) GetInPosition(axis string) (bool, error) {
+	status, err := e.GetStatus(axis)
+	return status.InPosition, err
 }
 
 // Home commands the controller to home an axis
