@@ -258,6 +258,8 @@ type Ensemble struct {
 
 	// velocities holds the velocities of the axes; the controller does not allow this to be queried, so we store it here
 	velocities map[string]float64
+
+	waitModes map[string]bool
 }
 
 // NewEnsemble returns a new Ensemble instance
@@ -269,6 +271,7 @@ func NewEnsemble(addr string, connectSerial bool) *Ensemble {
 	return &Ensemble{
 		pool:       pool,
 		velocities: map[string]float64{},
+		waitModes:  map[string]bool{},
 		timeout:    300 * time.Second}
 }
 
@@ -451,6 +454,36 @@ func (e *Ensemble) GetEnabled(axis string) (bool, error) {
 func (e *Ensemble) GetInPosition(axis string) (bool, error) {
 	status, err := e.GetStatus(axis)
 	return status.InPosition(), err
+}
+
+// SetSynchronous commands the controller to use synchronous motion mode
+// Aerotech idiosyncracy: the axis argument is ignored/not used by aerotech
+// nowait can only be
+func (e *Ensemble) SetSynchronous(axis string, useSync bool) error {
+	var cmd string
+	if useSync {
+		// cmd = fmt.Sprintf("WAIT INPOS %s", axis)
+		cmd = "WAIT MODE INPOS"
+	} else {
+		cmd = "WAIT MODE NOWAIT"
+		// cmd = fmt.Sprintf("WAIT NOWAIT %s", axis)
+	}
+	err := e.writeOnly(cmd)
+	if err == nil {
+		e.waitModes[axis] = useSync
+	}
+	return err
+
+}
+
+// GetSynchronous queries whether an axis is configured in synchronous mode
+// or not
+func (e *Ensemble) GetSynchronous(axis string) (bool, error) {
+	sync, ok := e.waitModes[axis]
+	if !ok {
+		return false, errors.New("synchronicity not known for axis, use SetSynchronous to make it known")
+	}
+	return sync, nil
 }
 
 // Home commands the controller to home an axis
