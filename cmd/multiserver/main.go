@@ -17,7 +17,7 @@ import (
 
 var (
 	// Version is the version number.  Typically injected via ldflags with git build
-	Version = "6"
+	Version = "7.b1"
 
 	// ConfigFileName is what it sounds like
 	ConfigFileName = "multiserver.yml"

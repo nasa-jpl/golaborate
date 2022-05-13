@@ -13,7 +13,6 @@ import (
 	"github.jpl.nasa.gov/bdube/golab/pi"
 	"github.jpl.nasa.gov/bdube/golab/server/middleware/locker"
 	"github.jpl.nasa.gov/bdube/golab/thermocube"
-	"github.jpl.nasa.gov/bdube/golab/thorlabs"
 	"github.jpl.nasa.gov/bdube/golab/util"
 
 	"github.jpl.nasa.gov/bdube/golab/aerotech"
@@ -28,7 +27,6 @@ import (
 	"github.jpl.nasa.gov/bdube/golab/fluke"
 
 	"github.jpl.nasa.gov/bdube/golab/generichttp/ascii"
-	"github.jpl.nasa.gov/bdube/golab/generichttp/laser"
 	"github.jpl.nasa.gov/bdube/golab/generichttp/motion"
 	"github.jpl.nasa.gov/bdube/golab/generichttp/tmc"
 
@@ -239,14 +237,6 @@ OuterLoop:
 		case "nkt", "superk":
 			sk := nkt.NewSuperK(node.Addr, node.Serial)
 			httper = nkt.NewHTTPWrapper(sk)
-
-		case "itc4000", "tl-laser-diode":
-			itc, err := thorlabs.NewITC4000()
-			if err != nil {
-				log.Fatal(err)
-			}
-			httper = laser.NewHTTPLaserController(itc)
-			ascii.InjectRawComm(httper.RT(), itc)
 
 		case "thermocube", "chiller":
 			chiller := thermocube.NewChiller(node.Addr, node.Serial)

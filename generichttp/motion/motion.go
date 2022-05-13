@@ -244,6 +244,70 @@ func Initialize(i Initializer) http.HandlerFunc {
 	}
 }
 
+type SynchronizationController interface {
+	SetSynchronous(string, bool) error
+	GetSynchronous(string) (bool, error)
+}
+
+func SetSynchronous(s SynchronizationController) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		axis := chi.URLParam(r, "axis")
+		boolT := generichttp.BoolT{}
+		err := json.NewDecoder(r.Body).Decode(&boolT)
+		defer r.Body.Close()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		err = s.SetSynchronous(axis, boolT.Bool)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+}
+
+func GetSynchronous(s SynchronizationController) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		axis := chi.URLParam(r, "axis")
+		enabled, err := s.GetSynchronous(axis)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		hp := generichttp.HumanPayload{T: types.Bool, Bool: enabled}
+		hp.EncodeAndRespond(w, r)
+	}
+}
+
+func HTTPSync(iface SynchronizationController, table generichttp.RouteTable) {
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/axis/{axis}/synchronous"}] = GetSynchronous(iface)
+	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/axis/{axis}/synchronous"}] = SetSynchronous(iface)
+}
+
+type InPositionQueryer interface {
+	GetInPosition(string) (bool, error)
+}
+
+func GetInPosition(i InPositionQueryer) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		axis := chi.URLParam(r, "axis")
+		enabled, err := i.GetInPosition(axis)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		hp := generichttp.HumanPayload{T: types.Bool, Bool: enabled}
+		hp.EncodeAndRespond(w, r)
+	}
+}
+
+func HTTPInPosition(iface InPositionQueryer, table generichttp.RouteTable) {
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/axis/{axis}/inposition"}] = GetInPosition(iface)
+}
+
 // LimitMiddleware is a type that can impose axis-specific limits on motion
 // it returns a boolean "notOK" that indicates if the limit would be violated
 // by a motion, stopping the chain of handling calls
@@ -365,6 +429,12 @@ func NewHTTPMotionController(c Controller) HTTPMotionController {
 	}
 	if rawer, ok := (c).(ascii.RawCommunicator); ok {
 		ascii.InjectRawComm(rt, rawer)
+	}
+	if syncer, ok := (c).(SynchronizationController); ok {
+		HTTPSync(syncer, rt)
+	}
+	if inposer, ok := (c).(InPositionQueryer); ok {
+		HTTPInPosition(inposer, rt)
 	}
 	w.RouteTable = rt
 	return w
