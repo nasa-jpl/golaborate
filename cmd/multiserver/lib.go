@@ -12,7 +12,6 @@ import (
 	"github.jpl.nasa.gov/bdube/golab/keysight"
 	"github.jpl.nasa.gov/bdube/golab/pi"
 	"github.jpl.nasa.gov/bdube/golab/server/middleware/locker"
-	"github.jpl.nasa.gov/bdube/golab/thermocube"
 	"github.jpl.nasa.gov/bdube/golab/util"
 
 	"github.jpl.nasa.gov/bdube/golab/aerotech"
@@ -21,8 +20,6 @@ import (
 	"github.jpl.nasa.gov/bdube/golab/nkt"
 
 	"github.jpl.nasa.gov/bdube/golab/newport"
-
-	"github.jpl.nasa.gov/bdube/golab/ixllightwave"
 
 	"github.jpl.nasa.gov/bdube/golab/fluke"
 
@@ -230,17 +227,9 @@ OuterLoop:
 			daq := keysight.NewDAQ(node.Addr)
 			httper = tmc.NewHTTPDAQ(daq)
 
-		case "lightwave", "ldc3916", "ixl":
-			ldc := ixllightwave.NewLDC3916(node.Addr)
-			httper = ixllightwave.NewHTTPWrapper(*ldc)
-
 		case "nkt", "superk":
 			sk := nkt.NewSuperK(node.Addr, node.Serial)
 			httper = nkt.NewHTTPWrapper(sk)
-
-		case "thermocube", "chiller":
-			chiller := thermocube.NewChiller(node.Addr, node.Serial)
-			httper = thermocube.NewHTTPChiller(chiller)
 
 		default:
 			log.Fatal("type", typ, "not understood")
