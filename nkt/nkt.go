@@ -5,7 +5,6 @@
 package nkt
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -18,7 +17,6 @@ import (
 	"github.jpl.nasa.gov/bdube/golab/generichttp/laser"
 
 	"github.jpl.nasa.gov/bdube/golab/util"
-	"golang.org/x/time/rate"
 
 	"github.com/tarm/serial"
 )
@@ -73,54 +71,6 @@ type ModuleInformation struct {
 
 	// Decoders maps friendly names like "Emission" to decoding functions that return a thinning json-serializable object
 	Decoders map[string]func([]byte) generichttp.HumanPayload
-}
-
-// AddressScan scans the NKT device to see:
-// - /where/ what modules are installed (an address)
-// - /what/ modules are installed (a type code)
-// and returns a map that connects addresses to (string) module types
-func AddressScan(addr string) (map[byte]string, error) {
-	// first establish a connection and dummy context for the limiter
-	conn, err := comm.TCPSetup(addr, 3*time.Second)
-	if err != nil {
-		return map[byte]string{}, err
-	}
-	defer conn.Close()
-	c := context.Background()
-
-	// now set up the rate limiter and basic message constructs
-	limiter := rate.NewLimiter(15, 15)
-	mp := MessagePrimitive{Type: "Read", Register: StandardAddresses["TypeCode"]}
-	addrs := util.ArangeByte(1, 160)
-
-	modules := map[byte]string{}
-
-	for _, a := range addrs {
-		mp.Dest = a
-		mp.Src = getSourceAddr()
-		tele, err := mp.EncodeTelegram()
-		if err != nil {
-			return map[byte]string{}, err
-		}
-		err = limiter.Wait(c)
-		if err != nil {
-			return map[byte]string{}, err
-		}
-
-		deadline := time.Now().Add(75 * time.Millisecond) // the manual advises 50-100 ms here
-		conn.SetReadDeadline(deadline)
-		conn.SetWriteDeadline(deadline)
-		resp, err := writeThenRead(conn, tele)
-		if err == nil {
-			if len(resp) > 0 {
-				mpr, err := DecodeTelegram(resp)
-				if err == nil {
-					modules[a] = ModuleTypeMap[mpr.Data[0]]
-				}
-			}
-		}
-	}
-	return modules, nil
 }
 
 // Module objects have an address and information struct
@@ -268,6 +218,15 @@ func (m *Module) GetFloat(addr string) (float64, error) {
 	return float64(dataOrder.Uint16(resp.Data)) / 10, err
 }
 
+// GetUint32 returns a 32-bit unsigned integer from the module
+func (m *Module) GetUint32(addr string) (uint32, error) {
+	resp, err := m.GetValue(addr)
+	if err != nil {
+		return 0, err
+	}
+	return dataOrder.Uint32(resp.Data), err
+}
+
 // GetStatus gets the status bitfield and converts it into a map of descriptive strings to booleans
 func (m *Module) GetStatus() (map[string]bool, error) {
 	// declare the response and get the response from the NKT
@@ -305,8 +264,8 @@ func (m *Module) GetStatus() (map[string]bool, error) {
 // SuperK is a struct holding all of the usual modules
 type SuperK struct {
 	*SuperKExtreme
-
 	*SuperKVaria
+	*SuperKBooster
 }
 
 // NewSuperK returns a new laser with pre-configured varia and extreme modules
@@ -324,7 +283,8 @@ func NewSuperK(addr string, connectSerial bool) *SuperK {
 	pool := comm.NewPool(1, 30*time.Second, maker)
 	extreme := NewSuperKExtreme(addr, pool)
 	varia := NewSuperKVaria(addr, pool)
-	return &SuperK{SuperKExtreme: extreme, SuperKVaria: varia}
+	booster := NewSuperKBooster(addr, pool)
+	return &SuperK{SuperKExtreme: extreme, SuperKVaria: varia, SuperKBooster: booster}
 }
 
 // StatusMain retrieves the main module status

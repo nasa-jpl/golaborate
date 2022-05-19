@@ -14,7 +14,7 @@ const (
 
 var (
 	// SuperKExtremeMain describes the SuperK Extreme Main module
-	SuperKExtremeMain = &ModuleInformation{
+	SuperKExtremeMainInfo = &ModuleInformation{
 		Addresses: map[string]byte{
 			"Inlet Temperature":  0x11,
 			"Emission":           0x30,
@@ -54,14 +54,14 @@ var (
 			}}}
 
 	// SuperKFrontDisplay describes the SuperK front display module
-	SuperKFrontDisplay = ModuleInformation{
+	SuperKFrontDisplayInfo = ModuleInformation{
 		Addresses: map[string]byte{
 			"Panel Lock":  0x3D,
 			"Text":        0x72,
 			"Error Flash": 0xBD}}
 
 	// SuperKBooster describes the SuperK Booster module
-	SuperKBooster = ModuleInformation{
+	SuperKBoosterInfo = ModuleInformation{
 		Addresses: map[string]byte{
 			"Module":           0x05,
 			"Emission Runtime": 0x80,
@@ -89,7 +89,7 @@ func NewSuperKExtreme(addr string, pool *comm.Pool) *SuperKExtreme {
 	return &SuperKExtreme{Module{
 		pool:    pool,
 		AddrDev: extremeDefaultAddr,
-		Info:    SuperKExtremeMain}}
+		Info:    SuperKExtremeMainInfo}}
 }
 
 // SetEmission turns emission (laser output) on
@@ -119,4 +119,21 @@ func (sk *SuperKExtreme) SetPower(level float64) error {
 // GetPower retrieves the power level of the laser
 func (sk *SuperKExtreme) GetPower() (float64, error) {
 	return sk.GetFloat("Power Level")
+}
+
+type SuperKBooster struct {
+	Module
+}
+
+func NewSuperKBooster(addr string, pool *comm.Pool) *SuperKBooster {
+	return &SuperKBooster{Module{
+		pool:    pool,
+		AddrDev: extremeDefaultAddr,
+		Info:    &SuperKBoosterInfo}}
+}
+
+// GetEmissionRuntime gets the total runtime of the laser booster in seconds
+func (sk *SuperKBooster) GetEmissionRuntime() (float64, error) {
+	u, err := sk.GetUint32("Emission Runtime")
+	return float64(u), err
 }
