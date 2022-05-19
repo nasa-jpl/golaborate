@@ -121,10 +121,12 @@ func (sk *SuperKExtreme) GetPower() (float64, error) {
 	return sk.GetFloat("Power Level")
 }
 
+// SuperKBooster embeds Module and has an EmissionRuntime method
 type SuperKBooster struct {
 	Module
 }
 
+// NewSuperKBooster creates a new Module representing a SuperK booster (where the laser gain medium lives)
 func NewSuperKBooster(addr string, pool *comm.Pool) *SuperKBooster {
 	return &SuperKBooster{Module{
 		pool:    pool,

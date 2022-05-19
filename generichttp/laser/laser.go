@@ -187,6 +187,16 @@ func SetCenterBandwidth(c BandwidthController) http.HandlerFunc {
 	}
 }
 
+// EmissionInfoHaver is a type which has information about emission runtime
+type EmissionInfoHaver interface {
+	GetEmissionRuntime() (float64, error)
+}
+
+// GetEmissionRuntime returns an http.HandlerFunc for GetEmissionRuntime
+func GetEmissionRuntime(e EmissionInfoHaver) http.HandlerFunc {
+	return generichttp.GetFloat(e.GetEmissionRuntime)
+}
+
 // HTTPLaserController wraps a LaserController in an HTTP route table
 type HTTPLaserController struct {
 	// Ctl is the underlying laser controller
@@ -203,19 +213,19 @@ func NewHTTPLaserController(ctl Controller) HTTPLaserController {
 		generichttp.MethodPath{Method: http.MethodGet, Path: "/emission"}:  GetEmission(ctl),
 		generichttp.MethodPath{Method: http.MethodPost, Path: "/emission"}: SetEmission(ctl),
 	}
-	if currentctl, ok := interface{}(ctl).(CurrentController); ok {
+	if currentctl, ok := ctl.(CurrentController); ok {
 		rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/current"}] = GetCurrent(currentctl)
 		rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/current"}] = SetCurrent(currentctl)
 	}
-	if powerctl, ok := interface{}(ctl).(PowerController); ok {
+	if powerctl, ok := ctl.(PowerController); ok {
 		rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/power"}] = GetPower(powerctl)
 		rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/power"}] = SetPower(powerctl)
 	}
-	if ndctl, ok := interface{}(ctl).(NDController); ok {
+	if ndctl, ok := ctl.(NDController); ok {
 		rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/nd"}] = GetND(ndctl)
 		rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/nd"}] = SetND(ndctl)
 	}
-	if bwctl, ok := interface{}(ctl).(BandwidthController); ok {
+	if bwctl, ok := ctl.(BandwidthController); ok {
 		rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/wvl/short"}] = GetShortWave(bwctl)
 		rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/wvl/short"}] = SetShortWave(bwctl)
 
@@ -224,6 +234,9 @@ func NewHTTPLaserController(ctl Controller) HTTPLaserController {
 
 		rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/wvl/center-bandwidth"}] = GetCenterBandwidth(bwctl)
 		rt[generichttp.MethodPath{Method: http.MethodPost, Path: "/wvl/center-bandwidth"}] = SetCenterBandwidth(bwctl)
+	}
+	if emh, ok := ctl.(EmissionInfoHaver); ok {
+		rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/emission-runtime"}] = GetEmissionRuntime(emh)
 	}
 	h.RouteTable = rt
 	return h
