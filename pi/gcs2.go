@@ -230,7 +230,7 @@ func (c *Controller) MoveAbs(axis string, pos float64) error {
 
 	const maxChecks = 10000
 	for checks := 0; checks < maxChecks; checks++ {
-		time.Sleep(dur) // avoid threashing the controller
+		time.Sleep(dur) // avoid thrashing the controller
 		b, err := c.readBool("ONT?", axis)
 		if err != nil {
 			return err
@@ -286,9 +286,33 @@ func (c *Controller) MoveRel(axis string, delta float64) error {
 	return nil
 }
 
+// for sync move macro, it is as simple as
+// MAC BEG movwai
+// MOV $1 $2
+// WAC ONT? $1 = 1
+// MAC END
+// ... but this does not render the "reply when move done" behavior that may be
+// desired :\
+// only solution is polling
+
 // GetPos returns the current position of an axis
 func (c *Controller) GetPos(axis string) (float64, error) {
 	return c.readFloat("POS?", axis)
+}
+
+// GetInPosition returns True if axis is in position
+func (c *Controller) GetInPosition(axis string) (bool, error) {
+	return c.readBool("ONT?", axis)
+}
+
+// SetVelocity returns the velocity of an axis
+func (c *Controller) SetVelocity(axis string, v float64) error {
+	return c.write(fmt.Sprintf("VEL %s %.9f", axis, v))
+}
+
+// GetVelocity returns the velocity of an axis
+func (c *Controller) GetVelocity(axis string) (float64, error) {
+	return c.readFloat("VEL?", axis)
 }
 
 // Enable causes the controller to enable motion on a given axis
