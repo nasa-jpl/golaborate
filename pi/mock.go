@@ -30,7 +30,7 @@ func randN1to1() float64 {
 	return rand.Float64()*2 - 1 // [0,1] => [0,2] => [-1,1]
 }
 
-func NewControllerMock(pool *comm.Pool, index int, handshaking bool) PIController {
+func NewControllerMock(pool *comm.Pool, index int, handshaking bool) *MockController {
 	return &MockController{
 		enabled: make(map[string]bool),
 		moving:  make(map[string]bool),

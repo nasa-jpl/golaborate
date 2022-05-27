@@ -108,7 +108,7 @@ type Controller struct {
 //
 // handshaking=true will check for errors after all commnads.  False does no error
 // checking.
-func NewController(pool *comm.Pool, index int, handshaking bool) PIController {
+func NewController(pool *comm.Pool, index int, handshaking bool) *Controller {
 	return &Controller{
 		index:       index,
 		pool:        pool,
