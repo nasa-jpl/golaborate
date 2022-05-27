@@ -1,6 +1,6 @@
 package pi
 
-type enabler interface {
+type Enabler interface {
 	// Enable enables an axis
 	Enable(string) error
 
@@ -11,12 +11,12 @@ type enabler interface {
 	GetEnabled(string) (bool, error)
 }
 
-type inPositionQueryer interface {
+type InPositionQueryer interface {
 	// GetInPosition returns True if the axis is in position
 	GetInPosition(string) (bool, error)
 }
 
-type mover interface {
+type Mover interface {
 	// GetPos gets the current position of an axis
 	GetPos(string) (float64, error)
 
@@ -30,7 +30,7 @@ type mover interface {
 	Home(string) error
 }
 
-type speeder interface {
+type Speeder interface {
 	// SetVelocity sets the velocity setpoint on the axis
 	SetVelocity(string, float64) error
 
@@ -38,6 +38,6 @@ type speeder interface {
 	GetVelocity(string) (float64, error)
 }
 
-type rawCommunicator interface {
+type RawCommunicator interface {
 	Raw(string) (string, error)
 }

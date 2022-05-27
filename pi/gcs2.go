@@ -74,12 +74,13 @@ func (n *ControllerNetwork) Add(index int, handshaking, mock bool) PIController 
 	return c
 }
 
+// PIController is a superset of several generichttp interfaces
 type PIController interface {
-	enabler
-	mover
-	speeder
-	inPositionQueryer
-	rawCommunicator
+	Enabler
+	Mover
+	Speeder
+	InPositionQueryer
+	RawCommunicator
 }
 
 // Controller maps to any PI controller, e.g. E-509, E-727, C-884
