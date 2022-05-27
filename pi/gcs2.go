@@ -52,21 +52,34 @@ The reply changes to
 // ControllerNetwork is a network of daisy chained controllers
 type ControllerNetwork struct {
 	pool        *comm.Pool
-	Controllers map[int]*Controller
+	Controllers map[int]PIController
 }
 
 // NewNetwork creates a controller network with a shared pool
 func NewNetwork(addr string, serial bool) *ControllerNetwork {
 	maker := comm.BackingOffTCPConnMaker(addr, 3*time.Second)
 	pool := comm.NewPool(1, 30*time.Second, maker)
-	return &ControllerNetwork{pool: pool, Controllers: map[int]*Controller{}}
+	return &ControllerNetwork{pool: pool, Controllers: map[int]PIController{}}
 }
 
 // Add adds a controller to the network and returns it
-func (n *ControllerNetwork) Add(index int, handshaking bool) *Controller {
-	c := NewController(n.pool, index, handshaking)
+func (n *ControllerNetwork) Add(index int, handshaking, mock bool) PIController {
+	var c PIController
+	if !mock {
+		c = NewController(n.pool, index, handshaking)
+	} else {
+		c = NewControllerMock(n.pool, index, handshaking)
+	}
 	n.Controllers[index] = c
 	return c
+}
+
+type PIController interface {
+	enabler
+	mover
+	speeder
+	inPositionQueryer
+	rawCommunicator
 }
 
 // Controller maps to any PI controller, e.g. E-509, E-727, C-884
@@ -94,7 +107,7 @@ type Controller struct {
 //
 // handshaking=true will check for errors after all commnads.  False does no error
 // checking.
-func NewController(pool *comm.Pool, index int, handshaking bool) *Controller {
+func NewController(pool *comm.Pool, index int, handshaking bool) PIController {
 	return &Controller{
 		index:       index,
 		pool:        pool,

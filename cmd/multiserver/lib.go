@@ -78,6 +78,8 @@ type Config struct {
 	// Addr is the address to listen at
 	Addr string `yaml:"Addr"`
 
+	Mock bool `yaml:"Mock"`
+
 	// Nodes is the list of nodes to set up
 	Nodes []ObjSetup `yaml:"Nodes"`
 }
@@ -149,18 +151,27 @@ OuterLoop:
 			}
 			switch typ {
 			case "aerotech", "ensemble":
+				if c.Mock {
+					log.Fatal("Aerotech mock interface is not yet implemented")
+				}
 				ensemble := aerotech.NewEnsemble(node.Addr, node.Serial)
 				limiter := motion.LimitMiddleware{Limits: limiters, Mov: ensemble}
 				httper = motion.NewHTTPMotionController(ensemble)
 				middleware = append(middleware, limiter.Check)
 				limiter.Inject(httper)
 			case "esp", "esp300", "esp301":
+				if c.Mock {
+					log.Fatal("newport esp mock interface is not yet implemented")
+				}
 				esp := newport.NewESP301(node.Addr, node.Serial)
 				limiter := motion.LimitMiddleware{Limits: limiters, Mov: esp}
 				httper = motion.NewHTTPMotionController(esp)
 				middleware = append(middleware, limiter.Check)
 				limiter.Inject(httper)
 			case "xps":
+				if c.Mock {
+					log.Fatal("newport xps mock interface is not yet implemented")
+				}
 				xps := newport.NewXPS(node.Addr)
 				limiter := motion.LimitMiddleware{Limits: limiters, Mov: xps}
 				httper = motion.NewHTTPMotionController(xps)
@@ -171,7 +182,7 @@ OuterLoop:
 				network := pi.NewNetwork(node.Addr, node.Serial)
 				for i := range node.DaisyChain {
 					daisy := node.DaisyChain[i]
-					ctl := network.Add(daisy.ControllerID, true) // true => handshaking//error checking
+					ctl := network.Add(daisy.ControllerID, true, c.Mock) // true => handshaking//error checking
 					limiter := motion.LimitMiddleware{Limits: limiters, Mov: ctl}
 					httper = motion.NewHTTPMotionController(ctl)
 					ascii.InjectRawComm(httper.RT(), ctl)
@@ -198,7 +209,7 @@ OuterLoop:
 				continue OuterLoop
 			case "pi":
 				network := pi.NewNetwork(node.Addr, node.Serial)
-				ctl := network.Add(1, true)
+				ctl := network.Add(1, true, c.Mock)
 				limiter := motion.LimitMiddleware{Limits: limiters, Mov: ctl}
 				httper = motion.NewHTTPMotionController(ctl)
 				ascii.InjectRawComm(httper.RT(), ctl)
@@ -208,26 +219,44 @@ OuterLoop:
 			}
 
 		case "cryocon":
+			if c.Mock {
+				log.Fatal("cryocon mock interface is not yet implemented")
+			}
 			cryo := cryocon.NewTemperatureMonitor(node.Addr)
 			httper = cryocon.NewHTTPWrapper(*cryo)
 
 		case "fluke", "dewk":
+			if c.Mock {
+				log.Fatal("fluke dewk mock interface is not yet implemented")
+			}
 			dewK := fluke.NewDewK(node.Addr)
 			httper = fluke.NewHTTPWrapper(*dewK)
 
 		case "keysight-scope":
+			if c.Mock {
+				log.Fatal("keysight scope mock interface is not yet implemented")
+			}
 			scope := keysight.NewScope(node.Addr)
 			httper = tmc.NewHTTPOscilloscope(scope)
 
 		case "agilent-function-generator":
+			if c.Mock {
+				log.Fatal("agilent function generator mock interface is not yet implemented")
+			}
 			gen := agilent.NewFunctionGenerator(node.Addr, node.Serial)
 			httper = tmc.NewHTTPFunctionGenerator(gen)
 
 		case "keysight-daq":
+			if c.Mock {
+				log.Fatal("keysight daq xps mock interface is not yet implemented")
+			}
 			daq := keysight.NewDAQ(node.Addr)
 			httper = tmc.NewHTTPDAQ(daq)
 
 		case "nkt", "superk":
+			if c.Mock {
+				log.Fatal("NKT SuperK mock interface is not yet implemented")
+			}
 			sk := nkt.NewSuperK(node.Addr, node.Serial)
 			httper = nkt.NewHTTPWrapper(sk)
 
