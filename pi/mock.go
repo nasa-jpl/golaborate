@@ -304,7 +304,7 @@ func (c *MockController) Raw(s string) (string, error) {
 type tlaNotUnderstoodInMock string
 
 func (t tlaNotUnderstoodInMock) Error() string {
-	return fmt.Sprintf("command '%s' was not understood by Golab's PI/GCS2 mock", t)
+	return fmt.Sprintf("command '%s' was not understood by Golab's PI/GCS2 mock", string(t))
 }
 
 func returnFloatAsString(s string, fun func(string) (float64, error)) (string, error) {
