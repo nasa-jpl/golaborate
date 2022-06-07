@@ -87,16 +87,6 @@ func (sk *SuperKVaria) SetShortWave(nanometers float64) error {
 	return sk.SetFloat("Short Wave Setpoint", nanometers)
 }
 
-// GetND retrieves the ND filter setpoint of the Varia
-func (sk *SuperKVaria) GetND() (float64, error) {
-	return sk.GetFloat("ND Setpoint")
-}
-
-// SetND retrieves the ND filter setpoint of the Varia
-func (sk *SuperKVaria) SetND(nanometers float64) error {
-	return sk.SetFloat("ND Setpoint", nanometers)
-}
-
 // GetLongWave retrieves the long wavelength setpoint of the Varia
 func (sk *SuperKVaria) GetLongWave() (float64, error) {
 	return sk.GetFloat("Long Wave Setpoint")

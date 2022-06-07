@@ -254,10 +254,13 @@ OuterLoop:
 			httper = tmc.NewHTTPDAQ(daq)
 
 		case "nkt", "superk":
+			var sk nkt.AugmentedLaserController
+
 			if c.Mock {
-				log.Fatal("NKT SuperK mock interface is not yet implemented")
+				sk = nkt.NewMockSuperK(node.Addr, node.Serial)
+			} else {
+				sk = nkt.NewSuperK(node.Addr, node.Serial)
 			}
-			sk := nkt.NewSuperK(node.Addr, node.Serial)
 			httper = nkt.NewHTTPWrapper(sk)
 
 		default:

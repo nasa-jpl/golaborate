@@ -171,34 +171,6 @@ func (m *Module) SetValue(addrName string, data []byte) (MessagePrimitive, error
 	return m.SendRecvMP(send)
 }
 
-// GetValueMulti is equivalent to GetValue for multiple addresses
-// if an error is encoutered along the way, the incomplete slice of MessagePrimitives will be returned with the error.
-func (m *Module) GetValueMulti(addrNames []string) ([]MessagePrimitive, error) {
-	out := make([]MessagePrimitive, len(addrNames))
-	for i := 0; i < len(addrNames); i++ {
-		mp, err := m.GetValue(addrNames[i])
-		if err != nil {
-			return out, err
-		}
-		out[i] = mp
-	}
-	return out, nil
-}
-
-// SetValueMulti is equivalent to SetValue for multiple addresses
-// if an error is encoutered along the way, the incomplete slice of MessagePrimitives will be returned with the error.
-func (m *Module) SetValueMulti(addrNames []string, data [][]byte) ([]MessagePrimitive, error) {
-	out := make([]MessagePrimitive, len(addrNames))
-	for i := 0; i < len(addrNames); i++ {
-		mp, err := m.SetValue(addrNames[i], data[i])
-		if err != nil {
-			return out, err
-		}
-		out[i] = mp
-	}
-	return out, nil
-}
-
 // SetFloat converts a float to limited precision uint16 and writes it to the module
 func (m *Module) SetFloat(addr string, value float64) error {
 	intt := uint16(math.Round(value * 10))
@@ -315,8 +287,14 @@ func encodeStatus(fcn func() (map[string]bool, error)) http.HandlerFunc {
 	}
 }
 
+type AugmentedLaserController interface {
+	laser.Controller
+	StatusMain() (map[string]bool, error)
+	StatusVaria() (map[string]bool, error)
+}
+
 // NewHTTPWrapper creates a new HTTP wrapper and populates the route table
-func NewHTTPWrapper(sk *SuperK) laser.HTTPLaserController {
+func NewHTTPWrapper(sk AugmentedLaserController) laser.HTTPLaserController {
 	w := laser.NewHTTPLaserController(sk)
 	rt := w.RT()
 	rt[generichttp.MethodPath{Method: http.MethodGet, Path: "/main-module-status"}] = encodeStatus(sk.StatusMain)
