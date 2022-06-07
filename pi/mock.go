@@ -135,20 +135,23 @@ func (c *MockController) moveTo(axis string, pos float64) {
 
 			// overshoot; -> + and -> - direction cases
 			if (lastPos < pos) && (nextPos > pos) {
-				nextPos = pos + randN1to1()
+				nextPos = pos + randN1to1()*1e-9
 				converged = true
 			}
 			if (lastPos > pos) && (nextPos < pos) {
-				nextPos = pos + randN1to1()
+				nextPos = pos + randN1to1()*1e-9
 				converged = true
 			}
 			c.Lock()
 			c.pos[axis] = nextPos
 			if converged {
 				c.moving[axis] = false
+				c.Unlock()
+				return
+			} else {
+				c.Unlock()
 			}
-			c.Unlock()
-		case <-time.After(time.Hour):
+		case <-time.After(24 * time.Hour):
 			c.Lock()
 			c.moving[axis] = false
 			c.Unlock()
@@ -165,6 +168,9 @@ func (c *MockController) MoveAbs(axis string, pos float64) error {
 	}
 	if !c.homed[axis] {
 		return GCS2Err(5)
+	}
+	if c.moving[axis] {
+		return GCS2Err(53)
 	}
 	c.moving[axis] = true
 	go c.moveTo(axis, pos)
