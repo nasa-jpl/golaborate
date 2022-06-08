@@ -233,71 +233,15 @@ func (c *Controller) readFloat(cmd, axis string) (float64, error) {
 // MoveAbs commands the controller to move an axis to an absolute position
 func (c *Controller) MoveAbs(axis string, pos float64) error {
 	// want to wait this long before reading position to wait for convergence
-	start := time.Now()
 	msg := fmt.Sprintf("MOV %s %.9f", axis, pos)
-	err := c.write(msg)
-	end := time.Now()
-	dur := end.Sub(start)
-	if err != nil {
-		return err
-	}
-
-	const maxChecks = 10000
-	for checks := 0; checks < maxChecks; checks++ {
-		time.Sleep(dur) // avoid thrashing the controller
-		b, err := c.readBool("ONT?", axis)
-		if err != nil {
-			return err
-		}
-		if !b {
-			// not on target
-			if checks == maxChecks-1 {
-				lastPos, err := c.GetPos(axis)
-				if err != nil {
-					return err
-				}
-				return fmt.Errorf("pi/gsc2: stage position did not converge after %d checks, last value %f for target %f", maxChecks, lastPos, pos)
-			}
-		}
-		break
-	}
-	// position converged
-	return nil
+	return c.write(msg)
 }
 
 // MoveRel commands the controller to move an axis by a delta
 func (c *Controller) MoveRel(axis string, delta float64) error {
 	// want to wait this long before reading position to wait for convergence
-	start := time.Now()
 	msg := fmt.Sprintf("MVR %s %.9f", axis, delta)
-	err := c.write(msg)
-	end := time.Now()
-	dur := end.Sub(start)
-	if err != nil {
-		return err
-	}
-
-	const maxChecks = 10000
-	for checks := 0; checks < maxChecks; checks++ {
-		time.Sleep(dur) // avoid threashing the controller
-		b, err := c.readBool("ONT?", axis)
-		if err != nil {
-			return err
-		}
-		if !b {
-			// not on target
-			if checks == maxChecks-1 {
-				lastPos, err := c.GetPos(axis)
-				if err != nil {
-					return err
-				}
-				return fmt.Errorf("pi/gsc2: stage position did not converge after %d checks, last value %f during relative move of %f", maxChecks, lastPos, delta)
-			}
-		}
-		break
-	}
-	// position converged
-	return nil
+	return c.write(msg)
 }
 
 // for sync move macro, it is as simple as
