@@ -169,10 +169,12 @@ OuterLoop:
 				middleware = append(middleware, limiter.Check)
 				limiter.Inject(httper)
 			case "xps":
+				var xps motion.Controller
 				if c.Mock {
-					log.Fatal("newport xps mock interface is not yet implemented")
+					xps = newport.NewControllerMock(node.Addr)
+				} else {
+					xps = newport.NewXPS(node.Addr)
 				}
-				xps := newport.NewXPS(node.Addr)
 				limiter := motion.LimitMiddleware{Limits: limiters, Mov: xps}
 				httper = motion.NewHTTPMotionController(xps)
 				middleware = append(middleware, limiter.Check)
