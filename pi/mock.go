@@ -135,11 +135,11 @@ func (c *MockController) moveTo(axis string, pos float64) {
 
 			// overshoot; -> + and -> - direction cases
 			if (lastPos < pos) && (nextPos > pos) {
-				nextPos = pos + randN1to1()*1e-9
+				nextPos = pos + randN1to1()*piPositioningError
 				converged = true
 			}
 			if (lastPos > pos) && (nextPos < pos) {
-				nextPos = pos + randN1to1()*1e-9
+				nextPos = pos + randN1to1()*piPositioningError
 				converged = true
 			}
 			c.Lock()
@@ -185,6 +185,9 @@ func (c *MockController) MoveRel(axis string, dPos float64) error {
 	}
 	if !c.homed[axis] {
 		return GCS2Err(5)
+	}
+	if c.moving[axis] {
+		return GCS2Err(53)
 	}
 	c.moving[axis] = true
 	pos := c.pos[axis] + dPos
