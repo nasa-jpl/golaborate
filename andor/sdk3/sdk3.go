@@ -427,6 +427,10 @@ func (c *Camera) GetFrame() (image.Image, error) {
 	}
 	err = c.WaitBuffer(expT + 3*time.Second)
 	if err != nil {
+		err2 := IssueCommand(c.Handle, "AcquisitionStop")
+		if err2 != nil {
+			return &ret, fmt.Errorf("andor/sdk3: while waiting for buffer, got %w; tried stopping acquisition, got error %w", err, err2)
+		}
 		return &ret, err
 	}
 	err = IssueCommand(c.Handle, "AcquisitionStop")
