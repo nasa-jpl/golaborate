@@ -23,6 +23,9 @@ import (
 	"github.jpl.nasa.gov/bdube/golab/comm"
 )
 
+// XPS manual states that up to 84 connections are supported (XPS-D)
+const xpsConcurrencyLimit = 84
+
 type xpsResponse struct {
 	errCode int
 	content string
@@ -310,7 +313,7 @@ type XPS struct {
 // NewXPS makes a new XPS instance
 func NewXPS(addr string) *XPS {
 	maker := comm.BackingOffTCPConnMaker(addr, 3*time.Second)
-	pool := comm.NewPool(3, 30*time.Second, maker)
+	pool := comm.NewPool(xpsConcurrencyLimit, 30*time.Second, maker)
 	return &XPS{pool: pool}
 }
 

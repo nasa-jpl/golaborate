@@ -2,6 +2,7 @@ package newport
 
 import (
 	"errors"
+	"math"
 	"math/rand"
 	"sync"
 	"time"
@@ -11,12 +12,14 @@ const (
 	xpsServoPeriod      = 250 * time.Microsecond // 4kHz servo rate on XPS controllers
 	xpsServerPeriodSec  = 250e-6                 // Period is for ticker, PeriodSec is for math
 	xpsPositioningError = 1e-7                   // up to 100 nm on lengths, 100 nrad on angles
+	floatCmpTol         = 1e-12
 )
 
 var NotImplemented = errors.New("not implemented")
 
 type MockController struct {
 	sync.Mutex
+	sem     chan struct{}
 	enabled map[string]bool
 	moving  map[string]bool
 	homed   map[string]bool
@@ -30,6 +33,7 @@ func randN1to1() float64 {
 
 func NewControllerMock(addr string) *MockController {
 	return &MockController{
+		sem:     make(chan struct{}, xpsConcurrencyLimit),
 		enabled: make(map[string]bool),
 		moving:  make(map[string]bool),
 		homed:   make(map[string]bool),
@@ -37,9 +41,19 @@ func NewControllerMock(addr string) *MockController {
 		vel:     make(map[string]float64)}
 }
 
+func (c *MockController) semAcq() {
+	c.sem <- struct{}{}
+}
+
+func (c *MockController) semRelease() {
+	<-c.sem
+}
+
 func (c *MockController) Disable(axis string) error {
 	c.Lock()
 	defer c.Unlock()
+	c.semAcq()
+	defer c.semRelease()
 	if c.moving[axis] {
 		return XPSErr(-22)
 	} // moving
@@ -50,6 +64,8 @@ func (c *MockController) Disable(axis string) error {
 func (c *MockController) Enable(axis string) error {
 	c.Lock()
 	defer c.Unlock()
+	c.semAcq()
+	defer c.semRelease()
 	c.enabled[axis] = true
 	return nil
 }
@@ -57,6 +73,8 @@ func (c *MockController) Enable(axis string) error {
 func (c *MockController) GetEnabled(axis string) (bool, error) {
 	c.Lock()
 	defer c.Unlock()
+	c.semAcq()
+	defer c.semRelease()
 	return c.enabled[axis], nil
 }
 
@@ -69,12 +87,16 @@ func (c *MockController) GetEnabled(axis string) (bool, error) {
 func (c *MockController) GetPos(axis string) (float64, error) {
 	c.Lock()
 	defer c.Unlock()
+	c.semAcq()
+	defer c.semRelease()
 	return c.pos[axis], nil
 }
 
 func (c *MockController) GetVelocity(axis string) (float64, error) {
 	c.Lock()
 	defer c.Unlock()
+	c.semAcq()
+	defer c.semRelease()
 	v, ok := c.vel[axis]
 	if !ok {
 		c.vel[axis] = 1
@@ -86,6 +108,8 @@ func (c *MockController) GetVelocity(axis string) (float64, error) {
 func (c *MockController) SetVelocity(axis string, v float64) error {
 	c.Lock()
 	defer c.Unlock()
+	c.semAcq()
+	defer c.semRelease()
 	if c.moving[axis] {
 		return XPSErr(-22)
 	}
@@ -96,6 +120,8 @@ func (c *MockController) SetVelocity(axis string, v float64) error {
 func (c *MockController) Home(axis string) error {
 	c.Lock()
 	defer c.Unlock()
+	c.semAcq()
+	defer c.semRelease()
 	if !c.enabled[axis] {
 		return XPSErr(-50)
 	}
@@ -109,15 +135,26 @@ func (c *MockController) Home(axis string) error {
 func (c *MockController) setPosition(axis string, pos float64) {
 	c.Lock()
 	defer c.Unlock()
+	c.semAcq()
+	defer c.semRelease()
 	c.pos[axis] = pos
 }
 
 // MoveAbs = public interface; moveTo = asynchronous internal interface
 func (c *MockController) moveTo(axis string, pos float64) {
+	currPos, _ := c.GetPos(axis)
+	if approxEqual(currPos, pos, floatCmpTol) {
+		return
+	}
 	tick := time.NewTicker(xpsServoPeriod)
 	defer tick.Stop()
 	v, _ := c.GetVelocity(axis)
+	// posErr is negative when we need to increase our distance
+	posErr := pos - currPos
 	step := v * xpsServerPeriodSec
+	if math.Signbit(posErr) {
+		step = -step
+	}
 	// there is a better mock here that checks the current time and the wall time
 	// when the move should be over.  It's only a few lines of code and higher
 	// fidelity than this.  Beauty for another day, this M.F is BIEGE.
@@ -157,6 +194,8 @@ func (c *MockController) moveTo(axis string, pos float64) {
 
 func (c *MockController) MoveAbs(axis string, pos float64) error {
 	c.Lock()
+	c.semAcq()
+	defer c.semRelease()
 	if !c.enabled[axis] {
 		return XPSErr(-50)
 	}
@@ -167,7 +206,7 @@ func (c *MockController) MoveAbs(axis string, pos float64) error {
 		return XPSErr(-22)
 	}
 	c.moving[axis] = true
-	defer c.Unlock()
+	c.Unlock()
 	// this might be buggy?  The goroutine that called MoveAbs is blocking,
 	// but others are not prevented from doing anything (lock released) while
 	// the move is happening.  There is an error on already moving, so I think
@@ -178,7 +217,8 @@ func (c *MockController) MoveAbs(axis string, pos float64) error {
 
 func (c *MockController) MoveRel(axis string, dPos float64) error {
 	c.Lock()
-	defer c.Unlock()
+	c.semAcq()
+	defer c.semRelease()
 	if !c.enabled[axis] {
 		return XPSErr(-50)
 	}
@@ -189,6 +229,7 @@ func (c *MockController) MoveRel(axis string, dPos float64) error {
 		return XPSErr(-22)
 	}
 	c.moving[axis] = true
+	c.Unlock()
 	pos := c.pos[axis] + dPos
 	c.moveTo(axis, pos)
 	return nil
@@ -196,4 +237,9 @@ func (c *MockController) MoveRel(axis string, dPos float64) error {
 
 func (c *MockController) Raw(s string) (string, error) {
 	return "", NotImplemented
+}
+
+func approxEqual(a, b, atol float64) bool {
+	d := b - a
+	return math.Abs(d) < atol
 }
