@@ -3,6 +3,7 @@ package pi
 import (
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 	"strconv"
 	"sync"
@@ -16,6 +17,7 @@ const (
 	piServoPeriod      = 50 * time.Microsecond // 20kHz servo rate on PI controllers circa 2014 or so and later
 	piServerPeriodSec  = 50e-6                 // Period is for ticker, PeriodSec is for math
 	piPositioningError = 1e-8                  // up to 10 nm on lengths, 10 nrad on angles
+	floatCmpTol        = 1e-12
 )
 
 var NotImplemented = errors.New("not implemented")
@@ -119,10 +121,19 @@ func (c *MockController) setPosition(axis string, pos float64) {
 
 // MoveAbs = public interface; moveTo = asynchronous internal interface
 func (c *MockController) moveTo(axis string, pos float64) {
+	currPos, _ := c.GetPos(axis)
+	if approxEqual(currPos, pos, floatCmpTol) {
+		return
+	}
 	tick := time.NewTicker(piServoPeriod)
 	defer tick.Stop()
 	v, _ := c.GetVelocity(axis)
+	// posErr is negative when we need to increase our distance
+	posErr := pos - currPos
 	step := v * piServerPeriodSec
+	if math.Signbit(posErr) {
+		step = -step
+	}
 	// there is a better mock here that checks the current time and the wall time
 	// when the move should be over.  It's only a few lines of code and higher
 	// fidelity than this.  Beauty for another day, this M.F is BIEGE.
@@ -330,4 +341,9 @@ func returnBoolAsString(s string, fun func(string) (bool, error)) (string, error
 		s = "0"
 	}
 	return s, err
+}
+
+func approxEqual(a, b, atol float64) bool {
+	d := b - a
+	return math.Abs(d) < atol
 }
