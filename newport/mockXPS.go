@@ -197,12 +197,15 @@ func (c *MockController) MoveAbs(axis string, pos float64) error {
 	c.semAcq()
 	defer c.semRelease()
 	if !c.enabled[axis] {
+		c.Unlock()
 		return XPSErr(-50)
 	}
 	if !c.homed[axis] {
+		c.Unlock()
 		return XPSErr(-109)
 	}
 	if c.moving[axis] {
+		c.Unlock()
 		return XPSErr(-22)
 	}
 	c.moving[axis] = true
@@ -220,12 +223,15 @@ func (c *MockController) MoveRel(axis string, dPos float64) error {
 	c.semAcq()
 	defer c.semRelease()
 	if !c.enabled[axis] {
+		c.Unlock()
 		return XPSErr(-50)
 	}
 	if !c.homed[axis] {
+		c.Unlock()
 		return XPSErr(-109)
 	}
 	if c.moving[axis] {
+		c.Unlock()
 		return XPSErr(-22)
 	}
 	c.moving[axis] = true
