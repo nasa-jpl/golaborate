@@ -10,10 +10,10 @@ import (
 	"reflect"
 	"unsafe"
 
-	"github.jpl.nasa.gov/bdube/golab/generichttp"
-	"github.jpl.nasa.gov/bdube/golab/generichttp/ascii"
+	"github.com/nasa-jpl/golaborate/generichttp"
+	"github.com/nasa-jpl/golaborate/generichttp/ascii"
 
-	"github.jpl.nasa.gov/bdube/golab/oscilloscope"
+	"github.com/nasa-jpl/golaborate/oscilloscope"
 )
 
 // FunctionGenerator describes an interface to a function generator

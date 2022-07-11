@@ -4,8 +4,8 @@ package apc
 import (
 	"time"
 
+	"github.com/nasa-jpl/golaborate/comm"
 	"github.com/tarm/serial"
-	"github.jpl.nasa.gov/bdube/golab/comm"
 )
 
 // makeSerConf makes a new serial.Config with correct parity, baud, etc, set.

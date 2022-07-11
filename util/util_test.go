@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.jpl.nasa.gov/bdube/golab/util"
+	"github.com/nasa-jpl/golaborate/util"
 )
 
 func ExampleArangeByte_EndOnly() {

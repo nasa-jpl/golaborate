@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.jpl.nasa.gov/bdube/golab/comm"
-	"github.jpl.nasa.gov/bdube/golab/oscilloscope"
-	"github.jpl.nasa.gov/bdube/golab/scpi"
+	"github.com/nasa-jpl/golaborate/comm"
+	"github.com/nasa-jpl/golaborate/oscilloscope"
+	"github.com/nasa-jpl/golaborate/scpi"
 )
 
 // DAQ is a remote interface to the DAQ973A and other DAQs with the same SCPI interface

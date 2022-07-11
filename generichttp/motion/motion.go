@@ -7,8 +7,8 @@ interfaces for a motion controller, which may implement any number of them.
 There are functions which consume a type that
 */
 import (
-	"github.jpl.nasa.gov/bdube/golab/generichttp"
-	"github.jpl.nasa.gov/bdube/golab/generichttp/ascii"
+	"github.com/nasa-jpl/golaborate/generichttp"
+	"github.com/nasa-jpl/golaborate/generichttp/ascii"
 )
 
 // Controller is used for the HTTP interface, which will check if the concrete

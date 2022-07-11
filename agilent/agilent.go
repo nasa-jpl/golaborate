@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.jpl.nasa.gov/bdube/golab/util"
+	"github.com/nasa-jpl/golaborate/util"
 
+	"github.com/nasa-jpl/golaborate/comm"
+	"github.com/nasa-jpl/golaborate/scpi"
 	"github.com/tarm/serial"
-	"github.jpl.nasa.gov/bdube/golab/comm"
-	"github.jpl.nasa.gov/bdube/golab/scpi"
 )
 
 // makeSerConf makes a new serial.Config with correct parity, baud, etc, set.

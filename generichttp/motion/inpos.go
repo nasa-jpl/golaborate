@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi"
-	"github.jpl.nasa.gov/bdube/golab/generichttp"
+	"github.com/nasa-jpl/golaborate/generichttp"
 )
 
 // InpositionQueryer is a type which can query whether an axis is in position

@@ -12,7 +12,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.jpl.nasa.gov/bdube/golab/generichttp"
+	"github.com/nasa-jpl/golaborate/generichttp"
 )
 
 // DAC is a model for simple digital to analog converter

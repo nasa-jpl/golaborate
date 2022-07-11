@@ -3,7 +3,7 @@ package fluke
 import (
 	"net/http"
 
-	"github.jpl.nasa.gov/bdube/golab/generichttp"
+	"github.com/nasa-jpl/golaborate/generichttp"
 )
 
 // HTTPWrapper provides HTTP bindings on top of the underlying Go interface

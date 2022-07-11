@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.jpl.nasa.gov/bdube/golab/comm"
+	"github.com/nasa-jpl/golaborate/comm"
 )
 
 // the Aerotech ASCII interface may seem like nonsense, and it partially is.

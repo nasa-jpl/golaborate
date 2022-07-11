@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi"
-	"github.jpl.nasa.gov/bdube/golab/util"
+	"github.com/nasa-jpl/golaborate/util"
 )
 
 // all of the following types are followed with a capital T for homogenaeity and

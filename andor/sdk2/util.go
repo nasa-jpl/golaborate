@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.jpl.nasa.gov/bdube/golab/util"
+	"github.com/nasa-jpl/golaborate/util"
 )
 
 // Enum behaves a bit like a C enum

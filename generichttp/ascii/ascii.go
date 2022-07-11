@@ -6,7 +6,7 @@ import (
 	"go/types"
 	"net/http"
 
-	"github.jpl.nasa.gov/bdube/golab/generichttp"
+	"github.com/nasa-jpl/golaborate/generichttp"
 )
 
 // RawCommunicator has a single Raw method

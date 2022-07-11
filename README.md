@@ -6,9 +6,9 @@ It also includes some lower level libraries for allowing transparent use of seri
 
 See hardware.csv for a list of supported hardware.
 
-Users likely need not interact with this repository at all, but simply run the appropriate executable acquired from [releases](https://github.jpl.nasa.gov/bdube/golab/releases).
+Users likely need not interact with this repository at all, but simply run the appropriate executable acquired from [releases](https://github.com/nasa-jpl/golaborate/releases).
 
-Point of Contact: [Brandon Dube (383D)](mailto:brandon.dube@jpl.nasa.gov)
+See [golaborate-docs](https://github.com/nasa-jpl/golaborate-docs) for getting started, etc.
 
 ## How to Use this
 
@@ -39,7 +39,7 @@ Commands:
 
 Each is configured with a human readable [yaml](https://github.com/darvid/trine/wiki/YAML-Primer) file.
 
-Clients in Python and matlab are available in the [golab-clients](https://github.jpl.nasa.gov/bdube/golab-clients) repository.  The clients are about 1/10th as much code as golab itself.  This is a tremendous labor savings when supporting a new language, maximizing engineer/scientist productivity.
+Clients in Python and matlab are available in the [golab-clients](https://github.com/nasa-jpl/golaborate-clients) repository.  The clients are about 1/10th as much code as golab itself.  This is a tremendous labor savings when supporting a new language, maximizing engineer/scientist productivity.
 
 ## What is Here
 
@@ -52,7 +52,7 @@ HTTP interface.
 
 ## Documentation
 
-To view the documentation for the `Go` code, from the root of the `$GOPATH`, then run `godoc -http=:6060` and visit http://localhost:6060/pkg/github.jpl.nasa.gov/bdube/golab/ in your browser.
+To view the documentation for the `Go` code, from the root of the `$GOPATH`, then run `godoc -http=:6060` and visit http://localhost:6060/pkg/github.com/nasa-jpl/golaborate/ in your browser.
 
 You will most likely interact primarily through the various client repositories, which each have their own documentation.  Each `cmd` binary behaves like a standard unix binary with its own `help` command that explains the configuration files, which are [YAML](https://getopentest.org/reference/yaml-primer.html).
 

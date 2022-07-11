@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.jpl.nasa.gov/bdube/golab/generichttp/laser"
+	"github.com/nasa-jpl/golaborate/generichttp/laser"
 )
 
 type MockSuperK struct {

@@ -6,7 +6,7 @@ import (
 	"math"
 	"net/http"
 
-	"github.jpl.nasa.gov/bdube/golab/generichttp"
+	"github.com/nasa-jpl/golaborate/generichttp"
 	"goji.io/pat"
 )
 

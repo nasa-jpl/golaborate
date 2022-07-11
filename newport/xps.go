@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"github.jpl.nasa.gov/bdube/golab/comm"
+	"github.com/nasa-jpl/golaborate/comm"
 )
 
 // XPS manual states that up to 84 connections are supported (XPS-D)

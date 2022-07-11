@@ -1,4 +1,4 @@
-module github.jpl.nasa.gov/bdube/golab
+module github.com/nasa-jpl/golaborate
 
 go 1.14
 

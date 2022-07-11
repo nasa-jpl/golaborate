@@ -34,8 +34,8 @@ import (
 	"unsafe"
 
 	"github.com/astrogo/fitsio"
-	"github.jpl.nasa.gov/bdube/golab/generichttp/camera"
-	"github.jpl.nasa.gov/bdube/golab/util"
+	"github.com/nasa-jpl/golaborate/generichttp/camera"
+	"github.com/nasa-jpl/golaborate/util"
 )
 
 // Camera represents an Andor camera

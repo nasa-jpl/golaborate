@@ -3,8 +3,8 @@ package nkt
 import (
 	"math"
 
-	"github.jpl.nasa.gov/bdube/golab/comm"
-	"github.jpl.nasa.gov/bdube/golab/generichttp/laser"
+	"github.com/nasa-jpl/golaborate/comm"
+	"github.com/nasa-jpl/golaborate/generichttp/laser"
 )
 
 // this file contains values relevant to the SuperK Varia accessory

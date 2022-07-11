@@ -12,11 +12,11 @@ import (
 	"net/http"
 	"time"
 
-	"github.jpl.nasa.gov/bdube/golab/comm"
-	"github.jpl.nasa.gov/bdube/golab/generichttp"
-	"github.jpl.nasa.gov/bdube/golab/generichttp/laser"
+	"github.com/nasa-jpl/golaborate/comm"
+	"github.com/nasa-jpl/golaborate/generichttp"
+	"github.com/nasa-jpl/golaborate/generichttp/laser"
 
-	"github.jpl.nasa.gov/bdube/golab/util"
+	"github.com/nasa-jpl/golaborate/util"
 
 	"github.com/tarm/serial"
 )

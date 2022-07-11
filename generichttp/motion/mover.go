@@ -7,7 +7,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi"
-	"github.jpl.nasa.gov/bdube/golab/generichttp"
+	"github.com/nasa-jpl/golaborate/generichttp"
 )
 
 // Mover describes an interface with position-related methods for axes

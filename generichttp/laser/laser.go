@@ -6,7 +6,7 @@ import (
 	"math"
 	"net/http"
 
-	"github.jpl.nasa.gov/bdube/golab/generichttp"
+	"github.com/nasa-jpl/golaborate/generichttp"
 )
 
 // CenterBandwidth is a struct holding the center wavelength (nm) and full bandwidth (nm) of a VARIA

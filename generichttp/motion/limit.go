@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi"
-	"github.jpl.nasa.gov/bdube/golab/generichttp"
-	"github.jpl.nasa.gov/bdube/golab/util"
+	"github.com/nasa-jpl/golaborate/generichttp"
+	"github.com/nasa-jpl/golaborate/util"
 )
 
 var (

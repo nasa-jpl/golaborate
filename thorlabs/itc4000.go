@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.jpl.nasa.gov/bdube/golab/usbtmc"
+	"github.com/nasa-jpl/golaborate/usbtmc"
 )
 
 /* unlike the remotedevice classes, this package assumes the connection to the

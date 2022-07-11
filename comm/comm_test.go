@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.jpl.nasa.gov/bdube/golab/comm"
+	"github.com/nasa-jpl/golaborate/comm"
 )
 
 func tcpEchoServer(addr string) {

@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.jpl.nasa.gov/bdube/golab/comm"
-	"github.jpl.nasa.gov/bdube/golab/scpi"
-	"github.jpl.nasa.gov/bdube/golab/temperature"
+	"github.com/nasa-jpl/golaborate/comm"
+	"github.com/nasa-jpl/golaborate/scpi"
+	"github.com/nasa-jpl/golaborate/temperature"
 )
 
 // parseTempToC converts a response string looking like "250.123124;K" into

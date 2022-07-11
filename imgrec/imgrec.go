@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.jpl.nasa.gov/bdube/golab/generichttp"
+	"github.com/nasa-jpl/golaborate/generichttp"
 )
 
 // Recorder records image sequences with incrementing filenames in yyyy-mm-dd subfolders.  It is not thread safe.

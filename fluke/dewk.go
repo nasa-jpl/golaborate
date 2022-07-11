@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.jpl.nasa.gov/bdube/golab/comm"
+	"github.com/nasa-jpl/golaborate/comm"
 )
 
 // DewK talks to a DewK 1620 temperature and humidity sensor

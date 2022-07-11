@@ -16,9 +16,9 @@ import (
 
 	"github.com/astrogo/fitsio"
 	"github.com/go-chi/chi"
-	"github.jpl.nasa.gov/bdube/golab/generichttp"
-	"github.jpl.nasa.gov/bdube/golab/imgrec"
-	"github.jpl.nasa.gov/bdube/golab/util"
+	"github.com/nasa-jpl/golaborate/generichttp"
+	"github.com/nasa-jpl/golaborate/imgrec"
+	"github.com/nasa-jpl/golaborate/util"
 )
 
 // AOI describes an area of interest on the camera

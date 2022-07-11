@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi"
-	"github.jpl.nasa.gov/bdube/golab/generichttp"
+	"github.com/nasa-jpl/golaborate/generichttp"
 )
 
 // Inject adds a lock route to a generichttp.HTTPer which is used to manipulate the locker

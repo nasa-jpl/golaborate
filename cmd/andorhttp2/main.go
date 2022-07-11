@@ -7,10 +7,10 @@ import (
 	"os"
 	"strings"
 
-	"github.jpl.nasa.gov/bdube/golab/andor/sdk2"
-	"github.jpl.nasa.gov/bdube/golab/generichttp"
-	"github.jpl.nasa.gov/bdube/golab/generichttp/camera"
-	"github.jpl.nasa.gov/bdube/golab/imgrec"
+	"github.com/nasa-jpl/golaborate/andor/sdk2"
+	"github.com/nasa-jpl/golaborate/generichttp"
+	"github.com/nasa-jpl/golaborate/generichttp/camera"
+	"github.com/nasa-jpl/golaborate/imgrec"
 
 	"github.com/go-chi/chi"
 	"github.com/knadh/koanf"

@@ -12,9 +12,9 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
-	"github.jpl.nasa.gov/bdube/golab/acromag"
-	"github.jpl.nasa.gov/bdube/golab/generichttp/daq"
-	"github.jpl.nasa.gov/bdube/golab/server/middleware/locker"
+	"github.com/nasa-jpl/golaborate/acromag"
+	"github.com/nasa-jpl/golaborate/generichttp/daq"
+	"github.com/nasa-jpl/golaborate/server/middleware/locker"
 )
 
 var (

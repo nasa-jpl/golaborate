@@ -6,7 +6,7 @@ import (
 	"go/types"
 	"net/http"
 
-	"github.jpl.nasa.gov/bdube/golab/generichttp"
+	"github.com/nasa-jpl/golaborate/generichttp"
 )
 
 // Controller is an interface to a thermal controller with a single channel
