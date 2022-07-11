@@ -7,25 +7,25 @@ import (
 	"os"
 	"strings"
 
-	"github.jpl.nasa.gov/bdube/golab/agilent"
-	"github.jpl.nasa.gov/bdube/golab/generichttp"
-	"github.jpl.nasa.gov/bdube/golab/keysight"
-	"github.jpl.nasa.gov/bdube/golab/pi"
-	"github.jpl.nasa.gov/bdube/golab/server/middleware/locker"
-	"github.jpl.nasa.gov/bdube/golab/util"
+	"github.com/nasa-jpl/golaborate/agilent"
+	"github.com/nasa-jpl/golaborate/generichttp"
+	"github.com/nasa-jpl/golaborate/keysight"
+	"github.com/nasa-jpl/golaborate/pi"
+	"github.com/nasa-jpl/golaborate/server/middleware/locker"
+	"github.com/nasa-jpl/golaborate/util"
 
-	"github.jpl.nasa.gov/bdube/golab/aerotech"
-	"github.jpl.nasa.gov/bdube/golab/cryocon"
+	"github.com/nasa-jpl/golaborate/aerotech"
+	"github.com/nasa-jpl/golaborate/cryocon"
 
-	"github.jpl.nasa.gov/bdube/golab/nkt"
+	"github.com/nasa-jpl/golaborate/nkt"
 
-	"github.jpl.nasa.gov/bdube/golab/newport"
+	"github.com/nasa-jpl/golaborate/newport"
 
-	"github.jpl.nasa.gov/bdube/golab/fluke"
+	"github.com/nasa-jpl/golaborate/fluke"
 
-	"github.jpl.nasa.gov/bdube/golab/generichttp/ascii"
-	"github.jpl.nasa.gov/bdube/golab/generichttp/motion"
-	"github.jpl.nasa.gov/bdube/golab/generichttp/tmc"
+	"github.com/nasa-jpl/golaborate/generichttp/ascii"
+	"github.com/nasa-jpl/golaborate/generichttp/motion"
+	"github.com/nasa-jpl/golaborate/generichttp/tmc"
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
