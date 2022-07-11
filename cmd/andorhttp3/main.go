@@ -7,16 +7,16 @@ import (
 	"os"
 	"strings"
 
-	"github.jpl.nasa.gov/bdube/golab/generichttp"
-	"github.jpl.nasa.gov/bdube/golab/generichttp/camera"
-	"github.jpl.nasa.gov/bdube/golab/imgrec"
+	"github.com/nasa-jpl/golaborate/generichttp"
+	"github.com/nasa-jpl/golaborate/generichttp/camera"
+	"github.com/nasa-jpl/golaborate/imgrec"
 
 	"github.com/go-chi/chi"
 	"github.com/knadh/koanf"
 	"github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/structs"
-	"github.jpl.nasa.gov/bdube/golab/andor/sdk3"
+	"github.com/nasa-jpl/golaborate/andor/sdk3"
 
 	yml "gopkg.in/yaml.v2"
 )
