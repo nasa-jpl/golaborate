@@ -518,6 +518,16 @@ func (xps *XPS) SetVelocity(axis string, vel float64) error {
 
 }
 
+// Stop aborts the motion of the axis
+func (xps *XPS) Stop(axis string) error {
+    cmd := fmt.Sprintf("GroupMoveAbort(%s)", axis)
+	resp, err := xps.openReadWriteClose(cmd)
+	if err != nil {
+		return err
+	}
+	return XPSErr(resp.errCode)
+}
+
 // Raw implements ascii.Rawer
 func (xps *XPS) Raw(s string) (string, error) {
 	resp, err := xps.openReadWriteClose(s)
