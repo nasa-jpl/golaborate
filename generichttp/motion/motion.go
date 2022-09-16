@@ -49,6 +49,9 @@ func NewHTTPMotionController(c Controller) HTTPMotionController {
 	if inposer, ok := (c).(InPositionQueryer); ok {
 		HTTPInPosition(inposer, rt)
 	}
+	if homequerier, ok := (c).(HomeQuerier); ok {
+		HTTPHomeQuery(homequerier, rt)
+	}
 	w.RouteTable = rt
 	return w
 }

@@ -93,6 +93,15 @@ func (s XPSStatus) IsReady() bool {
 	return false
 }
 
+// IsHomed returns true if the axis status is "homed" or false if not
+func (s XPSStatus) IsHomed() bool {
+	c := s.Code
+	if (c >= 10 && c <= 18) {
+		return true
+	}
+	return false
+}
+
 var (
 	// XPSErrorCodes maps XPS error integers to strings
 	XPSErrorCodes = map[int]string{
@@ -204,6 +213,7 @@ var (
 	// if i < 10 || i == 50, things are not initialized.
 	// 10 < i < 20 OK/ready.
 	// 20 <= i < 40, disabled
+	// 10 <= i < 18, homed/ready
 	XPSGroupStatuses = map[int]string{
 		0:  "Not initialized state",
 		1:  "Not initialized state due to an emergency brake : see positioner status",
@@ -416,6 +426,22 @@ func (xps *XPS) Home(axis string) error {
 		return err
 	}
 	return XPSErr(resp.errCode)
+}
+
+// GetHomed gets if the axis is homed
+func (xps *XPS) GetHomed(axis string) (bool, error) {
+	cmd := fmt.Sprintf("GroupStatusGet(%s, int *)", axis)
+	resp, err := xps.openReadWriteClose(cmd)
+	if err != nil {
+		return false, err
+	}
+	i, err := strconv.Atoi(resp.content)
+	if err != nil {
+		return false, err
+	}
+	status := intToXPSStatus(i)
+	return status.IsHomed(), nil
+	// return false, errors.New("XPS controllers do not have a way to query if motion is enabled")
 }
 
 // Initialize initializes the axis

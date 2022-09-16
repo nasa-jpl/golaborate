@@ -25,11 +25,21 @@ type Mover interface {
 	Home(string) error
 }
 
+type HomeQuerier interface {
+	// GetHome gets if an axis is homed
+	GetHomed(string) (bool, error)
+}
+
 // HTTPMove adds routes for the mover to the route tabler
 func HTTPMove(iface Mover, table generichttp.RouteTable) {
 	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/axis/{axis}/home"}] = Home(iface)
 	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/axis/{axis}/pos"}] = GetPos(iface)
 	table[generichttp.MethodPath{Method: http.MethodPost, Path: "/axis/{axis}/pos"}] = SetPos(iface)
+}
+
+// HTTPHomeQuery adds routes for the homequerier to the route tabler
+func HTTPHomeQuery(iface HomeQuerier, table generichttp.RouteTable) {
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/axis/{axis}/home"}] = GetHomed(iface)
 }
 
 // GetPos returns an HTTP handler func from a mover that gets the position of an axis
@@ -94,5 +104,19 @@ func Home(m Mover) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+	}
+}
+
+// GetHomed returns an HTTP handler func from a homer that returns if the axis is homed
+func GetHomed(e HomeQuerier) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		axis := chi.URLParam(r, "axis")
+		homed, err := e.GetHomed(axis)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		hp := generichttp.HumanPayload{T: types.Bool, Bool: homed}
+		hp.EncodeAndRespond(w, r)
 	}
 }
