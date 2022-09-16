@@ -78,6 +78,14 @@ func (c *MockController) GetEnabled(axis string) (bool, error) {
 	return c.enabled[axis], nil
 }
 
+func (c *MockController) GetHomed(axis string) (bool, error) {
+	c.Lock()
+	defer c.Unlock()
+	c.semAcq()
+	defer c.semRelease()
+	return c.homed[axis], nil
+}
+
 // func (c *MockController) GetInPosition(axis string) (bool, error) {
 // 	c.Lock()
 // 	defer c.Unlock()
