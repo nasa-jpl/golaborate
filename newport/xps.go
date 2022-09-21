@@ -428,20 +428,13 @@ func (xps *XPS) Home(axis string) error {
 	return XPSErr(resp.errCode)
 }
 
-// GetHomed gets if the axis is homed
-func (xps *XPS) GetHomed(axis string) (bool, error) {
-	cmd := fmt.Sprintf("GroupStatusGet(%s, int *)", axis)
-	resp, err := xps.openReadWriteClose(cmd)
+// Homed gets if the axis is homed
+func (xps *XPS) Homed(axis string) (bool, error) {
+	status, err := xps.GetStatus(axis)
 	if err != nil {
 		return false, err
 	}
-	i, err := strconv.Atoi(resp.content)
-	if err != nil {
-		return false, err
-	}
-	status := intToXPSStatus(i)
 	return status.IsHomed(), nil
-	// return false, errors.New("XPS controllers do not have a way to query if motion is enabled")
 }
 
 // Initialize initializes the axis

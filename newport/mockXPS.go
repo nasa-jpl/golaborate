@@ -80,7 +80,7 @@ func (c *MockController) GetEnabled(axis string) (bool, error) {
 	return c.enabled[axis], nil
 }
 
-func (c *MockController) GetHomed(axis string) (bool, error) {
+func (c *MockController) Homed(axis string) (bool, error) {
 	c.Lock()
 	defer c.Unlock()
 	c.semAcq()
@@ -152,7 +152,9 @@ func (c *MockController) setPosition(axis string, pos float64) {
 
 // MoveAbs = public interface; moveTo = asynchronous internal interface
 func (c *MockController) moveTo(axis string, pos float64) {
+	c.Lock()
 	c.stop[axis] = false
+	c.Unlock()
 	currPos, _ := c.GetPos(axis)
 	if approxEqual(currPos, pos, floatCmpTol) {
 		return
@@ -202,12 +204,14 @@ func (c *MockController) moveTo(axis string, pos float64) {
 		}
 
 		// Abort is Stop is called
+		c.Lock()
 		if c.stop[axis] {
-			c.Lock()
 			c.moving[axis] = false
 			c.stop[axis] = false
 			c.Unlock()
 			return
+		} else {
+			c.Unlock()
 		}
 	}
 }
