@@ -23,6 +23,7 @@ type MockController struct {
 	enabled map[string]bool
 	moving  map[string]bool
 	homed   map[string]bool
+	stop    map[string]bool
 	pos     map[string]float64
 	vel     map[string]float64
 }
@@ -37,6 +38,7 @@ func NewControllerMock(addr string) *MockController {
 		enabled: make(map[string]bool),
 		moving:  make(map[string]bool),
 		homed:   make(map[string]bool),
+		stop:    make(map[string]bool),
 		pos:     make(map[string]float64),
 		vel:     make(map[string]float64)}
 }
@@ -76,6 +78,14 @@ func (c *MockController) GetEnabled(axis string) (bool, error) {
 	c.semAcq()
 	defer c.semRelease()
 	return c.enabled[axis], nil
+}
+
+func (c *MockController) Homed(axis string) (bool, error) {
+	c.Lock()
+	defer c.Unlock()
+	c.semAcq()
+	defer c.semRelease()
+	return c.homed[axis], nil
 }
 
 // func (c *MockController) GetInPosition(axis string) (bool, error) {
@@ -142,6 +152,9 @@ func (c *MockController) setPosition(axis string, pos float64) {
 
 // MoveAbs = public interface; moveTo = asynchronous internal interface
 func (c *MockController) moveTo(axis string, pos float64) {
+	c.Lock()
+	c.stop[axis] = false
+	c.Unlock()
 	currPos, _ := c.GetPos(axis)
 	if approxEqual(currPos, pos, floatCmpTol) {
 		return
@@ -188,6 +201,17 @@ func (c *MockController) moveTo(axis string, pos float64) {
 			c.moving[axis] = false
 			c.Unlock()
 			return
+		}
+
+		// Abort is Stop is called
+		c.Lock()
+		if c.stop[axis] {
+			c.moving[axis] = false
+			c.stop[axis] = false
+			c.Unlock()
+			return
+		} else {
+			c.Unlock()
 		}
 	}
 }
@@ -241,6 +265,16 @@ func (c *MockController) MoveRel(axis string, dPos float64) error {
 	return nil
 }
 
+func (c *MockController) Stop(axis string) error {
+	c.Lock()
+	c.semAcq()
+	defer c.semRelease()
+	if c.moving[axis] {
+		c.stop[axis] = true
+	}
+	c.Unlock()
+	return nil
+}
 func (c *MockController) Raw(s string) (string, error) {
 	return "", NotImplemented
 }

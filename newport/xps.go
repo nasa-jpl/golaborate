@@ -93,6 +93,15 @@ func (s XPSStatus) IsReady() bool {
 	return false
 }
 
+// IsHomed returns true if the axis status is "homed" or false if not
+func (s XPSStatus) IsHomed() bool {
+	c := s.Code
+	if (c >= 10 && c <= 18) {
+		return true
+	}
+	return false
+}
+
 var (
 	// XPSErrorCodes maps XPS error integers to strings
 	XPSErrorCodes = map[int]string{
@@ -204,6 +213,7 @@ var (
 	// if i < 10 || i == 50, things are not initialized.
 	// 10 < i < 20 OK/ready.
 	// 20 <= i < 40, disabled
+	// 10 <= i < 18, homed/ready
 	XPSGroupStatuses = map[int]string{
 		0:  "Not initialized state",
 		1:  "Not initialized state due to an emergency brake : see positioner status",
@@ -418,6 +428,15 @@ func (xps *XPS) Home(axis string) error {
 	return XPSErr(resp.errCode)
 }
 
+// Homed gets if the axis is homed
+func (xps *XPS) Homed(axis string) (bool, error) {
+	status, err := xps.GetStatus(axis)
+	if err != nil {
+		return false, err
+	}
+	return status.IsHomed(), nil
+}
+
 // Initialize initializes the axis
 func (xps *XPS) Initialize(axis string) error {
 	cmd := fmt.Sprintf("GroupInitialize(%s)", axis)
@@ -490,6 +509,16 @@ func (xps *XPS) SetVelocity(axis string, vel float64) error {
 	}
 	return nil
 
+}
+
+// Stop aborts the motion of the axis
+func (xps *XPS) Stop(axis string) error {
+    cmd := fmt.Sprintf("GroupMoveAbort(%s)", axis)
+	resp, err := xps.openReadWriteClose(cmd)
+	if err != nil {
+		return err
+	}
+	return XPSErr(resp.errCode)
 }
 
 // Raw implements ascii.Rawer
