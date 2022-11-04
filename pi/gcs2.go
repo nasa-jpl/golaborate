@@ -15,7 +15,7 @@ import (
 
 /* GCS 2 primer
 commands are three letters, like POS? or MOV
-a command is followed by arguments.  Arguments are usually addressee-value pairs
+a command is followed by arguments.  Arguments are usually address-value pairs
 like MOV 1 123.456 moves axis 1 to position 123.456
 
 Queries are suffixed by ?
@@ -57,7 +57,12 @@ type ControllerNetwork struct {
 
 // NewNetwork creates a controller network with a shared pool
 func NewNetwork(addr string, serial bool) *ControllerNetwork {
-	maker := comm.BackingOffTCPConnMaker(addr, 3*time.Second)
+	var maker comm.CreationFunc
+	if serial {
+		maker = comm.SerialConnMaker(makeSerConf(addr))
+	} else {
+		maker = comm.BackingOffTCPConnMaker(addr, 3*time.Second)
+	}
 	pool := comm.NewPool(1, 30*time.Second, maker)
 	return &ControllerNetwork{pool: pool, Controllers: map[int]PIController{}}
 }
