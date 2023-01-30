@@ -39,7 +39,7 @@ func HTTPMove(iface Mover, table generichttp.RouteTable) {
 
 // HTTPHomeQuery adds routes for the homequerier to the route tabler
 func HTTPHomeQuery(iface HomeQuerier, table generichttp.RouteTable) {
-	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/axis/{axis}/home"}] = Homed(iface)
+	table[generichttp.MethodPath{Method: http.MethodGet, Path: "/axis/{axis}/homed"}] = Homed(iface)
 }
 
 // GetPos returns an HTTP handler func from a mover that gets the position of an axis
