@@ -298,6 +298,11 @@ func (c *Controller) Home(axis string) error {
 	return c.write(fmt.Sprintf("FRF %s", axis))
 }
 
+// Homed returns True if the axis has been homed
+func (c *Controller) Homed(axis string) (bool, error) {
+	return c.readBool("FRF?", axis)
+}
+
 // SetVoltage sets the voltage on an axis
 func (c *Controller) SetVoltage(axis string, volts float64) error {
 	msg := fmt.Sprintf("SVA %s %.9f", axis, volts)
