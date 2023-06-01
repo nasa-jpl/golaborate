@@ -191,5 +191,5 @@ func main() {
 		}
 		os.Exit(0)
 	}()
-	http.ListenAndServe(":8000", root)
+	log.Fatal(http.ListenAndServe(":8000", root))
 }
