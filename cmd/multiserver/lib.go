@@ -117,7 +117,7 @@ OuterLoop:
 		typ := strings.ToLower(node.Type)
 		switch typ {
 
-		case "aerotech", "ensemble", "esp", "esp300", "esp301", "xps", "pi", "pi-daisy-chain":
+		case "aerotech", "ensemble", "esp", "esp300", "esp301", "picomotor", "xps", "pi", "pi-daisy-chain":
 			axislocker = true
 			/* the limits are encoded as:
 			Args:
@@ -149,6 +149,7 @@ OuterLoop:
 					}
 				}
 			}
+			log.Println(typ)
 			switch typ {
 			case "aerotech", "ensemble":
 				if c.Mock {
@@ -166,6 +167,12 @@ OuterLoop:
 				esp := newport.NewESP301(node.Addr, node.Serial)
 				limiter := motion.LimitMiddleware{Limits: limiters, Mov: esp}
 				httper = motion.NewHTTPMotionController(esp)
+				middleware = append(middleware, limiter.Check)
+				limiter.Inject(httper)
+			case "picomotor":
+				pico := newport.NewPicomotor(node.Addr, node.Serial)
+				limiter := motion.LimitMiddleware{Limits: limiters, Mov: pico}
+				httper = motion.NewHTTPMotionController(pico)
 				middleware = append(middleware, limiter.Check)
 				limiter.Inject(httper)
 			case "xps":
@@ -266,7 +273,7 @@ OuterLoop:
 			httper = nkt.NewHTTPWrapper(sk)
 
 		default:
-			log.Fatal("type", typ, "not understood")
+			log.Fatal("type ", typ, " not understood")
 		}
 
 		// prepare the URL, "omc/nkt" => "/omc/nkt/*"
