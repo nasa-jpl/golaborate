@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -11,7 +12,28 @@ import (
 	"github.com/nasa-jpl/golaborate/comm"
 )
 
-// no consts here, TxTerm and RxTerm are the same between ESP and picomotor
+func newConnectionFactory(addr string, serial bool) comm.CreationFunc {
+	if !serial {
+		return func() (io.ReadWriteCloser, error) {
+			f := comm.BackingOffTCPConnMaker(addr, 10*time.Second)
+			conn, err := f()
+			if err != nil {
+				return nil, err
+			}
+			buf := make([]byte, 256)
+			_, err = conn.Read(buf)
+			if err != nil {
+				log.Println("picomotor gave an error trying to read telnet hello,", err)
+				conn.Close()
+				return nil, err
+			}
+			return conn, nil
+		}
+	}
+	// this is the same as ESP301, as a guess... the manual does not say
+	// what the serial parameters are!
+	return comm.SerialConnMaker(makeSerConf(addr))
+}
 
 type PicomotorError struct {
 	Axis, Code int
@@ -34,25 +56,35 @@ func intToPicomotorError(i int) error {
 	return PicomotorError{Axis: axis, Code: code}
 }
 
-// ESP301 represents an ESP301 motion controller.
+// Picomotor represents an picomotor controller.
 type Picomotor struct {
 	pool *comm.Pool
 
 	// Handshaking controls if commands check for errors.  Higher throughput can
 	// be achieved without error checking in exchange for reduced safety
 	Handshaking bool
+
+	// serial indicates whether this driver uses a serial connection or ethernet.
+	// unlike most devices where this only matters to the connection logic,
+	// newport's love of suffering means that the terminators are different on
+	// ethernet and serial.  Particularly,
+	// serial: terminator = \r
+	// ethernet: terminator = \n
+	// bonus pain: ethernet replies are \r\n
+	serial bool
 }
 
 // NewESP301 makes a new ESP301 motion controller instance
 func NewPicomotor(addr string, connectSerial bool) *Picomotor {
-	var maker comm.CreationFunc
-	if connectSerial {
-		maker = comm.SerialConnMaker(makeSerConf(addr))
-	} else {
-		maker = comm.BackingOffTCPConnMaker(addr, 1*time.Second)
-	}
-	p := comm.NewPool(1, time.Minute, maker)
+	p := comm.NewPool(1, time.Minute, newConnectionFactory(addr, connectSerial))
 	return &Picomotor{pool: p, Handshaking: true}
+}
+
+func (p *Picomotor) terminator() byte {
+	if p.serial {
+		return CarriageReturn
+	}
+	return Newline
 }
 
 func (p *Picomotor) writeOnlyCommand(cmd string) error {
@@ -61,7 +93,8 @@ func (p *Picomotor) writeOnlyCommand(cmd string) error {
 		return err
 	}
 	defer func() { p.pool.ReturnWithError(conn, err) }()
-	wrap := comm.NewTerminator(conn, RxTerm, TxTerm)
+	term := p.terminator()
+	wrap := comm.NewTerminator(conn, term, term)
 	_, err = io.WriteString(wrap, cmd)
 	if err != nil {
 		return err
@@ -76,6 +109,10 @@ func (p *Picomotor) writeOnlyCommand(cmd string) error {
 			return err
 		}
 		buf = buf[:n]
+		n = len(buf) - 1
+		if buf[n] == CarriageReturn {
+			buf = buf[:n] // go slices are end-exclusive
+		}
 		// buf will be, for example, "108" or "46"
 		// if the length is greater than two, it is an axis-specific error
 		// else it is a non-axis specific error
@@ -100,7 +137,8 @@ func (p *Picomotor) writeReadCommand(cmd string) (string, error) {
 		return "", err
 	}
 	defer func() { p.pool.ReturnWithError(conn, err) }()
-	wrap := comm.NewTerminator(conn, RxTerm, TxTerm)
+	term := p.terminator()
+	wrap := comm.NewTerminator(conn, term, term)
 	if p.Handshaking {
 		cmd = cmd + ";TE?"
 	}
@@ -114,7 +152,12 @@ func (p *Picomotor) writeReadCommand(cmd string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	str := string(buf[:n])
+	buf = buf[:n]
+	n = len(buf) - 1
+	if buf[n] == CarriageReturn {
+		buf = buf[:n] // go slices are end-exclusive
+	}
+	str := string(buf)
 	pieces := strings.SplitN(str, ";", 2)
 	if len(pieces) != 2 {
 		return "", errors.New("Picomotor controller was queried for error with command, but chose to ignore the error query")

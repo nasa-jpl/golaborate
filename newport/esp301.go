@@ -15,10 +15,8 @@ import (
 
 const (
 	// TxTerm is the outgoing terminator
-	TxTerm = '\r'
-
-	// RxTerm is the incoming terminator
-	RxTerm = '\r'
+	CarriageReturn = '\r'
+	Newline        = '\n'
 )
 
 var (
@@ -265,7 +263,7 @@ func (esp *ESP301) RawCommand(cmd string) (string, error) {
 		return "", err
 	}
 	defer func() { esp.pool.ReturnWithError(conn, err) }()
-	wrapper := comm.NewTerminator(conn, RxTerm, TxTerm)
+	wrapper := comm.NewTerminator(conn, CarriageReturn, CarriageReturn)
 
 	// acquire an almost imperceptible amount of parallel performance here
 	// the message will be in flight or processed by the ESP while we

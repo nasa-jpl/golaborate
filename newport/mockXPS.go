@@ -15,7 +15,7 @@ const (
 	floatCmpTol         = 1e-12
 )
 
-var NotImplemented = errors.New("not implemented")
+var ErrNotImplemented = errors.New("not implemented")
 
 type MockController struct {
 	sync.Mutex
@@ -276,7 +276,7 @@ func (c *MockController) Stop(axis string) error {
 	return nil
 }
 func (c *MockController) Raw(s string) (string, error) {
-	return "", NotImplemented
+	return "", ErrNotImplemented
 }
 
 func approxEqual(a, b, atol float64) bool {

@@ -149,7 +149,6 @@ OuterLoop:
 					}
 				}
 			}
-			log.Println(typ)
 			switch typ {
 			case "aerotech", "ensemble":
 				if c.Mock {
