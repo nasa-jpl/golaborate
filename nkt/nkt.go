@@ -207,10 +207,12 @@ func (m *Module) GetStatus() (map[string]bool, error) {
 	if err != nil {
 		return resp, err
 	}
-
 	// pop the bitfield and codebank for the module's status codes
 	bitfield := mp.Data
 	codebank := m.Info.CodeBanks["Status"]
+	if len(bitfield) == 0 {
+		return nil, errors.New("empty response from NKT to status query")
+	}
 
 	// loop over the number of bits in the codebank (which may be more than 1 byte in size)
 	// each time we are modulo 8, we increment the offset
