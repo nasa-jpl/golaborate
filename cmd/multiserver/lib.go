@@ -217,7 +217,7 @@ OuterLoop:
 				continue OuterLoop
 			case "pi":
 				network := pi.NewNetwork(node.Addr, node.Serial)
-				ctl := network.Add(1, true, c.Mock)
+				ctl := network.Add(0, true, c.Mock)
 				limiter := motion.LimitMiddleware{Limits: limiters, Mov: ctl}
 				httper = motion.NewHTTPMotionController(ctl)
 				ascii.InjectRawComm(httper.RT(), ctl)

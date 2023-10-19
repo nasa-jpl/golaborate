@@ -146,14 +146,21 @@ func (c *Controller) write(msgs ...string) error {
 
 	for i := range msgs {
 		msg := msgs[i]
-		msg = strconv.Itoa(c.index) + " " + msg
+		if c.index > 0 { // part of a daisy chain
+			msg = strconv.Itoa(c.index) + " " + msg
+		}
 		_, err = io.WriteString(wrap, msg)
 		if err != nil {
 			return err
 		}
 	}
 	if c.Handshaking {
-		msg := strconv.Itoa(c.index) + " ERR?"
+		var msg string
+		if c.index > 0 {
+			msg = strconv.Itoa(c.index) + " ERR?"
+		} else {
+			msg = "ERR?"
+		}
 		_, err = io.WriteString(wrap, msg)
 		// error response will look like 0 1 nnnn which is six bytes, ten is enough
 		buf := make([]byte, 10)
@@ -172,7 +179,7 @@ func (c *Controller) write(msgs ...string) error {
 	return nil
 }
 
-// write sends a request for data to the controller.  The controller index
+// query sends a request for data to the controller.  The controller index
 // is automatically prepended.  Commands with a ? in them will be rejected,
 // as they are queries.  The response is returned, after stripping the prefix
 // and suffix (~= "0 1" and \n)
@@ -193,8 +200,10 @@ func (c *Controller) query(msg string) ([]byte, error) {
 	}
 	wrap = comm.NewTerminator(wrap, '\n', '\n')
 
-	// prepend controller ID and send query
-	msg = strconv.Itoa(c.index) + " " + msg
+	// part of a daisy chain, prepend controller ID and send query
+	if c.index > 0 {
+		msg = strconv.Itoa(c.index) + " " + msg
+	}
 	_, err = io.WriteString(wrap, msg)
 	if err != nil {
 		return nil, err
@@ -204,15 +213,20 @@ func (c *Controller) query(msg string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	pieces := bytes.SplitN(buf[:n], []byte{' '}, 3)
-	fromAddr, err := strconv.Atoi(string(pieces[1]))
-	if err != nil {
-		return nil, errors.New("pi/gcs2: could not parse controller ID from response")
+	// NOT part of a daisy chain (fast path)
+	if c.index <= 0 {
+		return buf[:n], nil
+	} else {
+		pieces := bytes.SplitN(buf[:n], []byte{' '}, 3)
+		fromAddr, err := strconv.Atoi(string(pieces[1]))
+		if err != nil {
+			return nil, errors.New("pi/gcs2: could not parse controller ID from response")
+		}
+		if fromAddr != c.index {
+			return nil, errors.New("pi/gcs2: response received was not from the expected controller")
+		}
+		return pieces[2], nil
 	}
-	if fromAddr != c.index {
-		return nil, errors.New("pi/gcs2: response received was not from the expected controller")
-	}
-	return pieces[2], nil
 }
 
 func (c *Controller) readBool(cmd, axis string) (bool, error) {
