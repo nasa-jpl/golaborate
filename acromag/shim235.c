@@ -93,15 +93,17 @@ void start_waveform(struct cblk235 *cfg)
 
 void stop_waveform(struct cblk235 *cfg)
 {
-	// long temp = input_long(cfg->nHandle, (long *)&cfg->brd_ptr->CommonControl);
-	// temp &= 0xFFFFFFFE;	/* Stop All Waveforms */
-	// output_long(cfg->nHandle, (long *)&cfg->brd_ptr->CommonControl, (long)temp);
-	output_long(cfg->nHandle, (long *)(&cfg->brd_ptr->CommonControl), (long)(0x10));
+	// see drvr235.c line 459
+	long temp = input_long(cfg->nHandle, (long *)&cfg->brd_ptr->CommonControl);
+	temp &= 0xFFFFFFFE;	/* Stop All Waveforms */
+	output_long(cfg->nHandle, (long *)&cfg->brd_ptr->CommonControl, (long)temp);
 
 	// disable interrupts
 	output_long(cfg->nHandle, (long *)(&cfg->brd_ptr->AXI_ClearInterruptEnableRegister), (long)(0x1FFFF));
 	output_long(cfg->nHandle, (long *)(&cfg->brd_ptr->AXI_MasterEnableRegister), (long)(MasterInterruptDisable));
 	APTerminateBlockedStart(cfg->nHandle);
+
+	// TODO: need to reset? drvr235.c line 475, what does "software reset" do?
 }
 
 unsigned long fetch_status(struct cblk235 *cfg)
