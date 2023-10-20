@@ -47,6 +47,11 @@ The reply changes to
 "to address 0 (the PC), from address 1, axis 1 has pos =0.00..."
 */
 
+const (
+	velVerbHex    = "VLS"
+	velVerbNotHex = "VEL"
+)
+
 // file gsc2 contains a generichttp/motion compliant implementation around GCS2
 
 // ControllerNetwork is a network of daisy chained controllers
@@ -103,6 +108,8 @@ type Controller struct {
 
 	// DV is the maximum allowed voltage delta between commands
 	DV *float64
+
+	isHexapod *bool
 }
 
 // NewController returns a new motion controller
@@ -249,6 +256,20 @@ func (c *Controller) readFloat(cmd, axis string) (float64, error) {
 	return strconv.ParseFloat(string(resp), 64)
 }
 
+func (c *Controller) idn() ([]byte, error) {
+	return c.query("*IDN?")
+}
+
+func (c *Controller) setIsHexapod() error {
+	buf, err := c.idn()
+	if err != nil {
+		return err
+	}
+	b := bytes.Contains(buf, []byte("C-887"))
+	c.isHexapod = &b
+	return nil
+}
+
 // MoveAbs commands the controller to move an axis to an absolute position
 func (c *Controller) MoveAbs(axis string, pos float64) error {
 	// want to wait this long before reading position to wait for convergence
@@ -284,12 +305,36 @@ func (c *Controller) GetInPosition(axis string) (bool, error) {
 
 // SetVelocity returns the velocity of an axis
 func (c *Controller) SetVelocity(axis string, v float64) error {
-	return c.write(fmt.Sprintf("VEL %s %.9f", axis, v))
+	if c.isHexapod == nil {
+		err := c.setIsHexapod()
+		if err != nil {
+			return err
+		}
+	}
+	if *c.isHexapod {
+		return c.write(fmt.Sprintf("VLS %.9f", v))
+	} else {
+		return c.write(fmt.Sprintf("VEL %s %.9f", axis, v))
+	}
 }
 
 // GetVelocity returns the velocity of an axis
 func (c *Controller) GetVelocity(axis string) (float64, error) {
-	return c.readFloat("VEL?", axis)
+	if c.isHexapod == nil {
+		err := c.setIsHexapod()
+		if err != nil {
+			return 0, err
+		}
+	}
+	if *c.isHexapod {
+		b, err := c.query("VLS?")
+		if err != nil {
+			return 0, err
+		}
+		return strconv.ParseFloat(string(b), 64)
+	} else {
+		return c.readFloat("VEL?", axis)
+	}
 }
 
 // Enable causes the controller to enable motion on a given axis
