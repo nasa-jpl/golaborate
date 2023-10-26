@@ -411,9 +411,9 @@ func (dac *AP235) OutputDN16(channel int, value uint16) error {
 
 // OutputMulti writes voltages to multiple output channels.
 // the error is non-nil if any of these conditions occur:
-//	1.  A blend of output modes (some simultaneous, some immediate)
-//  2.  A command is out of range
-//  3.  A channel is set up for waveform playback
+//  1. A blend of output modes (some simultaneous, some immediate)
+//  2. A command is out of range
+//  3. A channel is set up for waveform playback
 //
 // if an error is encountered in case 2, the output buffer of the DAC may be
 // partially updated from proceeding valid commands.  No invalid values escape
@@ -582,7 +582,18 @@ func (dac *AP235) PopulateWaveform(channel int, data []float64) error {
 	if err != nil {
 		return err // err is beneign, but force users to reconfigure DAC first
 	}
+	err = dac.SetTriggerMode(channel, "timer")
+	if err != nil {
+		return err // err is beneign, but force users to reconfigure DAC first
+	}
+	if dac.cptr[channel] != nil {
+		// free old buffer and replace
+		C.Teardown_board_corrected_buffer(dac.cfg, dac.cScatterInfo)
+		dac.cptr[channel] = nil
+	}
+
 	l := len(data)
+	C.Setup_board_corrected_buffer(dac.cfg)
 	buf, cptr, err := cMkarrayU16(l)
 	if err != nil {
 		return err
@@ -592,10 +603,7 @@ func (dac *AP235) PopulateWaveform(channel int, data []float64) error {
 	if err != nil {
 		return err // err is beneign, but dump the buffer first
 	}
-	if dac.cptr[channel] != nil {
-		// free old buffer and replace
-		C.aligned_free(unsafe.Pointer(dac.cptr[channel]))
-	}
+
 	dac.cptr[channel] = cptr
 
 	// set the interrupt source for this channel (needed for transfer interrupt)
@@ -673,6 +681,11 @@ func (dac *AP235) Clear(channel int) error {
 	dac.cfg.opts._chan[C.int(channel)].DataReset = C.int(1)
 	dac.sendCfgToBoard(channel)
 	dac.cfg.opts._chan[C.int(channel)].DataReset = C.int(0)
+	dac.cfg.current_ptr[C.int(channel)] = nil
+	dac.cfg.head_ptr[C.int(channel)] = nil
+	dac.cfg.tail_ptr[C.int(channel)] = nil
+	dac.sendCfgToBoard(channel)
+	// C.Teardown_board_corrected_buffer(dac.cfg, dac.cScatterInfo)
 	return nil
 }
 
@@ -712,15 +725,18 @@ func (dac *AP235) Status(channel int) ChannelStatus {
 
 func (dac *AP235) doTransfer(channel int) {
 	head := dac.cursor[channel]
-	tailOffset := dac.sampleCount[channel] - dac.cursor[channel]
-	if tailOffset > MaxXferSize {
-		tailOffset = MaxXferSize
-	}
-	tailOffset-- // 2048 => 2047, etc.
+	tailOffset := MaxXferSize
 	tail := head + tailOffset
-	if tail == dac.sampleCount[channel] {
-		tail--
+	tail2 := tail
+	l := len(dac.buffer[channel]) - 1
+	if tail2 > l {
+		tail2 = l
 	}
+	if tail2 != tail {
+		tailOffset = tail2 - head
+	}
+	tail = head + tailOffset
+
 	p1 := (*C.short)(unsafe.Pointer(&dac.buffer[channel][head]))
 	p2 := (*C.short)(unsafe.Pointer(&dac.buffer[channel][tail]))
 	// no need for bytes to transfer, since that only applies in simple DMA mode
@@ -730,7 +746,12 @@ func (dac *AP235) doTransfer(channel int) {
 	dac.cfg.current_ptr[channel] = p1
 	dac.cfg.tail_ptr[channel] = p2
 	C.fifowro235(dac.cfg, C.int(channel))
-	dac.cursor[channel] += tailOffset + 1 // todo: wrap around
+	head += tailOffset + 1
+	if head > l {
+		head = l
+	}
+	dac.cursor[channel] = head
+
 }
 
 // CMkarrayU16 allocates a []uint16 in C and returns a Go slice without copying
