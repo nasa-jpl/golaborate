@@ -413,7 +413,7 @@ func StartWaveform(d WaveformDAC) http.HandlerFunc {
 // StopWaveform ceases waveform playback
 func StopWaveform(d WaveformDAC) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		err := d.StartWaveform()
+		err := d.StopWaveform()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
