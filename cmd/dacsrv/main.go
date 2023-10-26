@@ -191,5 +191,6 @@ func main() {
 		}
 		os.Exit(0)
 	}()
-	log.Fatal(http.ListenAndServe(":8000", root))
+	log.Println("now listening on port 8080")
+	log.Fatal(http.ListenAndServe(":8080", root))
 }
